@@ -23,6 +23,7 @@ creds = {
 BOOK_DIR = "/home/yannick/Montages Réseau/iceland_storage/Ebooks"
 BOOK_DIR = os.path.abspath("books")
 CACHE_DIR = os.path.abspath("cache")
+BOOK_DB = "book.db"
 
 #
 app = Flask(__name__)
@@ -65,7 +66,7 @@ def browser():
     if not is_user_connected:
         return redirect(url_for("login"))
 
-    Book.scan_dir(BOOK_DIR)
+    #Book.scan_dir(BOOK_DB, BOOK_DIR)
 
     return render_template("browser.html",
                            titre = "eBook browser",
@@ -115,7 +116,7 @@ def admin():
     ### print(os.path.basename(f1))
 
     if request.method == "GET":
-        Book.scan_dir(BOOK_DIR)
+        #Book.scan_dir(BOOK_DB, BOOK_DIR)
         return render_template("bookadmin.html", titre = "eBook admin")
     else:
         s = request.form['username'] or None
@@ -151,5 +152,6 @@ if __name__ == '__main__':
     ###                     "WATCH-PATH=[%s] FILENAME=[%s]", 
     ###                     header.wd, header.mask, header.cookie, header.len, type_names, 
     ###                     watch_path, filename)
+    Book.scan_dir(BOOK_DB, BOOK_DIR)
 
     app.run(debug=True)

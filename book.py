@@ -7,15 +7,13 @@ from flask import *
 
 import os
 
-#BOOK_DIR = os.path.abspath("books")
-
 class Book:
 
     def __init__(self, sha1, filename, category):
 
         # object variables
         self.sha1 = sha1
-        self.mtime = "toto"
+        self.mtime = os.path.getmtime(filename)
         self.filename = filename
         self.category = category
         # TODO: self.filesize = 0
@@ -28,6 +26,40 @@ class Book:
     book_list = []
 
     @classmethod
+    def _load_bookdb_from_file(cls, dbfile):
+        if os.path.exists(dbfile):
+            cls.book_list = []
+
+            with open(dbfile, "r") as f:
+                book_list = json.load(f)
+
+                for b in book_list['books']:
+                    sha1 = b["sha1"]
+                    filename = b["filename"]
+                    category = b["category"]
+                    new = Book(sha1, filename, category)
+
+                    new.mtime = b["mtime"]
+
+                    cls.book_list.append(new)
+
+    @classmethod
+    def save_bookdb_to_file(cls, dbfile):
+        with open(dbfile, "w") as f:
+            buf = []
+
+            for b in cls.book_list:
+                buf.append(json.dumps(b.__dict__, indent=2))
+
+            all  = '{\n'
+            all += ' "nb_books": "' + str(len(cls.book_list)) + '",\n'
+            all += ' "books": [\n'
+            all += ',\n'.join(buf) + "\n]\n}\n"
+
+            f.write(all)
+            f.close()
+
+    @classmethod
     def find_book_by_sha1(cls, sha1):
         for b in cls.book_list:
             if b.sha1 == sha1:
@@ -35,7 +67,24 @@ class Book:
         return None
 
     @classmethod
-    def scan_dir(cls, book_dir):
+    def find_book_by_filename(cls, filename):
+        for b in cls.book_list:
+            if b.filename == filename:
+                return b
+        return None
+
+    @classmethod
+    def scan_dir(cls, dbfile, book_dir):
+        """
+            Open 'dbfile' (JSon format) and refresh its content by searching
+            for PDF files in 'book_dir' filesystem tree.
+
+            The filename is researched, and if found, the mtime is checked.
+            If both match between dbfile and book_dir entry, then the dbfile
+            cached informations are considered consistents and reused.
+        """
+        print("Open directory db...")
+        cls._load_bookdb_from_file(dbfile)
         print("Scanning directory %s for PDF files..." % book_dir)
         for (dir, _, files) in os.walk(book_dir):
 
@@ -51,7 +100,16 @@ class Book:
             for f in files:
                 path = os.path.join(dir, f)
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
-                    print("\t" + path)
+                    # a valid pdf filename has been found, check if present in
+                    # book database previously loaded
+                    b = cls.find_book_by_filename(path)
+                    if b and b.mtime == os.path.getmtime(path):
+                        continue
+
+                    # TODO: keep a reference to current filename in
+                    # dir_book_list[]
+
+                    #print("\t" + path)
                     k = sha1_file(path)
 
                     e = cls.find_book_by_sha1(k)
@@ -66,34 +124,9 @@ class Book:
                     c.create_thumbnail(path, k)
                     cls.book_list.append(b)
 
-    ##@classmethod
-    ##def load_from_json(cls):
-    ##    pass
+            cls.save_bookdb_to_file(dbfile)
 
-    ##@classmethod
-    ##def save_to_json(cls):
-    ##    j = json.jsonify(cls.book_list)
-    ##    print(j)
-    ##    #j = json.jsonify({"a": 1, "b": "toto"})
-    ##    #print(j.dumps)
-    ##    pass
-
-    @classmethod
-    def get_html(cls):
-        s = "<h1>Liste des livres</h1>"
-        s += '<table border="1">'
-        s += '<tr>'
-        s += '<th>thumb</th>'
-        s += '<th>filename</th>'
-        s += '<th>sha1</th>'
-        s += '</tr>'
-        for b in cls.book_list:
-            s += "<tr>"
-            #s += '<td><img src="images/' + b.sha1 + '" width="300px"/></td>'
-            s += '<td><img src="images/' + b.sha1 + '" width="150px"/></td>'
-            s += "<td>" + b.filename + "</td>"
-            s += "<td>" + b.sha1 + "</td>"
-            s += "</tr>"
-        s += '</table>'
-        return s
+        # Directory traversal is finished:
+        # TODO: check if some book_list entries are
+        # referering to obsolete pdf file not present in dir_book_list[] anymore
 
