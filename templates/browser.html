@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{{ titre }}</title>
+    </head>
+
+    <body>
+        <h1>Liste des livres</h1>
+        <table border="0" bgcolor="lightgrey">
+            <!--tr>
+                <th>thumb</th>
+                <th>filename</th>
+                <th>sha1</th>
+            </tr-->
+        {% for b in books %}
+            <tr>
+                <td>
+                <a href="{{ url_for('pdf_read', pdffile = b.filename[1:]) }}">
+                <img src="{{ url_for('image', sha1 = b.sha1) }}" width="300px" />
+                </a>
+                </td>
+                <td>{{ b.mtime }}</td>
+                <!--td>{{ b.filename }}</td-->
+                <!--td>{{ b.sha1 }}</td-->
+
+		<!--TODO-->
+                <!--td>{{ b.author }}</td-->
+                <!--td>{{ b.annee }}</td-->
+                <!--td>{{ b.note_sur_5_stars }}</td-->
+                <!--td>{{ b.nb_pages }}</td-->
+            </tr>
+        {% endfor %}
+        </table>
+    </body>
+</html>
