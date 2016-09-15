@@ -20,7 +20,6 @@ creds = {
     'yannick':  'test',
 }
 
-BOOK_DIR = "/home/yannick/Montages Réseau/iceland_storage/Ebooks"
 BOOK_DIR = os.path.abspath("books")
 CACHE_DIR = os.path.abspath("cache")
 BOOK_DB = "book.db"
@@ -75,7 +74,7 @@ def browser():
 
 @app.route('/images/<sha1>')
 def image(sha1):
-    print(sha1)
+    #print(sha1)
 
     global cache
     mon_image = cache.get_thumbnail(sha1)
@@ -95,7 +94,6 @@ def image(sha1):
 
 @app.route('/readpdf/<path:pdffile>')
 def pdf_read(pdffile):
-    print(__name__)
     pdffile = '/' + pdffile
     #print(pdffile)
     #response = make_response(pdffile)
@@ -109,11 +107,8 @@ def pdf_read(pdffile):
 
 @app.route("/bookadmin", methods=['GET', 'POST'])
 def admin():
-    #if not is_user_connected:
-    #    abort(401)
-    ### import os
-    ### f1= "/tmp/test.jpeg"
-    ### print(os.path.basename(f1))
+    if not is_user_connected:
+        return redirect(url_for("login"))
 
     if request.method == "GET":
         #Book.scan_dir(BOOK_DB, BOOK_DIR)
@@ -132,26 +127,8 @@ def admin():
 #def ma_page_erreur(error):
 #    return "Ma jolie page {}".format(error.code), error.code
 
-### import inotify.adapters
-
-#import tests
-
 if __name__ == '__main__':
 
-    ### if 0:
-    ###     i = inotify.adapters.Inotify()
-
-    ###     i.add_watch('/tmp')
-
-    ###     for event in i.event_gen():
-    ###         print(".")
-    ###         if event is not None:
-    ###             (header, type_names, watch_path, filename) = event
-    ###                        
-    ###             print("WD=(%d) MASK=(%d) COOKIE=(%d) LEN=(%d) MASK->NAMES=%s "
-    ###                     "WATCH-PATH=[%s] FILENAME=[%s]", 
-    ###                     header.wd, header.mask, header.cookie, header.len, type_names, 
-    ###                     watch_path, filename)
     Book.scan_dir(BOOK_DB, BOOK_DIR)
 
     app.run(debug=True)
