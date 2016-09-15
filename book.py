@@ -16,11 +16,16 @@ class Book:
         self.mtime = os.path.getmtime(filename)
         self.filename = filename
         self.category = category
-        # TODO: self.filesize = 0
+        self.filesize = os.stat(filename).st_size
         
     
     def __str__(self):
         return (self.sha1 + '|' + self.filename)
+
+    def get_name_and_size_as_str(self):
+        return ("%s (%.2f MB)"
+            % (os.path.basename(self.filename),
+               (self.filesize / 1024.0 / 1024.0)))
 
     # class variables
     book_list = []
@@ -40,6 +45,7 @@ class Book:
                     new = Book(sha1, filename, category)
 
                     new.mtime = b["mtime"]
+                    new.filesize = b["filesize"]
 
                     cls.book_list.append(new)
 

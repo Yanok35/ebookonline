@@ -20,7 +20,7 @@
                 <img src="{{ url_for('image', sha1 = b.sha1) }}" width="300px" />
                 </a>
                 </td>
-                <td>{{ b.mtime }}</td>
+                <td>{{ b.get_name_and_size_as_str() }}</td>
                 <!--td>{{ b.filename }}</td-->
                 <!--td>{{ b.sha1 }}</td-->
 
