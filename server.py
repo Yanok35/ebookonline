@@ -80,7 +80,7 @@ def dummyimg_get_response():
     if not dummyimg_resp:
         from PIL import Image
         img = StringIO()
-        Image.new("RGB", (150,300), "#92C41D").save(img, 'BMP')
+        Image.new("RGB", (210,297), "#92C41D").save(img, 'BMP')
         dummyimg_resp = make_response(img.getvalue())
         dummyimg_resp.mimetype = "image/bmp"
 
