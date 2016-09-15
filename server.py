@@ -72,6 +72,20 @@ def browser():
                            books = Book.book_list,
                            )
 
+dummyimg_resp = None
+
+def dummyimg_get_response():
+
+    global dummyimg_resp
+    if not dummyimg_resp:
+        from PIL import Image
+        img = StringIO()
+        Image.new("RGB", (150,300), "#92C41D").save(img, 'BMP')
+        dummyimg_resp = make_response(img.getvalue())
+        dummyimg_resp.mimetype = "image/bmp"
+
+    return dummyimg_resp
+
 @app.route('/images/<sha1>')
 def image(sha1):
     #print(sha1)
@@ -83,12 +97,7 @@ def image(sha1):
         response = make_response(mon_image)
         response.mimetype = "image/jpeg"
     else:
-        from PIL import Image
-
-        mon_image = StringIO()
-        Image.new("RGB", (150,300), "#92C41D").save(mon_image, 'BMP')
-        response = make_response(mon_image.getvalue())
-        response.mimetype = "image/bmp"
+        response = dummyimg_get_response()
 
     return response
 
