@@ -13,7 +13,7 @@ from book import Book
 #
 # Globals
 #
-is_user_connected = True #False
+is_user_connected = False #False
 
 # user: password
 creds = {
