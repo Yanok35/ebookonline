@@ -34,6 +34,9 @@ import sys
 print("set recursion limit from %d to 10000" % sys.getrecursionlimit())
 sys.setrecursionlimit(10000)
 
+# initial scan of available books
+Book.scan_dir(BOOK_DB, BOOK_DIR)
+
 @app.route('/')
 def index():
     if request.path == '/' and is_user_connected:
@@ -138,6 +141,6 @@ def admin():
 
 if __name__ == '__main__':
 
-    Book.scan_dir(BOOK_DB, BOOK_DIR)
+    #Book.scan_dir(BOOK_DB, BOOK_DIR)
 
     app.run(debug=True)
