@@ -85,7 +85,11 @@ class Cache:
 
         except:
             print '{{{ Error: thumbnail generation failed'
-            print "Unexpected error:", sys.exc_info()
+            print 'pdffilename = %s' % pdffilename
+            print "Unexpected error:"
+            print sys.exc_info()
+            import traceback
+            print traceback.print_exc()
             print '}}}'
             return
 
