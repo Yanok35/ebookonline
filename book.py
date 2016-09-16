@@ -4,6 +4,7 @@
 
 from __future__ import unicode_literals
 
+from cache import Cache
 from cache import sha1_file
 from flask import *
 
@@ -105,6 +106,7 @@ class Book:
                 category = 'Generals'
             #print(category)
 
+            c = Cache.get_instance()
             for f in files:
                 path = os.path.join(dir, f)
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
@@ -112,6 +114,9 @@ class Book:
                     # book database previously loaded
                     b = cls.find_book_by_filename(path)
                     if b and b.mtime == os.path.getmtime(path):
+                        # Let's create thumbnail, in case it is missing for
+                        # any reason
+                        c.create_thumbnail(path, b.sha1)
                         continue
 
                     # TODO: keep a reference to current filename in
@@ -127,8 +132,6 @@ class Book:
                         continue
 
                     b = Book(k, path, category)
-                    from cache import Cache
-                    c = Cache.get_instance()
                     c.create_thumbnail(path, k)
                     cls.book_list.append(b)
 
