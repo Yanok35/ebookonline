@@ -72,6 +72,8 @@ class Cache:
             from PyPDF2 import PdfFileReader, PdfFileWriter
             f = open(pdffilename, 'rb') 
             pdf = PdfFileReader(f)
+            if pdf.isEncrypted:
+                pdf.decrypt('')
             contents = pdf.getPage(0)
 
             pdf = PdfFileWriter()
