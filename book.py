@@ -99,7 +99,7 @@ class Book:
             #print('>>>', dir, files)
 
             # Book category is first level directory name
-            category = dir.lstrip(book_dir)
+            category = dir.replace(book_dir, '')
             category = category.split('/')[0]
             if category == '':
                 category = 'Generals'
