@@ -16,17 +16,30 @@ from book import Book
 #
 app = Flask(__name__)
 
-# You should generate a new one before hosting, using 'os.urandom(24)'
-SECRET_KEY = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
+CFG_FILE = os.path.abspath("ebookonline.conf")
+if os.path.exists(CFG_FILE):
+    print("Parsing conf file...")
+    execfile(CFG_FILE)
 
-# user: password
-creds = {
-    'yannick':  'test',
-}
+    assert(SECRET_KEY)
+    assert(len(creds.keys()))
+    assert(BOOK_DIR)
+    assert(CACHE_DIR)
+    assert(BOOK_DB)
+else:
+    # Default values
 
-BOOK_DIR = os.path.abspath("books")
-CACHE_DIR = os.path.abspath("cache")
-BOOK_DB = "book.db"
+    # You should generate a new one before hosting, using 'os.urandom(24)'
+    SECRET_KEY = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
+
+    # user: password
+    creds = {
+        'yannick':  'test',
+    }
+
+    BOOK_DIR = os.path.abspath("books")
+    CACHE_DIR = os.path.abspath("cache")
+    BOOK_DB = "book.db"
 
 app.secret_key = SECRET_KEY
 #
