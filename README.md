@@ -35,23 +35,34 @@ cd git/
 
 ## Configure the service
 
-You can edit ```server.py``` file and modify the "creds" dictionnary to
-configure a set of users. Also, by default the server will search for PDF files
-in a subdirectory "books" as referenced by the BOOK_DIR variable. You can
-configure this one according to your needs
+You should edit ```ebookonline.conf``` file and modify following variables. A
+secret key is required for cookies encryption in the
+[Flask session documentation](http://flask.pocoo.org/docs/0.11/quickstart/#sessions).
+Also, you should configure the user/password list by filling up the "creds"
+dictionnary.
+
+By default the server will search for PDF files in a subdirectory "books" as
+referenced by the BOOK_DIR variable. You can configure this one according to
+your needs.
 
 ```python
-# user: password
+# You should generate a new one before hosting, using 'os.urandom(24)'
+SECRET_KEY = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
+
 creds = {
     'yannick':  'test',
 }
 
 BOOK_DIR = os.path.abspath("books")
+CACHE_DIR = os.path.abspath("cache")
+BOOK_DB = "book.db"
 ```
 
 ## Configure Apache as an Https proxy
 
-## Start the server
+TODO
+
+## Start the Flask server
 ```bash
 # ./server.py
 FLASK_APP=server.py flask run --host=0.0.0.0
