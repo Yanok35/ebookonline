@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 
 import os
+import sys
 #from flask import Flask, redirect, request, make_response, render_template, url_for
 #from flask import abort
 from flask import *
@@ -13,7 +14,10 @@ from book import Book
 #
 # Globals
 #
-is_user_connected = False #False
+app = Flask(__name__)
+
+# You should generate a new one before hosting, using 'os.urandom(24)'
+SECRET_KEY = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
 
 # user: password
 creds = {
@@ -24,13 +28,12 @@ BOOK_DIR = os.path.abspath("books")
 CACHE_DIR = os.path.abspath("cache")
 BOOK_DB = "book.db"
 
+app.secret_key = SECRET_KEY
 #
-app = Flask(__name__)
 
 #cache = Cache(CACHE_DIR)
 cache = Cache.get_instance(CACHE_DIR)
 
-import sys
 print("set recursion limit from %d to 10000" % sys.getrecursionlimit())
 sys.setrecursionlimit(10000)
 
@@ -39,13 +42,16 @@ Book.scan_dir(BOOK_DB, BOOK_DIR)
 
 @app.route('/')
 def index():
-    if request.path == '/' and is_user_connected:
+    if request.path == '/' and 'username' in session:
         return redirect(url_for("browser"))
     else:
         return redirect(url_for("login"))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'username' in session:
+        return redirect(url_for("index"))
+
     if request.method == "GET":
         return render_template("login.html")
     else:
@@ -55,8 +61,7 @@ def login():
         if u in creds.keys():
             if creds[u] == p:
 
-                global is_user_connected
-                is_user_connected = True
+                session['username'] = u
 
                 return redirect(url_for("index"))
 
@@ -65,7 +70,7 @@ def login():
 
 @app.route('/browser')
 def browser():
-    if not is_user_connected:
+    if not 'username' in session:
         return redirect(url_for("login"))
 
     #Book.scan_dir(BOOK_DB, BOOK_DIR)
@@ -119,7 +124,7 @@ def pdf_read(pdffile):
 
 @app.route("/bookadmin", methods=['GET', 'POST'])
 def admin():
-    if not is_user_connected:
+    if not 'username' in session:
         return redirect(url_for("login"))
 
     if request.method == "GET":
