@@ -81,6 +81,12 @@ def login():
         abort(401)
         return ("<h3>Error</h3>")
 
+@app.route('/logout')
+def logout():
+    # remove the username from the session if it's there
+    session.pop('username', None)
+    return redirect(url_for('index'))
+
 @app.route('/browser')
 def browser():
     if not 'username' in session:
