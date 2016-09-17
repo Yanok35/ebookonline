@@ -40,6 +40,11 @@ class Book:
         if os.path.exists(dbfile):
             cls.book_list = []
 
+            # When dbfile is empty, json parser trig an exception.
+            if not os.stat(dbfile).st_size:
+                print("Warning: dbfile is empty");
+                return
+
             with open(dbfile, "r") as f:
                 book_list = json.load(f)
 
