@@ -10,27 +10,24 @@ the use of an https server!
 
 # Installation steps
 
+## Clone this repository
+```bash
+git clone https://github.com/Yanok35/ebookonline.git
+cd ebookonline/
+```
+
 ## Create a virtual environment
 ```bash
-virtualenv ebookonline
-cd ebookonline
-source bin/activate
+virtualenv venv
+source venv/bin/activate
 ```
 
 ## Install dependencies
 ```bash
-sudo apt-get install libjpeg-dev
-sudo apt-get install libmagickwand-dev
-pip install flask
-pip install Pillow
-pip install PyPDF2
-pip install wand
-```
-
-## Clone this repository
-```bash
-git clone https://github.com/Yanok35/ebookonline.git git
-cd git/
+pip install flask==0.11.1
+pip install Pillow==3.3.1
+pip install PyPDF2==1.26.0
+pip install wand==0.4.3
 ```
 
 ## Configure the service
