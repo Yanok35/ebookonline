@@ -3,7 +3,7 @@
 
 import os
 import sys
-from flask import abort, make_response, redirect, render_template, request, session, url_for
+from flask import abort, current_app, make_response, redirect, render_template, request, session, url_for
 from . import main
 from ..book import Book
 from ..cache import Cache
@@ -28,10 +28,7 @@ def login():
         u = request.form['username']
         p = request.form['password']
 
-        #FIXME: quick&dirty stub to validate code migration...
-        session['username'] = u
-        return redirect(url_for(".index"))
-
+        creds = current_app.config['CREDENTIALS']
         if u in creds.keys():
             if creds[u] == p:
 
