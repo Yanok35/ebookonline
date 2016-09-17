@@ -16,8 +16,8 @@
         {% for b in books %}
             <tr>
                 <td>
-                <a href="{{ url_for('pdf_read', pdffile = b.filename[1:]) }}">
-                <img src="{{ url_for('image', sha1 = b.sha1) }}" width="300px" />
+                <a href="{{ url_for('.pdf_read', pdffile = b.filename[1:]) }}">
+                <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
                 </a>
                 </td>
                 <td>{{ b.get_name_and_size_as_str() }}</td>

@@ -28,6 +28,7 @@ pip install flask==0.11.1
 pip install Pillow==3.3.1
 pip install PyPDF2==1.26.0
 pip install wand==0.4.3
+pip install flask-script==2.0.5
 ```
 
 ## Configure the service
