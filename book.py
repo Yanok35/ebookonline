@@ -4,6 +4,8 @@
 
 from __future__ import unicode_literals
 
+import sys
+
 from cache import Cache
 from cache import sha1_file
 from flask import *
@@ -122,13 +124,16 @@ class Book:
                     # TODO: keep a reference to current filename in
                     # dir_book_list[]
 
-                    #print("\t" + path)
+                    print "Compute sha1 for %s..." % f,
+                    sys.stdout.flush()
                     k = sha1_file(path)
+                    print "done"
 
                     e = cls.find_book_by_sha1(k)
                     if e:
-                        print("*** Warning: duplicate PDF files: %s\n"
-                              "\t(%s already in cache)" % (path, e.filename))
+                        print("*** Warning: duplicate PDF files:\n"
+                              "adding \t%s\n"
+                              "already\t%s" % (path, e.filename))
                         continue
 
                     b = Book(k, path, category)
