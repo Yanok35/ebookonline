@@ -1,5 +1,6 @@
 # Flask Course
 https://openclassrooms.com/courses/creez-vos-applications-web-avec-flask/requetes-et-reponses
 
-README.md: specify versions of pip packages
+README.md: specify versions of pip packages -> requirements.txt?
 
+Ctrl+C handler to avoid dbfile corruption?
