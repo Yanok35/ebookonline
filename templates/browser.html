@@ -3,24 +3,6 @@
     <head>
         <meta charset="utf-8" />
         <title>{{ titre }}</title>
-        <style>
-.bookpreview-image img {
-    -webkit-transition: all 0.5s ease; /* Safari and Chrome */
-    -moz-transition: all 0.5s ease; /* Firefox */
-    -o-transition: all 0.5s ease; /* IE 9 */
-    -ms-transition: all 0.5s ease; /* Opera */
-    transition: all 0.5s ease;
-        max-width: 100%;
-}
-
-.bookpreview-image:hover img {
-    -webkit-transform:scale(1.05); /* Safari and Chrome */
-    -moz-transform:scale(1.05); /* Firefox */
-    -ms-transform:scale(1.05); /* IE 9 */
-    -o-transform:scale(1.05); /* Opera */
-     transform:scale(1.05);
-}
-        </style>
     </head>
 
     <body>
@@ -33,20 +15,12 @@
             </tr-->
         {% for b in books %}
             <tr>
-                <td style="text-align:center">
-                <figure>
+                <td>
                 <a href="{{ url_for('pdf_read', pdffile = b.filename[1:]) }}">
-                <div class="bookpreview-image">
                 <img src="{{ url_for('image', sha1 = b.sha1) }}" width="300px" />
-                </div>
                 </a>
-                <figcaption>
-                {{ b.get_name_and_size_as_str() }}
-                </figcaption>
-                </figure>
                 </td>
-            </tr><tr>
-                <td><hr/></td>
+                <td>{{ b.get_name_and_size_as_str() }}</td>
                 <!--td>{{ b.filename }}</td-->
                 <!--td>{{ b.sha1 }}</td-->
 
