@@ -7,7 +7,7 @@ import sys
 
 from app import create_app
 from config import Config
-from flask.ext.script import Manager
+from flask_script import Manager
 
 from app.cache import Cache
 from app.book import Book
