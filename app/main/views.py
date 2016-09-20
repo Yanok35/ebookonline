@@ -5,7 +5,7 @@ import os
 import sys
 from flask import abort, current_app, make_response, redirect, render_template, request, session, url_for
 from . import main
-from ..book import Book
+from ..book import BookDir
 from ..cache import Cache
 
 from StringIO import StringIO
@@ -54,7 +54,7 @@ def browser():
 
     return render_template("browser.html",
                            titre = "eBook browser",
-                           books = Book.book_list,
+                           books = current_app.bookdir.booklist,
                            )
 
 dummyimg_resp = None
