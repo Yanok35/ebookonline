@@ -4,6 +4,7 @@
 
 from __future__ import unicode_literals
 
+import json
 import sys
 
 from cache import Cache
@@ -12,19 +13,25 @@ from flask import *
 
 import os
 
+def json_dumper(obj):
+    try:
+        return obj.to_json()
+    except:
+        return obj.__dict__
+
 class Book:
 
-    def __init__(self, sha1, filename, category):
+    def __init__(self, sha1, book_dir, filename, category):
 
         # object variables
+        fullpath = os.path.join(book_dir, filename)
         self.sha1 = sha1
-        self.mtime = os.path.getmtime(filename)
+        self.mtime = os.path.getmtime(fullpath)
         self.filename = filename
         self.category = category
-        self.filesize = os.stat(filename).st_size
-        
-    
-    def __str__(self):
+        self.filesize = os.stat(fullpath).st_size
+
+    def __repr__(self):
         return (self.sha1 + '|' + self.filename)
 
     def get_name_and_size_as_str(self):
@@ -39,42 +46,33 @@ class BookDir:
         self.dbfile = dbfile
         self.dirpath = None
 
-    def _load_bookdb_from_file(self, dbfile):
-        if os.path.exists(dbfile):
+    def _load_bookdb_from_file(self):
+        if os.path.exists(self.dbfile):
             self.booklist = []
 
             # When dbfile is empty, json parser trig an exception.
-            if not os.stat(dbfile).st_size:
+            if not os.stat(self.dbfile).st_size:
                 print("Warning: dbfile is empty");
                 return
 
-            with open(dbfile, "r") as f:
+            with open(self.dbfile, "r") as f:
                 inp = json.load(f)
 
-                for b in inp['books']:
+                for b in inp['booklist']:
                     sha1 = b["sha1"]
                     filename = b["filename"]
                     category = b["category"]
-                    new = Book(sha1, filename, category)
+                    new = Book(sha1, self.dirpath, filename, category)
 
                     new.mtime = b["mtime"]
                     new.filesize = b["filesize"]
 
                     self.booklist.append(new)
 
-    def save_bookdb_to_file(self, dbfile):
-        with open(dbfile, "w") as f:
-            buf = []
-
-            for b in self.booklist:
-                buf.append(json.dumps(b.__dict__, indent=2))
-
-            all  = '{\n'
-            all += ' "nb_books": "' + str(len(self.booklist)) + '",\n'
-            all += ' "books": [\n'
-            all += ',\n'.join(buf) + "\n]\n}\n"
-
-            f.write(all)
+    def save_bookdb_to_file(self):
+        with open(self.dbfile, "w") as f:
+            s = json.dumps(self, default=json_dumper, indent=2)
+            f.write(s)
             f.close()
 
     def find_book_by_sha1(self, sha1):
@@ -98,13 +96,13 @@ class BookDir:
             If both match between dbfile and book_dir entry, then the dbfile
             cached informations are considered consistents and reused.
         """
-        print("Open directory db...")
-        self._load_bookdb_from_file(self.dbfile)
-        print("Scanning directory %s for PDF files..." % book_dir)
-        self.dirpath = book_dir
-        for (dir, _, files) in os.walk(book_dir):
 
-            #print('>>>', dir, files)
+        print("Open directory db...")
+        self.dirpath = book_dir
+        self._load_bookdb_from_file()
+
+        print("Scanning directory %s for PDF files..." % book_dir)
+        for (dir, _, files) in os.walk(book_dir):
 
             # Book category is first level directory name
             category = dir.replace(book_dir, '')
@@ -119,11 +117,16 @@ class BookDir:
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
                     # a valid pdf filename has been found, check if present in
                     # book database previously loaded
+
+                    # Book object path are relative to BookDir path
+                    abspath = path
+                    path = os.path.relpath(path, book_dir)
+
                     b = self.find_book_by_filename(path)
-                    if b and b.mtime == os.path.getmtime(path):
+                    if b and b.mtime == os.path.getmtime(abspath):
                         # Let's create thumbnail, in case it is missing for
                         # any reason
-                        c.create_thumbnail(path, b.sha1)
+                        c.create_thumbnail(abspath, b.sha1)
                         continue
 
                     # TODO: keep a reference to current filename in
@@ -131,7 +134,7 @@ class BookDir:
 
                     print "Compute sha1 for %s..." % f,
                     sys.stdout.flush()
-                    k = sha1_file(path)
+                    k = sha1_file(abspath)
                     print "done"
 
                     e = self.find_book_by_sha1(k)
@@ -141,11 +144,11 @@ class BookDir:
                               "already\t%s" % (path, e.filename))
                         continue
 
-                    b = Book(k, path, category)
+                    b = Book(k, book_dir, path, category)
                     c.create_thumbnail(path, k)
                     self.booklist.append(b)
 
-            self.save_bookdb_to_file(self.dbfile)
+            self.save_bookdb_to_file()
 
         # Directory traversal is finished:
         # TODO: check if some book_list entries are

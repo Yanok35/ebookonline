@@ -88,12 +88,12 @@ def image(sha1):
 
 @main.route('/readpdf/<path:pdffile>')
 def pdf_read(pdffile):
-    pdffile = '/' + pdffile
     #print(pdffile)
     #response = make_response(pdffile)
     #return response
     mon_pdf = StringIO()
-    n = open(pdffile, 'rb')
+    abspath = os.path.join(current_app.bookdir.dirpath, pdffile)
+    n = open(abspath, 'rb')
     allin = n.read() #.decode('latin1')#.decode('iso8859-15')
     response = make_response(allin)
     response.mimetype = "application/pdf"
