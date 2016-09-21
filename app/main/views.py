@@ -45,16 +45,26 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('.index'))
 
-@main.route('/browser')
+@main.route('/browser', methods=['GET', 'POST'])
 def browser():
     if not 'username' in session:
         return redirect(url_for(".login"))
 
-    #Book.scan_dir(BOOK_DB, BOOK_DIR)
+    d = current_app.bookdir
+    categories = d.get_list_of_category()
+
+    selected_category = request.values.get('selected-category')
+
+    if selected_category and selected_category != "all":
+        booklist = d.get_subset_by_category(selected_category)
+    else:
+        booklist = d.booklist
 
     return render_template("browser.html",
                            titre = "eBook browser",
-                           books = current_app.bookdir.booklist,
+                           books = booklist,
+                           categories = categories,
+                           selected_category = selected_category,
                            )
 
 dummyimg_resp = None

@@ -89,6 +89,20 @@ class BookDir:
                 return b
         return None
 
+    def get_subset_by_category(self, category):
+        sublist = []
+        for b in self.booklist:
+            if b.category == category:
+                sublist.append(b)
+        return sublist
+
+    def get_list_of_category(self):
+        categories = []
+        for b in self.booklist:
+            if not b.category in categories:
+                categories.append(b.category)
+        return categories
+
     def scan_dir(self, book_dir):
         """
             Open 'dbfile' (JSon format) and refresh its content by searching

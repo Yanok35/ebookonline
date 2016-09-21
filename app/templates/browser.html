@@ -7,6 +7,16 @@
 
     <body>
         <h1>Liste des livres</h1>
+        <form class="form-filter" role="form" method="post">
+        <select name="selected-category">
+            <option> all </option>
+        {% for c in categories %}
+            <option{{ " selected" if c == selected_category else "" }}> {{ c }} </option>
+        {% endfor %}
+        </select>
+        <button class="btn" type="submit">Filter</button>
+        </form>
+
         <table border="0" bgcolor="lightgrey">
             <!--tr>
                 <th>thumb</th>
