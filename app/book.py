@@ -123,11 +123,10 @@ class BookDir:
         for (dir, _, files) in os.walk(book_dir):
 
             # Book category is first level directory name
-            category = dir.replace(book_dir, '')
-            category = category.split('/')[-1]
+            category = dir.replace(book_dir, '')[1:]
+            category = category.split('/')[0]
             if category == '':
                 category = 'Generals'
-            #print(category)
 
             c = Cache.get_instance()
             for f in files:
