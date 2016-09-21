@@ -71,7 +71,7 @@ class BookDir:
 
                 self.booklist.append(new)
 
-    def save_bookdb_to_file(self):
+    def save_db(self):
         with open(self.dbfile, "w") as f:
             s = json.dumps(self, default=json_dumper, indent=2)
             f.write(s)
@@ -103,12 +103,14 @@ class BookDir:
         self.dirpath = book_dir
         self.load_db()
 
+        refreshed_booklist = []
+
         print("Scanning directory %s for PDF files..." % book_dir)
         for (dir, _, files) in os.walk(book_dir):
 
             # Book category is first level directory name
             category = dir.replace(book_dir, '')
-            category = category.split('/')[0]
+            category = category.split('/')[-1]
             if category == '':
                 category = 'Generals'
             #print(category)
@@ -117,42 +119,66 @@ class BookDir:
             for f in files:
                 path = os.path.join(dir, f)
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
-                    # a valid pdf filename has been found, check if present in
-                    # book database previously loaded
+                    # a valid pdf filename has been found
 
                     # Book object path are relative to BookDir path
                     abspath = path
                     path = os.path.relpath(path, book_dir)
 
+                    # check if present in book database
                     b = self.find_book_by_filename(path)
                     if b and b.mtime == os.path.getmtime(abspath):
                         # Let's create thumbnail, in case it is missing for
                         # any reason
                         c.create_thumbnail(abspath, b.sha1)
-                        continue
 
-                    # TODO: keep a reference to current filename in
-                    # dir_book_list[]
+                        refreshed_booklist.append(b)
+                        self.booklist.remove(b)
+                        continue
 
                     print "Compute sha1 for %s..." % f,
                     sys.stdout.flush()
                     k = sha1_file(abspath)
                     print "done"
 
-                    e = self.find_book_by_sha1(k)
-                    if e:
-                        print("*** Warning: duplicate PDF files:\n"
-                              "adding \t%s\n"
-                              "already\t%s" % (path, e.filename))
+                    # if file found in refreshed_booklist, its a duplicate
+                    dup = False
+                    for b in refreshed_booklist:
+                        if b.sha1 == k and b.filesize:
+                            print("*** Warning: duplicate PDF files:\n"
+                                  "not adding\t%s\n"
+                                  "already   \t%s" % (path, b.filename))
+                            dup = True
+                    if dup:
                         continue
 
+                    # if file found in self.booklist, its a moved file
+                    e = self.find_book_by_sha1(k)
+                    if e:
+                        # entry found in db and was moved in dir.
+                        e.filename = path
+                        e.mtime = os.path.getmtime(abspath)
+                        e.category = category
+                        e.filesize = os.stat(abspath).st_size
+
+                        refreshed_booklist.append(e)
+                        self.booklist.remove(e)
+                        continue
+
+                    # A new book which was not in db
                     b = Book(k, book_dir, path, category)
                     c.create_thumbnail(path, k)
-                    self.booklist.append(b)
 
-            self.save_bookdb_to_file()
+                    refreshed_booklist.append(b)
 
-        # Directory traversal is finished:
-        # TODO: check if some book_list entries are
-        # referering to obsolete pdf file not present in dir_book_list[] anymore
+        # booklist still contains all db file not found in dir, thus removed.
+        # let's keep those entry to keep user settings in case they reappears
+        books_notfound = self.booklist
+        self.booklist = refreshed_booklist
+        for b in books_notfound:
+            b.filesize = 0
+            b.mtime = -1
+            self.booklist.append(b)
+
+        self.save_db()
 
