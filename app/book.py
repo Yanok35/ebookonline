@@ -25,11 +25,14 @@ class Book:
 
         # object variables
         fullpath = os.path.join(book_dir, filename)
+        here = os.path.exists(fullpath)
+        if not here:
+            print("*** %s not here" % filename)
         self.sha1 = sha1
-        self.mtime = os.path.getmtime(fullpath)
+        self.mtime = os.path.getmtime(fullpath) if here else -1
         self.filename = filename
         self.category = category
-        self.filesize = os.stat(fullpath).st_size
+        self.filesize = os.stat(fullpath).st_size if here else 0
 
     def __repr__(self):
         return (self.sha1 + '|' + self.filename)
@@ -46,28 +49,27 @@ class BookDir:
         self.dbfile = dbfile
         self.dirpath = None
 
-    def _load_bookdb_from_file(self):
-        if os.path.exists(self.dbfile):
-            self.booklist = []
+    def load_db(self):
+        if not os.path.exists(self.dbfile):
+            return
 
-            # When dbfile is empty, json parser trig an exception.
-            if not os.stat(self.dbfile).st_size:
-                print("Warning: dbfile is empty");
-                return
+        self.booklist = []
 
-            with open(self.dbfile, "r") as f:
-                inp = json.load(f)
+        # When dbfile is empty, json parser trig an exception.
+        if not os.stat(self.dbfile).st_size:
+            print("Warning: dbfile is empty");
+            return
 
-                for b in inp['booklist']:
-                    sha1 = b["sha1"]
-                    filename = b["filename"]
-                    category = b["category"]
-                    new = Book(sha1, self.dirpath, filename, category)
+        with open(self.dbfile, "r") as f:
+            inp = json.load(f)
 
-                    new.mtime = b["mtime"]
-                    new.filesize = b["filesize"]
+            for b in inp['booklist']:
+                sha1 = b["sha1"]
+                filename = b["filename"]
+                category = b["category"]
+                new = Book(sha1, self.dirpath, filename, category)
 
-                    self.booklist.append(new)
+                self.booklist.append(new)
 
     def save_bookdb_to_file(self):
         with open(self.dbfile, "w") as f:
@@ -99,7 +101,7 @@ class BookDir:
 
         print("Open directory db...")
         self.dirpath = book_dir
-        self._load_bookdb_from_file()
+        self.load_db()
 
         print("Scanning directory %s for PDF files..." % book_dir)
         for (dir, _, files) in os.walk(book_dir):
