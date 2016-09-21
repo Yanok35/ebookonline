@@ -7,6 +7,8 @@
 
     <body>
         <h1>Liste des livres</h1>
+        <a href="{{ url_for('.logout') }}">Logout</a><br/>
+
         <form class="form-filter" role="form" method="post">
         <select name="selected-category">
             <option> all </option>
