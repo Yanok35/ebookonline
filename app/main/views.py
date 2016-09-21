@@ -63,7 +63,7 @@ def browser():
     return render_template("browser.html",
                            titre = "eBook browser",
                            books = booklist,
-                           categories = categories,
+                           categories = sorted(categories),
                            selected_category = selected_category,
                            )
 
