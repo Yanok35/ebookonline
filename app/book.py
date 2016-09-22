@@ -75,7 +75,6 @@ class BookDir:
         with open(self.dbfile, "w") as f:
             s = json.dumps(self, default=json_dumper, indent=2)
             f.write(s)
-            f.close()
 
     def find_book_by_sha1(self, sha1):
         for b in self.booklist:
