@@ -179,7 +179,7 @@ class BookDir:
 
                     # A new book which was not in db
                     b = Book(k, book_dir, path, category)
-                    c.create_thumbnail(path, k)
+                    c.create_thumbnail(abspath, k)
 
                     refreshed_booklist.append(b)
 
