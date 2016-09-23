@@ -73,6 +73,9 @@ class BookDir:
                 category = b["category"]
                 new = Book(sha1, self.dirpath, filename, category)
 
+                if "tags" in b.keys():
+                    new.tags = b["tags"]
+
                 self.booklist.append(new)
 
     def save_db(self):
@@ -105,6 +108,14 @@ class BookDir:
             if not b.category in categories:
                 categories.append(b.category)
         return categories
+
+    def get_list_of_tags(self):
+        tags = []
+        for b in self.booklist:
+            for t in b.tags.split(' '):
+                if not t in tags:
+                    tags.append(t)
+        return tags
 
     def scan_dir(self, book_dir):
         """
