@@ -34,6 +34,10 @@ class Book:
         self.category = category
         self.filesize = os.stat(fullpath).st_size if here else 0
 
+        # following are user-defined books attributes
+        # (mostly empty after scan_dir)
+        self.tags = ""
+
     def __repr__(self):
         return (self.sha1 + '|' + self.filename)
 
