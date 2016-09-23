@@ -26,10 +26,17 @@
         {% for b in books %}
           <div class="book-box">
             <a href="{{ url_for('.pdf_read', pdffile = b.filename) }}">
+            <div class="book-img">
             <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
+            </div>
             </a>
             <span class="caption simple-caption">
             <p>{{ b.get_name_and_size_as_str() }}</p>
+            <p>
+              <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">
+              <img src="/static/pencil.svg" width="20" height="20" />
+              </a>
+            </p>
             </span>
           </div>
         <!--td>{{ b.get_name_and_size_as_str() }}</td-->
