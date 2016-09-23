@@ -3,6 +3,9 @@
     <head>
         <meta charset="utf-8" />
         <title>{{ titre }}</title>
+        <link href="static/style.css" rel="stylesheet" type="text/css" media="screen" />
+        <style>
+        </style>
     </head>
 
     <body>
@@ -19,30 +22,28 @@
         <!--button class="btn" type="submit">Filter</button-->
         </form>
 
-        <table border="0" bgcolor="lightgrey">
-            <!--tr>
-                <th>thumb</th>
-                <th>filename</th>
-                <th>sha1</th>
-            </tr-->
+        <div class="book-view">
         {% for b in books %}
-            <tr>
-                <td>
-                <a href="{{ url_for('.pdf_read', pdffile = b.filename) }}">
-                <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
-                </a>
-                </td>
-                <td>{{ b.get_name_and_size_as_str() }}</td>
-                <!--td>{{ b.filename }}</td-->
-                <!--td>{{ b.sha1 }}</td-->
+          <div class="book-box">
+            <a href="{{ url_for('.pdf_read', pdffile = b.filename) }}">
+            <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
+            </a>
+            <span class="caption simple-caption">
+            <p>{{ b.get_name_and_size_as_str() }}</p>
+            </span>
+          </div>
+        <!--td>{{ b.get_name_and_size_as_str() }}</td-->
 
-		<!--TODO-->
-                <!--td>{{ b.author }}</td-->
-                <!--td>{{ b.annee }}</td-->
-                <!--td>{{ b.note_sur_5_stars }}</td-->
-                <!--td>{{ b.nb_pages }}</td-->
-            </tr>
+
+        <!--td>{{ b.filename }}</td-->
+        <!--td>{{ b.sha1 }}</td-->
+
+	<!--TODO-->
+        <!--td>{{ b.author }}</td-->
+        <!--td>{{ b.annee }}</td-->
+        <!--td>{{ b.note_sur_5_stars }}</td-->
+        <!--td>{{ b.nb_pages }}</td-->
         {% endfor %}
-        </table>
+        </div>
     </body>
 </html>
