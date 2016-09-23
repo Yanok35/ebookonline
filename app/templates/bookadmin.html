@@ -6,32 +6,60 @@
     </head>
 
     <body>
-        <h1>{{ titre }}</h1>
-        <h2>Cache details</h2>
+        <h1>Administration</h1>
+        {% if sha1 %}
+        <h2>Book entry</h2>
         <ul>
-            <li>Number of SHA1 thumbnail = </li>
-            <li>Cache size = </li>
+            <li>Filename = {{ bsel.filename }}</li>
+            <li>Sha1 = {{ bsel.sha1 }}</li>
+            <li>Json = {{ bsel.get_json() }}</li>
         </ul>
+        <form class="form-bookadmin" role="form" method="post">
+        <h3>File name</h3>
+        <p>{{ bsel.filename }}</p>
+
+        <h3>File size</h3>
+        <p>{{ bsel.filesize }} Bytes</p>
+
+        <h3>Category</h3>
+        <p>{{ bsel.category }}</p>
+
+	<h3>Tags</h3>
+        <p><input name="tags" type="text" value="{{ bsel.tags }}"></p>
+	<p>Liste des tags de la bibliothèque : </br>
+	{{ ' '.join(d.get_list_of_tags()) }}
+	</p>
+
+	<h3>Thumbnail cover</h3>
+        <p><img border=1px src="/images/{{ bsel.sha1 }}"/></p>
+
+        <h3>Crop Left (px)</h3>
+        <p><input name="crop_left" type="text" id="inputUsername" class="form-control" placeholder="Username" value="{{ bsel.filename }}"></p>
+
+        <h3>Auteur</h3>
+
+        <h3>Editeur</h3>
+        <p>
+        <input name="username" type="text" id="inputUsername" class="form-control" placeholder="Username" value="{{ bsel.filename }}">
+        </p>
+        <p>
+        Liste des éditeurs dans la base: 
+        </p>
+
+        <p>
+        <button class="btn" type="submit">Save</button>
+        </p>
+        </form>
+        {% else %}
         <h2>Book list</h2>
         <ul>
         {% for b in books %}
-            <li>{{ b }}</li>
+            <li>
+            <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">{{ b }}</a>
+            </li>
         {% endfor %}
         </ul>
-
-        <div class="container">
-	<!-- action="{ { url_for('templates', filename = 'bookadmin.html') } }" -->
-            <form class="form-register" role="form" method="post">
-                <h2 class="form-register-heading">Please sign up</h2>
-                <label for="username" class="sr-only">Username</label>
-                <input name="username" type="text" id="inputUsername" class="form-control" placeholder="Username" required autofocus>
-                <!--label for="email" class="sr-only">Email address</label>
-                <input name="email" type="email" id="inputEmail" class="form-control" placeholder="Email address" required autofocus-->
-                <label for="password" class="sr-only">Password</label>
-                <input name="password" type="password" id="inputPassword" class="form-control" placeholder="Password" required >
-                <button class="btn btn-lg btn-primary btn-block" type="submit">Sign up</button>
-            </form>
-        </div>
+        {% endif %}
 
     </body>
 </html>

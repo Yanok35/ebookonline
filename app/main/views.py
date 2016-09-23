@@ -109,22 +109,35 @@ def pdf_read(pdffile):
     response.mimetype = "application/pdf"
     return response
 
-#@main.route("/bookadmin", methods=['GET', 'POST'])
-#def admin():
-#    if not 'username' in session:
-#        return redirect(url_for("login"))
-#
-#    if request.method == "GET":
-#        #Book.scan_dir(BOOK_DB, BOOK_DIR)
-#        return render_template("bookadmin.html", titre = "eBook admin")
-#    else:
-#        s = request.form['username'] or None
-#        pass #
-#
-#    response = make_response("<h1>Book admin for %s</h1>"
-#            "<p>%s</p>" % (s, request.form))
-#    return response
-#
+@main.route("/bookadmin/")
+@main.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
+def bookadmin(sha1 = None):
+    if not 'username' in session:
+        return redirect(url_for("login"))
+
+    d = current_app.bookdir
+
+    bsel = None
+    if sha1:
+        bsel = d.find_book_by_sha1(sha1)
+
+    edit_book_sha1 = request.values.get('book-sha1')
+
+    if request.method == "POST":
+        if 'tags' in request.form.keys():
+            bsel.tags = request.form['tags']
+
+        # Write json db
+        d.save_db()
+        return redirect(url_for(".bookadmin", sha1 = sha1))
+
+    return render_template("bookadmin.html",
+                            d = d,
+                            bsel = bsel,
+                            sha1 = sha1,
+                            books = d.booklist,
+                            titre = "eBook admin")
+
 #@main.errorhandler(401)
 #@main.errorhandler(404)
 #@main.errorhandler(500)

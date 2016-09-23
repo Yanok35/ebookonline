@@ -46,6 +46,9 @@ class Book:
             % (os.path.basename(self.filename),
                (self.filesize / 1024.0 / 1024.0)))
 
+    def get_json(self):
+        return json.dumps(self, default=json_dumper, indent=2)
+
 class BookDir:
 
     def __init__(self, dbfile):
