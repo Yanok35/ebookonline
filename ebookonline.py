@@ -11,15 +11,15 @@ from flask_script import Manager
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
+print("set recursion limit from %d to 10000" % sys.getrecursionlimit())
+sys.setrecursionlimit(10000)
+
 #
 # Globals
 #
 app = create_app(os.getenv('FLASK_CONFIG') or 'default')
 manager = Manager(app)
 
-
-print("set recursion limit from %d to 10000" % sys.getrecursionlimit())
-sys.setrecursionlimit(10000)
 
 if __name__ == '__main__':
     manager.run()
