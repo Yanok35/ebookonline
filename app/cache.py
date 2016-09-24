@@ -99,10 +99,9 @@ class Cache:
         # sudo apt-get install python-wand
 
         from wand.image import Image
-        with Image(filename=inter) as img:
-            print(img.size)
-            #img.resize(200, 150)
-            #img.resize(300, 300*img.size[1]/img.size[0])
+        with Image() as img:
+            img.options['pdf:use-cropbox'] = 'true'
+            img.read(filename=inter)
             img.save(filename=thumbname)
 
         os.remove(inter)
