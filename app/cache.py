@@ -104,6 +104,22 @@ class Cache:
             img.read(filename=inter)
             img.save(filename=thumbname)
 
+        orig_filesize = float(os.stat(thumbname).st_size)
+
+        with Image() as img:
+            # 2nd pass jpeg->jpeg
+            img.read(filename=thumbname)
+            img.resize(width=300, height=300*img.height/img.width)
+            img.compression_quality = 85 # 92 by default
+            img.save(filename=thumbname)
+
+        resized_filesize = float(os.stat(thumbname).st_size)
+
+        print("filesize orig: %.2f KB resize: %.2f KB (ratio = %d %%)"
+              % (orig_filesize / 1024.0,
+                 resized_filesize / 1024.0,
+                 resized_filesize * 100 / orig_filesize) )
+
         os.remove(inter)
 
     #def generate_all_thumbs(self):
