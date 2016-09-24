@@ -83,6 +83,19 @@ class Cache:
             pdf.write(f)
             f.close()
 
+            # Generate image from first page
+
+            # http://docs.wand-py.org/en/0.4.3/
+            # sudo apt-get install python-wand
+
+            from wand.image import Image
+            with Image() as img:
+                img.options['pdf:use-cropbox'] = 'true'
+                img.read(filename=inter)
+                img.save(filename=thumbname)
+
+            os.remove(inter)
+
         except:
             print '{{{ Error: thumbnail generation failed'
             print 'pdffilename = %s' % pdffilename
@@ -93,16 +106,6 @@ class Cache:
             print '}}}'
             return
 
-        # Generate image from first page
-
-        # http://docs.wand-py.org/en/0.4.3/
-        # sudo apt-get install python-wand
-
-        from wand.image import Image
-        with Image() as img:
-            img.options['pdf:use-cropbox'] = 'true'
-            img.read(filename=inter)
-            img.save(filename=thumbname)
 
         orig_filesize = float(os.stat(thumbname).st_size)
 
@@ -120,7 +123,6 @@ class Cache:
                  resized_filesize / 1024.0,
                  resized_filesize * 100 / orig_filesize) )
 
-        os.remove(inter)
 
     #def generate_all_thumbs(self):
     #    assert(self.cachedir)
