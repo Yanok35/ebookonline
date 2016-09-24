@@ -104,8 +104,18 @@ class Cache:
             import traceback
             print traceback.print_exc()
             print '}}}'
-            return
 
+            try:
+                print("--- trying with wand library ---")
+                from wand.image import Image
+                with Image() as img:
+                    img.options['pdf:use-cropbox'] = 'true'
+                    img.read(filename=pdffilename+"[0]")
+                    img.save(filename=thumbname)
+            except:
+                print traceback.print_exc()
+                print("--- Failed ---")
+                return
 
         orig_filesize = float(os.stat(thumbname).st_size)
 
