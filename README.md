@@ -31,6 +31,14 @@ pip install wand==0.4.3
 pip install flask-script==2.0.5
 ```
 
+## Policy tuning (ImageMagik 6 and later)
+Please check security setting allows users to read pdf files, by following
+entry in ```/etc/ImageMagick-6/policy.xml```
+
+```
+<policy domain="coder" rights="read" pattern="PDF" />
+```
+
 ## Configure the service
 
 You should edit ```ebookonline.conf``` file and modify following variables. A
