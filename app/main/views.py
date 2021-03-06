@@ -67,6 +67,57 @@ def browser():
                            selected_category = selected_category,
                            )
 
+SUBSET_NBBOOKS = 20
+
+@main.route('/browser_lazy', methods=['GET'])
+def browser_lazy():
+    if not 'username' in session:
+        return redirect(url_for(".login"))
+
+    d = current_app.bookdir
+    booklist = d.booklist[:SUBSET_NBBOOKS]
+
+    return render_template("browser_lazy.html",
+                           titre = "eBook browser",
+                           books = booklist,
+                           nbSubset = max(1, len(d.booklist) / SUBSET_NBBOOKS),
+                           )
+
+@main.route('/browser_subset', methods=['GET', 'POST'])
+def browser_subset():
+    if not 'username' in session:
+        return redirect(url_for(".login"))
+
+    d = current_app.bookdir
+    booklist = d.booklist
+    nbBooks = len(booklist)
+
+    subset_id = int(request.values.get('subset-id'))
+
+    booklist = booklist[subset_id * SUBSET_NBBOOKS : subset_id * SUBSET_NBBOOKS + SUBSET_NBBOOKS]
+
+    html = ""
+    for b in booklist:
+        html += '   <div class="book-box">\n'
+        html += '     <a href="' + url_for('.pdf_read', pdffile = b.filename) + '">\n'
+        html += '     <div class="book-img">\n'
+        html += '     <img src="' + url_for('.image', sha1 = b.sha1) + '" width="300px" />\n'
+        html += '     </div>\n'
+        html += '     </a>\n'
+        html += '     <span class="caption simple-caption">\n'
+        html += '     <p>' + b.get_name_and_size_as_str() + '</p>\n'
+        html += '     <p>\n'
+        html += '       <a href="' + url_for('.bookadmin', sha1 = b.sha1) + '">\n'
+        html += '       <img src="/static/pencil.svg" width="20" height="20" />\n'
+        html += '       </a>\n'
+        html += '     </p>\n'
+        html += '     </span>\n'
+        html += '   </div>\n'
+
+
+    return html
+
+
 dummyimg_resp = None
 
 def dummyimg_get_response():

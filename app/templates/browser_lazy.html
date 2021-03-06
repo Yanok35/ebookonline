@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+        <meta charset="utf-8" />
+        <title>{{ titre }}</title>
+        <link href="static/style.css" rel="stylesheet" type="text/css" media="screen" />
+        <style>
+        </style>
+    <script>
+        var nextSubset=1;
+        $(window).scroll(function () {
+            if ($(window).scrollTop() == $(document).height() - $(window).height() && nextSubset < {{ nbSubset }}) {
+                appendBooklistSubset();
+            }
+        });
+        function appendBooklistSubset() {
+            const Http = new XMLHttpRequest();
+            url='/browser_subset?subset-id=' + nextSubset;
+            Http.open("GET", url);
+            Http.send();
+            nextSubset++;
+
+            Http.onreadystatechange = (e) => {
+                if (Http.readyState == Http.DONE) {
+                    console.log(Http.responseText)
+                    $('#main-book-view').append(Http.responseText);
+                }
+            }
+        }
+    </script>
+</head>
+    <body>
+        <h1>Liste des livres</h1>
+        <a href="{{ url_for('.logout') }}">Logout</a><br/>
+
+        <form class="form-filter" role="form" method="post">
+        <select name="selected-category" onchange="this.form.submit()">
+            <option> all </option>
+        {% for c in categories %}
+            <option{{ " selected" if c == selected_category else "" }}> {{ c }} </option>
+        {% endfor %}
+        </select>
+        </form>
+
+        <div class="book-view" id="main-book-view">
+        {% for b in books %}
+          <div class="book-box">
+            <a href="{{ url_for('.pdf_read', pdffile = b.filename) }}">
+            <div class="book-img">
+            <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
+            </div>
+            </a>
+            <span class="caption simple-caption">
+            <p>{{ b.get_name_and_size_as_str() }}</p>
+            <p>
+              <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">
+              <img src="/static/pencil.svg" width="20" height="20" />
+              </a>
+            </p>
+            </span>
+          </div>
+        {% endfor %}
+        </div>
+    </body>
+
+</html>
+
