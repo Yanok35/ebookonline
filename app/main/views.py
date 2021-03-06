@@ -13,7 +13,7 @@ from StringIO import StringIO
 @main.route('/')
 def index():
     if request.path == '/' and 'username' in session:
-        return redirect(url_for(".browser"))
+        return redirect(url_for(".browser_lazy"))
     else:
         return redirect(url_for(".login"))
 
