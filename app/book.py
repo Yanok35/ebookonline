@@ -105,6 +105,13 @@ class BookDir:
                 sublist.append(b)
         return sublist
 
+    def get_subset_by_regexp(self, pattern):
+        sublist = []
+        for b in self.booklist:
+            if pattern in b.filename.lower():
+                sublist.append(b)
+        return sublist
+
     def get_list_of_category(self):
         categories = []
         for b in self.booklist:
