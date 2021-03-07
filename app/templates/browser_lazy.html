@@ -28,20 +28,72 @@
                 }
             }
         }
+
+        // Search bar
+        $(function() {
+            $('#input-search-pattern').each(function() {
+                var elem = $(this);
+
+                // Save current value of element
+                elem.data('oldVal', elem.val());
+
+                // Look for changes in the value
+                elem.bind("propertychange change click keyup input paste", function(event){
+                    // If value has changed...
+                    if (elem.data('oldVal') != elem.val()) {
+                        // Updated stored value
+                        elem.data('oldVal', elem.val());
+
+                        // Do action
+                        console.log(elem.val());
+
+                        if (elem.val() != "") {
+                            debounce(
+                                booklistSearch(elem.val()),
+                                250
+                            );
+                        } else {
+                            // No search string, fallback to subset #0 display
+                            document.getElementById('main-book-view').innerHTML = "";
+                            nextSubset = 0;
+                            appendBooklistSubset();
+                        }
+                    }
+                });
+            });
+        });
+        function booklistSearch(pattern) {
+            const Http = new XMLHttpRequest();
+            url='/browser_search?pat=' + encodeURIComponent(pattern);
+            Http.open("GET", url);
+            Http.send();
+
+            Http.onreadystatechange = (e) => {
+                if (Http.readyState == Http.DONE) {
+                    document.getElementById('main-book-view').innerHTML = Http.responseText;
+                }
+            }
+        }
+
+        // https://grafikart.fr/tutoriels/debounce-throttle-642
+        function debounce(callback, delay){
+            var timer;
+            return function(){
+                var args = arguments;
+                var context = this;
+                clearTimeout(timer);
+                timer = setTimeout(function(){
+                    callback.apply(context, args);
+                }, delay)
+            }
+        }
     </script>
 </head>
     <body>
         <h1>Liste des livres</h1>
         <a href="{{ url_for('.logout') }}">Logout</a><br/>
 
-        <form class="form-filter" role="form" method="post">
-        <select name="selected-category" onchange="this.form.submit()">
-            <option> all </option>
-        {% for c in categories %}
-            <option{{ " selected" if c == selected_category else "" }}> {{ c }} </option>
-        {% endfor %}
-        </select>
-        </form>
+        <input id="input-search-pattern" type="text" />
 
         <div class="book-view" id="main-book-view">
         {% for b in books %}
