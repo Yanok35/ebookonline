@@ -118,6 +118,57 @@ def browser_subset():
     return html
 
 
+@main.route('/browser_search', methods=['GET', 'POST'])
+def browser_search():
+    if not 'username' in session:
+        return redirect(url_for(".login"))
+
+    d = current_app.bookdir
+
+    pattern = request.values.get('pat')
+    print("pattern: " + pattern)
+
+    s = d.get_subset_by_regexp(pattern)
+    print("sublist size = " + str(len(s)))
+
+    html = ""
+    if len(s) < 50:
+
+        for b in s:
+                print(" " + b.get_name_and_size_as_str())
+
+        for b in s:
+            html += '   <div class="book-box">\n'
+            html += '     <a href="' + url_for('.pdf_read', pdffile = b.filename) + '">\n'
+            html += '     <div class="book-img">\n'
+            html += '     <img src="' + url_for('.image', sha1 = b.sha1) + '" width="300px" />\n'
+            html += '     </div>\n'
+            html += '     </a>\n'
+            html += '     <span class="caption simple-caption">\n'
+            html += '     <p>' + b.get_name_and_size_as_str() + '</p>\n'
+            html += '     <p>\n'
+            html += '       <a href="' + url_for('.bookadmin', sha1 = b.sha1) + '">\n'
+            html += '       <img src="/static/pencil.svg" width="20" height="20" />\n'
+            html += '       </a>\n'
+            html += '     </p>\n'
+            html += '     </span>\n'
+            html += '   </div>\n'
+
+    elif len(s) < 1000:
+
+        html += '   <div>\n'
+        html += 'Search results founds ' + str(len(s)) + ' books<br/>\n'
+
+        for b in s:
+                html += '    <p><a href="' + url_for('.pdf_read', pdffile = b.filename) + '">'
+                html += b.get_name_and_size_as_str()
+                html += "</a></p>\n"
+        html += '   </div>\n'
+
+
+    return html
+
+
 dummyimg_resp = None
 
 def dummyimg_get_response():
