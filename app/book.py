@@ -154,6 +154,7 @@ class BookDir:
 
             c = Cache.get_instance()
             for f in files:
+                print(" Scan %s" % f)
                 path = os.path.join(dir, f)
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
                     # a valid pdf filename has been found
@@ -217,5 +218,6 @@ class BookDir:
             b.mtime = -1
             self.booklist.append(b)
 
+        print("Directory db fully parsed. Save JSON db file...")
         self.save_db()
 
