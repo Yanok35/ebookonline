@@ -132,7 +132,7 @@ def browser_search():
     print("sublist size = " + str(len(s)))
 
     html = ""
-    if len(s) < 50:
+    if len(s) < 200:
 
         for b in s:
                 print(" " + b.get_name_and_size_as_str())
