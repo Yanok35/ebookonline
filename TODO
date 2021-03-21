@@ -4,3 +4,8 @@ https://openclassrooms.com/courses/creez-vos-applications-web-avec-flask/requete
 README.md: specify versions of pip packages -> requirements.txt?
 
 Ctrl+C handler to avoid dbfile corruption?
+
+If a file is not accessible, then an uncatch file exception can occurs.
+Observed with following conditions:
+ - if python script is launched as real user (www-data), and
+ - when a PDF file ownership is set to "nobody.nogroup", and "-rw-------" permissions,
