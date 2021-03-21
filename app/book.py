@@ -154,6 +154,9 @@ class BookDir:
 
             c = Cache.get_instance()
             for f in files:
+                # Allow user to ignore some directories using a marker hidden file
+                if (os.path.exists(dir + "/.ebook-ignore-dir")):
+                    continue
                 print(" Scan %s" % f)
                 path = os.path.join(dir, f)
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
