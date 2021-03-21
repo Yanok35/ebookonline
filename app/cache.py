@@ -97,6 +97,7 @@ class Cache:
             os.remove(inter)
 
         except:
+            print (u"\u001b[36m")
             print '{{{ Error: thumbnail generation failed'
             print 'pdffilename = %s' % pdffilename
             print "Unexpected error:"
@@ -104,6 +105,7 @@ class Cache:
             import traceback
             print traceback.print_exc()
             print '}}}'
+            print (u"\u001b[0m")
 
             try:
                 print("--- trying with wand library ---")
@@ -113,8 +115,11 @@ class Cache:
                     img.read(filename=pdffilename+"[0]")
                     img.save(filename=thumbname)
             except:
+                print (u"\u001b[36m")
                 print traceback.print_exc()
+                print (u"\u001b[0m")
                 print("--- Failed ---")
+                print (u"\u001b[33mNo thumbnail for '%s'\u001b[0m" % pdffilename)
                 return
 
         orig_filesize = float(os.stat(thumbname).st_size)
