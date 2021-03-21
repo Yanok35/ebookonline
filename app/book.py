@@ -109,10 +109,12 @@ class BookDir:
     def get_subset_by_regexp(self, pattern):
         sublist = []
         for b in self.booklist:
-            name = b.filename
+            name = b.filename.lower()
+            if name.endswith(".pdf"):
+                name = name[:-4]
             name = name.replace("-", " ")
             name = name.replace("_", " ")
-            if pattern in name.lower():
+            if pattern in name:
                 sublist.append(b)
         return sublist
 
