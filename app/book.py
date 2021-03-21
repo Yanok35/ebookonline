@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 
+from __future__ import print_function
 from __future__ import unicode_literals
 
 import json
@@ -160,10 +161,11 @@ class BookDir:
                 # Allow user to ignore some directories using a marker hidden file
                 if (os.path.exists(dir + "/.ebook-ignore-dir")):
                     continue
-                print(" Scan %s" % f)
+
                 path = os.path.join(dir, f)
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
                     # a valid pdf filename has been found
+                    print(" Scan '%s'... \r" % f, end='')
 
                     # Book object path are relative to BookDir path
                     abspath = path
@@ -180,10 +182,10 @@ class BookDir:
                         self.booklist.remove(b)
                         continue
 
-                    print "Compute sha1 for %s..." % f,
+                    print ("Compute sha1 for %s..." % f, end="")
                     sys.stdout.flush()
                     k = sha1_file(abspath)
-                    print "done"
+                    print ("done")
 
                     # if file found in refreshed_booklist, its a duplicate
                     dup = False
@@ -224,6 +226,6 @@ class BookDir:
             b.mtime = -1
             self.booklist.append(b)
 
-        print("Directory db fully parsed. Save JSON db file...")
+        print("\nDirectory db fully parsed. Save JSON db file...")
         self.save_db()
 
