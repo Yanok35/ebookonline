@@ -8,7 +8,7 @@ from . import main
 from ..book import BookDir
 from ..cache import Cache
 
-from StringIO import StringIO
+import io
 
 @main.route('/')
 def index():
@@ -176,10 +176,11 @@ def dummyimg_get_response():
     global dummyimg_resp
     if not dummyimg_resp:
         from PIL import Image
-        img = StringIO()
-        Image.new("RGB", (210,297), "#92C41D").save(img, 'BMP')
-        dummyimg_resp = make_response(img.getvalue())
-        dummyimg_resp.mimetype = "image/bmp"
+        image = Image.new("RGB", (210,297), "#92C41D")
+        with io.BytesIO() as output:
+            image.save(output, 'BMP')
+            dummyimg_resp = make_response(output.getvalue())
+            dummyimg_resp.mimetype = "image/bmp"
 
     return dummyimg_resp
 
@@ -203,7 +204,6 @@ def pdf_read(pdffile):
     #print(pdffile)
     #response = make_response(pdffile)
     #return response
-    mon_pdf = StringIO()
     abspath = os.path.join(current_app.bookdir.dirpath, pdffile)
     n = open(abspath, 'rb')
     allin = n.read() #.decode('latin1')#.decode('iso8859-15')

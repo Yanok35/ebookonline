@@ -18,17 +18,14 @@ cd ebookonline/
 
 ## Create a virtual environment
 ```bash
-virtualenv venv
+python3 -m venv venv
 source venv/bin/activate
 ```
 
 ## Install dependencies
 ```bash
-pip install flask==0.11.1
-pip install Pillow==3.3.1
-pip install PyPDF2==1.26.0
-pip install wand==0.4.3
-pip install flask-script==2.0.5
+sudo apt install zlib1g-dev libturbojpeg0-dev gcc libpython3.8-dev
+pip3 install -r requirements.txt
 ```
 
 ## Policy tuning (ImageMagik 6 and later)
@@ -70,7 +67,8 @@ TODO
 
 ## Start the Flask server
 ```bash
-# ./server.py
-FLASK_APP=server.py flask run --host=0.0.0.0
+# ./ebookonline.py
+FLASK_ENV=debug FLASK_APP=ebookonline.py flask run --host=0.0.0.0
+./ebookonline.py runserver --host=0.0.0.0
 ```
 

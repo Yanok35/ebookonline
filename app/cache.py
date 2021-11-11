@@ -97,14 +97,15 @@ class Cache:
             os.remove(inter)
 
         except:
-            print (u"\u001b[36m")
-            print '{{{ Error: thumbnail generation failed'
-            print 'pdffilename = %s' % pdffilename
-            print "Unexpected error:"
-            print sys.exc_info()
+            print(u"\u001b[36m")
+            print(">>>")
+            print('Error: thumbnail generation failed')
+            print('pdffilename = %s' % pdffilename)
+            print("Unexpected error:")
+            print(sys.exc_info())
             import traceback
-            print traceback.print_exc()
-            print '}}}'
+            print (traceback.print_exc())
+            print ('<<<')
             print (u"\u001b[0m")
 
             try:
@@ -116,7 +117,7 @@ class Cache:
                     img.save(filename=thumbname)
             except:
                 print (u"\u001b[36m")
-                print traceback.print_exc()
+                print (traceback.print_exc())
                 print (u"\u001b[0m")
                 print("--- Failed ---")
                 print (u"\u001b[33mNo thumbnail for '%s'\u001b[0m" % pdffilename)

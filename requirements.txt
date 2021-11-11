@@ -1,0 +1,5 @@
+Flask==2.0.2
+Pillow==8.4.0
+PyPDF2==1.26.0
+Wand==0.6.7
+flask-script==2.0.6

@@ -2,15 +2,11 @@
 # -*- coding:utf-8 -*-
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import json
 import sys
 
-from cache import Cache
-from cache import sha1_file
-from flask import *
+from app.cache import Cache
+from app.cache import sha1_file
 
 import os
 
@@ -65,7 +61,7 @@ class BookDir:
 
         # When dbfile is empty, json parser trig an exception.
         if not os.stat(self.dbfile).st_size:
-            print("Warning: dbfile is empty");
+            print("Warning: dbfile is empty")
             return
 
         with open(self.dbfile, "r") as f:
