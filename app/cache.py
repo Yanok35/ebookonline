@@ -6,6 +6,7 @@ import hashlib
 import os
 import shutil
 import sys
+import math
 
 #from pdfrw import PdfReader, PdfWriter
 
@@ -128,7 +129,7 @@ class Cache:
         with Image() as img:
             # 2nd pass jpeg->jpeg
             img.read(filename=thumbname)
-            img.resize(width=300, height=300*img.height/img.width)
+            img.resize(width=300, height=math.floor(300*img.height/img.width))
             img.compression_quality = 85 # 92 by default
             img.save(filename=thumbname)
 
