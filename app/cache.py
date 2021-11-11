@@ -75,7 +75,11 @@ class Cache:
             pdf = PdfFileReader(f)
             if pdf.isEncrypted:
                 pdf.decrypt('')
-            contents = pdf.getPage(0)
+            # It has been observed working on a second call on some file.
+            try:
+                contents = pdf.getPage(0)
+            except:
+                contents = pdf.pages[0]
 
             pdf = PdfFileWriter()
             pdf.addPage(contents)
