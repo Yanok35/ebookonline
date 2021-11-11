@@ -124,10 +124,33 @@ class Cache:
                 print (u"\u001b[36m")
                 print (traceback.print_exc())
                 print (u"\u001b[0m")
-                print("--- Failed ---")
-                print (u"\u001b[33mNo thumbnail for '%s'\u001b[0m" % pdffilename)
-                return
+                try:
+                    resolution = int(150)
+                    while resolution >= 2:
+                        print(f"--- trying with Ghostscript -sDEVICE=jpeg ({resolution} dpi) ---")
+                        cmdLine = f'gs -sDEVICE=jpeg -o "{thumbname}" -dFirstPage=1 -dLastPage=1 -dJPEGQ=92 -r{resolution}x{resolution} "{pdffilename}"'
+                        print(cmdLine)
+                        retCode = os.system(cmdLine)
+                        print(f"retcode = {retCode}")
+                        if retCode != 0:
+                            #raise "Ghostscript failed"
+                            break
+                        filesize = os.stat(thumbname).st_size
+                        print(f"filesize = {filesize} Bytes")
+                        if filesize < (2048 * 1024): # > 2MB
+                            break
 
+                        resolution = resolution // 2
+
+                except:
+                    print (u"\u001b[36m")
+                    print (traceback.print_exc())
+                    print (u"\u001b[0m")
+                    print("--- Failed ---")
+                    print (u"\u001b[33mNo thumbnail for '%s'\u001b[0m" % pdffilename)
+                    return
+
+        # Try to resize the thumbnail to save network bandwith and overall disk space
         orig_filesize = float(os.stat(thumbname).st_size)
 
         with Image() as img:
