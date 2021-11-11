@@ -163,17 +163,16 @@ class BookDir:
             c = Cache.get_instance()
             # For all files found in current directory
             for f in files:
-                path = os.path.join(dir, f)
-                if (path.lower().endswith("pdf")) and os.path.exists(path):
+                abspath = os.path.join(dir, f)
+                if (abspath.lower().endswith("pdf")) and os.path.exists(abspath):
                     # a valid pdf filename has been found
                     print(" Scan '%s'... \r" % f, end='')
 
                     # Book object path are relative to BookDir path
-                    abspath = path
-                    path = os.path.relpath(path, book_dir)
+                    relpath = os.path.relpath(abspath, book_dir)
 
                     # check if present in book database
-                    b = self.find_book_by_filename(path)
+                    b = self.find_book_by_filename(relpath)
                     if b and b.mtime == os.path.getmtime(abspath):
                         # Let's create thumbnail, in case it is missing for
                         # any reason
@@ -194,7 +193,7 @@ class BookDir:
                         if b.sha1 == k and b.filesize:
                             print("*** Warning: duplicate PDF files:\n"
                                   "not adding\t%s\n"
-                                  "already   \t%s" % (path, b.filename))
+                                  "already   \t%s" % (relpath, b.filename))
                             dup = True
                     if dup:
                         continue
@@ -203,7 +202,7 @@ class BookDir:
                     e = self.find_book_by_sha1(k)
                     if e:
                         # entry found in db and was moved in dir.
-                        e.filename = path
+                        e.filename = relpath
                         e.mtime = os.path.getmtime(abspath)
                         e.category = category
                         e.filesize = os.stat(abspath).st_size
@@ -213,7 +212,7 @@ class BookDir:
                         continue
 
                     # A new book which was not in db
-                    b = Book(k, book_dir, path, category)
+                    b = Book(k, book_dir, relpath, category)
                     c.create_thumbnail(abspath, k)
 
                     refreshed_booklist.append(b)
