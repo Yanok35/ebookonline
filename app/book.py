@@ -112,7 +112,7 @@ class BookDir:
                 name = name[:-4]
             name = name.replace("-", " ")
             name = name.replace("_", " ")
-            if pattern in name:
+            if pattern.lower() in name:
                 sublist.append(b)
         return sublist
 
