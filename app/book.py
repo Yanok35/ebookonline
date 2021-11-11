@@ -150,6 +150,10 @@ class BookDir:
         print("Scanning directory %s for PDF files..." % book_dir)
         for (dir, _, files) in os.walk(book_dir):
 
+            # Allow user to ignore some directories using a marker hidden file
+            if (os.path.exists(dir + "/.ebook-ignore-dir")):
+                continue
+
             # Book category is first level directory name
             category = dir.replace(book_dir, '')[1:]
             category = category.split('/')[0]
@@ -157,11 +161,8 @@ class BookDir:
                 category = 'Generals'
 
             c = Cache.get_instance()
+            # For all files found in current directory
             for f in files:
-                # Allow user to ignore some directories using a marker hidden file
-                if (os.path.exists(dir + "/.ebook-ignore-dir")):
-                    continue
-
                 path = os.path.join(dir, f)
                 if (path.lower().endswith("pdf")) and os.path.exists(path):
                     # a valid pdf filename has been found
