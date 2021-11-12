@@ -80,10 +80,17 @@
     </script>
 </head>
     <body>
-        <h1>Liste des livres</h1>
-        <a href="{{ url_for('.logout') }}">Logout</a><br/>
+        <div class="titlebar">
+            <h1>Liste des livres</h1>
+        </div>
 
-        <input id="input-search-pattern" type="text" />
+        <div class="actionbar">
+            <div class="linksbar">
+                <a href="{{ url_for('.logout') }}">Logout</a><br/>
+                La librairie contient {{ nbBooklist }} livres<br/>
+            </div>
+            <input id="input-search-pattern" type="text" />
+        </div>
 
         <div class="book-view" id="main-book-view">
         {% for b in books %}

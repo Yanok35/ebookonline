@@ -1,4 +1,29 @@
+.actionbar #input-search-pattern {
+    margin: 3px;
+    width: 80%;
+}
+
+.linksbar {
+    display: flex;
+    justify-content: flex-start;
+    gap: 10px;
+    flex-direction: row;
+}
+
+.linksbar a{
+    font-variant: small-caps;
+    text-decoration: none;
+    color: inherit;
+}
+
+.linksbar a:hover
+{
+   text-decoration: underline;
+   color: darkred;
+}
+
 .book-view {
+    /* https://css-tricks.com/snippets/css/a-guide-to-flexbox/ */
     display: flex;
     flex-flow: row wrap;
     writing-mode: horizontal-tb;

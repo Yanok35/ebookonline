@@ -81,6 +81,7 @@ def browser_lazy():
     return render_template("browser_lazy.html",
                            titre = "eBook browser",
                            books = subset,
+                           nbBooklist = len(booklist),
                            nbSubset = max(1, len(booklist) / SUBSET_NBBOOKS),
                            )
 
