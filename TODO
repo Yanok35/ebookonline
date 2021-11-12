@@ -1,11 +1,33 @@
 # Flask Course
+
 https://openclassrooms.com/courses/creez-vos-applications-web-avec-flask/requetes-et-reponses
-
-README.md: specify versions of pip packages -> requirements.txt?
-
-Ctrl+C handler to avoid dbfile corruption?
 
 If a file is not accessible, then an uncatch file exception can occurs.
 Observed with following conditions:
  - if python script is launched as real user (www-data), and
  - when a PDF file ownership is set to "nobody.nogroup", and "-rw-------" permissions,
+
+# System requirements:
+ - Scan bookdir on startup
+ - Ctrl+C handler (to avoid dbfile corruption?)
+ - iNotify bookdir when running
+ - Automatic isbn analysis
+ - Booklib array statistics : nb of books, size of database in GB,
+ - Move from ajax to websocket design (Flask -> Quart)
+
+# PDF reader interaction:
+ Add ability to add a mark on the current page/view.
+  This is possible using an icon in firefox PDF viewer.
+  Might be done using a custom fields?
+ Is there a way to integrates with JS ? another PDF viewer: https://pdfjs.express/blog/how-embed-pdf-in-html-website
+
+number of time a book has been open/read ( popularity )
+
+# User interface:
+ - Header links list on main page:
+ Save password using a HASH function
+ History of book read
+ Add ability to take some notes on a book
+ Add ability to give a score (5x star like  style maybe)
+  Bookmark in library (star notation / in pinned book ?)
+ 'admin' page to have a summary of duplicated pdf, missing pdf?
