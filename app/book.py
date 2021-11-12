@@ -110,6 +110,7 @@ class BookDir:
             name = b.filename.lower()
             if name.endswith(".pdf"):
                 name = name[:-4]
+            name = name.replace(".", " ")
             name = name.replace("-", " ")
             name = name.replace("_", " ")
             if pattern.lower() in name:
