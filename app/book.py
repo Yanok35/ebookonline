@@ -162,14 +162,13 @@ class BookDir:
             If both match between dbfile and book_dir entry, then the dbfile
             cached informations are considered consistents and reused.
         """
-
+        self.dirpath = book_dir
         thr = Thread(target=self.__scan_dir_thr, args=(book_dir,))
         thr.start()
 
     def __scan_dir_thr(self, book_dir):
 
         print("Open directory db...")
-        self.dirpath = book_dir
         self.load_db()
 
         refreshed_booklist = []
