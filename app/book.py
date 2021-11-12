@@ -10,12 +10,6 @@ from app.cache import sha1_file
 
 import os
 
-def json_dumper(obj):
-    try:
-        return obj.to_json()
-    except:
-        return obj.__dict__
-
 class Book:
 
     def __init__(self, sha1, book_dir, filename, category):
@@ -43,8 +37,8 @@ class Book:
             % (os.path.basename(self.filename),
                (self.filesize / 1024.0 / 1024.0)))
 
-    def get_json(self):
-        return json.dumps(self, default=json_dumper, indent=2)
+    def to_json(self):
+        return json.dumps(self, default=lambda o: o.__dict__, indent=2)
 
 class BookDir:
 
@@ -82,7 +76,7 @@ class BookDir:
 
     def save_db(self):
         with open(self.dbfile, "w") as f:
-            s = json.dumps(self, default=json_dumper, indent=2)
+            s = json.dumps(self, default=lambda o: o.__dict__, indent=2)
             f.write(s)
 
     def find_book_by_sha1(self, sha1):
