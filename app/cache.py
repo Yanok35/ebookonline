@@ -6,8 +6,13 @@ import hashlib
 import os
 import sys
 import math
+import traceback
 
 import multiprocessing
+
+from PyPDF2 import PdfFileReader, PdfFileWriter
+
+from wand.image import Image
 
 def sha1_file(filename):
     if not os.path.exists(filename):
@@ -98,9 +103,28 @@ class Cache:
         # extract first page of PDF
 
     def __pdf2jpeg(self, pdffilename, thumbname):
+        """
+        Generate a Jpeg from a Pdf using different 'backends'
+        When thumbnail is almost ready, resize it to a small memory footprint
+        """
+        jpeg_backends = [
+            self.__pdf2jpeg_resize_then_wand,
+            self.__pdf2jpeg_wand_only,
+            self.__pdf2jpeg_ghostscript
+        ]
+
+        for callback in jpeg_backends:
+            jpegReady = callback(pdffilename, thumbname)
+            if jpegReady:
+                break
+
+        if jpegReady:
+            self.__thumb_resize_small(thumbname)
+
+
+    def __pdf2jpeg_resize_then_wand(self, pdffilename, thumbname):
+
         try:
-            #from pyPdf import PdfFileReader, PdfFileWriter
-            from PyPDF2 import PdfFileReader, PdfFileWriter
             f = open(pdffilename, 'rb') 
             pdf = PdfFileReader(f)
             if pdf.isEncrypted:
@@ -123,14 +147,16 @@ class Cache:
             # http://docs.wand-py.org/en/0.4.3/
             # sudo apt-get install python-wand
 
-            from wand.image import Image
             with Image() as img:
                 img.options['pdf:use-cropbox'] = 'true'
                 img.read(filename=inter)
                 img.save(filename=thumbname)
 
             os.remove(inter)
+            return True
 
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
         except:
             print(u"\u001b[36m")
             print(">>>")
@@ -138,47 +164,62 @@ class Cache:
             print('pdffilename = %s' % pdffilename)
             print("Unexpected error:")
             print(sys.exc_info())
-            import traceback
             print (traceback.print_exc())
             print ('<<<')
             print (u"\u001b[0m")
 
-            try:
-                print("--- trying with wand library ---")
-                from wand.image import Image
-                with Image() as img:
-                    img.options['pdf:use-cropbox'] = 'true'
-                    img.read(filename=pdffilename+"[0]")
-                    img.save(filename=thumbname)
-            except:
-                print (u"\u001b[36m")
-                print (traceback.print_exc())
-                print (u"\u001b[0m")
-                try:
-                    resolution = int(150)
-                    while resolution >= 2:
-                        print(f"--- trying with Ghostscript -sDEVICE=jpeg ({resolution} dpi) ---")
-                        cmdLine = f'gs -sDEVICE=jpeg -o "{thumbname}" -dFirstPage=1 -dLastPage=1 -dJPEGQ=92 -r{resolution}x{resolution} "{pdffilename}"'
-                        print(cmdLine)
-                        retCode = os.system(cmdLine)
-                        print(f"retcode = {retCode}")
-                        if retCode != 0:
-                            #raise "Ghostscript failed"
-                            break
-                        filesize = os.stat(thumbname).st_size
-                        print(f"filesize = {filesize} Bytes")
-                        if filesize < (2048 * 1024): # > 2MB
-                            break
+            return False
 
-                        resolution = resolution // 2
 
-                except:
-                    print (u"\u001b[36m")
-                    print (traceback.print_exc())
-                    print (u"\u001b[0m")
-                    print("--- Failed ---")
-                    print (u"\u001b[33mNo thumbnail for '%s'\u001b[0m" % pdffilename)
-                    return
+    def __pdf2jpeg_wand_only(self, pdffilename, thumbname):
+
+        try:
+            print("--- trying with wand library ---")
+            with Image() as img:
+                img.options['pdf:use-cropbox'] = 'true'
+                img.read(filename=pdffilename+"[0]")
+                img.save(filename=thumbname)
+            return True
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
+        except:
+            print (u"\u001b[36m")
+            print (traceback.print_exc())
+            print (u"\u001b[0m")
+            return False
+
+
+    def __pdf2jpeg_ghostscript(self, pdffilename, thumbname):
+
+        try:
+            resolution = int(150)
+            while resolution >= 2:
+                print(f"--- trying with Ghostscript -sDEVICE=jpeg ({resolution} dpi) ---")
+                cmdLine = f'gs -sDEVICE=jpeg -o "{thumbname}" -dFirstPage=1 -dLastPage=1 -dJPEGQ=92 -r{resolution}x{resolution} "{pdffilename}"'
+                print(cmdLine)
+                retCode = os.system(cmdLine)
+                print(f"retcode = {retCode}")
+                if retCode != 0:
+                    #raise "Ghostscript failed"
+                    break
+                filesize = os.stat(thumbname).st_size
+                print(f"filesize = {filesize} Bytes")
+                if filesize < (2048 * 1024): # > 2MB
+                    break
+
+                resolution = resolution // 2
+            return True
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
+        except:
+            print (u"\u001b[36m")
+            print (traceback.print_exc())
+            print (u"\u001b[0m")
+            print("--- Failed ---")
+            print (u"\u001b[33mNo thumbnail for '%s'\u001b[0m" % pdffilename)
+            return False
+
+    def __thumb_resize_small(self, thumbname):
 
         # Try to resize the thumbnail to save network bandwith and overall disk space
         orig_filesize = float(os.stat(thumbname).st_size)
