@@ -13,6 +13,9 @@ import math
 #CACHE_DIR = os.path.abspath("cache")
 #BOOK_DIR = os.path.abspath("books")
 
+import multiprocessing
+from multiprocessing import Process
+
 def sha1_file(filename):
     if not os.path.exists(filename):
         raise getopt.error("file %s not found" % str(filename))
@@ -44,6 +47,13 @@ class Cache:
         self.cachedir = cachedir
         #self.generate_all_thumbs()
 
+        self.sha1_queue = multiprocessing.Queue()
+        self.subproc = []
+        for num in range(max(1, os.cpu_count()-1)):
+            p = multiprocessing.Process(target=self.__subproc_thumbnail_create, args=(num,))
+            p.start()
+            self.subproc.append(p)
+
     def get_thumbname(self, sha1):
         thumbname = os.path.join(self.cachedir, sha1 + ".jpg")
         return thumbname
@@ -67,7 +77,35 @@ class Cache:
         if os.path.exists(thumbname):
             return
 
+        # Push thumbnail generation request to the process pool
+        msg = (pdffilename, thumbname)
+        self.sha1_queue.put(msg)
+
+    def __del__(self):
+        self.sha1_queue.close()
+        self.sha1_queue.join_thread()
+
+    def __subproc_thumbnail_create(self, subprocId: int):
+
+        while True:
+            print(f"{subprocId}: waiting for orders")
+
+            try:
+                (pdffilename, thumbname) = self.sha1_queue.get()
+
+                print(f"{subprocId}, {os.getpid()}: thumb gen: {pdffilename} -> {thumbname}")
+                self.__pdf2jpeg(pdffilename, thumbname)
+                continue
+
+            except KeyboardInterrupt:
+                print(f"{subprocId}: exit working loop")
+                break
+
+        return
+
         # extract first page of PDF
+
+    def __pdf2jpeg(self, pdffilename, thumbname):
         try:
             #from pyPdf import PdfFileReader, PdfFileWriter
             from PyPDF2 import PdfFileReader, PdfFileWriter
@@ -83,7 +121,7 @@ class Cache:
 
             pdf = PdfFileWriter()
             pdf.addPage(contents)
-            inter = "/tmp/temp_output.pdf"
+            inter = f"/tmp/temp_output_{os.getpid()}.pdf"
             f = open(inter, 'wb') 
             pdf.write(f)
             f.close()
