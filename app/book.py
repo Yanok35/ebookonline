@@ -13,25 +13,38 @@ import os
 
 class Book:
 
-    def __init__(self, sha1, book_dir, filename, category):
+    def __init__(self, book_dir):
 
         # object variables
-        fullpath = os.path.join(book_dir, filename)
-        here = os.path.exists(fullpath)
-        if not here:
-            print("*** %s not here" % filename)
-        self.sha1 = sha1
-        self.mtime = os.path.getmtime(fullpath) if here else -1
-        self.filename = filename
-        self.category = category
-        self.filesize = os.stat(fullpath).st_size if here else 0
+        self.book_dir = book_dir
+        self.sha1 = None
+        self.filename = None
+        self.category = None
+        self.mtime = -1
+        self.filesize = 0
 
         # following are user-defined books attributes
         # (mostly empty after scan_dir)
         self.tags = ""
 
-    def __repr__(self):
-        return (self.sha1 + '|' + self.filename)
+    def set_sha1(self, sha1):
+        self.sha1 = sha1
+
+    def set_filename(self, filename):
+        fullpath = os.path.join(self.book_dir, filename)
+        here = os.path.exists(fullpath)
+        if not here:
+            print("*** %s not here" % filename)
+
+        self.filename = filename
+        self.mtime = os.path.getmtime(fullpath) if here else -1
+        self.filesize = os.stat(fullpath).st_size if here else 0
+
+    def set_category(self, category):
+        self.category = category
+
+    def set_tags(self, tags):
+        self.tags = tags
 
     def get_name_and_size_as_str(self):
         return ("%s (%.2f MB)"
@@ -39,7 +52,15 @@ class Book:
                (self.filesize / 1024.0 / 1024.0)))
 
     def to_json(self):
-        return json.dumps(self, default=lambda o: o.__dict__, indent=2)
+        j = {
+            "sha1": self.sha1,
+            "mtime": self.mtime,
+            "filename": self.filename,
+            "category": self.category,
+            "filesize": self.filesize,
+            "tags": self.tags
+        }
+        return json.dumps(j, default=lambda o: o.__dict__, indent=2)
 
 class BookDir:
 
@@ -67,13 +88,13 @@ class BookDir:
                 if not os.path.exists(os.path.join(self.dirpath, b["filename"])):
                     continue
 
-                sha1 = b["sha1"]
-                filename = b["filename"]
-                category = b["category"]
-                new = Book(sha1, self.dirpath, filename, category)
+                new = Book(self.dirpath)
+                new.set_sha1(b["sha1"])
+                new.set_filename(b["filename"])
+                new.set_category(b["category"])
 
                 if "tags" in b.keys():
-                    new.tags = b["tags"]
+                    new.set_tags(b["tags"])
 
                 self.booklist.append(new)
 
@@ -218,7 +239,10 @@ class BookDir:
                         continue
 
                     # A new book which was not in db
-                    b = Book(k, book_dir, relpath, category)
+                    b = Book(book_dir)
+                    b.set_sha1(k)
+                    b.set_filename(relpath)
+                    b.set_category(category)
                     c.create_thumbnail(abspath, k)
 
                     refreshed_booklist.append(b)
