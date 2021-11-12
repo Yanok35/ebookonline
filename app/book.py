@@ -63,6 +63,10 @@ class BookDir:
             inp = json.load(f)
 
             for b in inp['booklist']:
+                # only append referenced PDF which still present on disk
+                if not os.path.exists(os.path.join(self.dirpath, b["filename"])):
+                    continue
+
                 sha1 = b["sha1"]
                 filename = b["filename"]
                 category = b["category"]
@@ -71,9 +75,7 @@ class BookDir:
                 if "tags" in b.keys():
                     new.tags = b["tags"]
 
-                # only append referenced PDF which still present on disk
-                if os.path.exists(os.path.join(self.dirpath, filename)):
-                    self.booklist.append(new)
+                self.booklist.append(new)
 
     def save_db(self):
         with open(self.dbfile, "w") as f:
