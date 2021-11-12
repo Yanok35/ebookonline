@@ -4,6 +4,7 @@
 
 import json
 import sys
+from threading import Thread
 
 from app.cache import Cache
 from app.cache import sha1_file
@@ -138,6 +139,11 @@ class BookDir:
             If both match between dbfile and book_dir entry, then the dbfile
             cached informations are considered consistents and reused.
         """
+
+        thr = Thread(target=self.__scan_dir_thr, args=(book_dir,))
+        thr.start()
+
+    def __scan_dir_thr(self, book_dir):
 
         print("Open directory db...")
         self.dirpath = book_dir

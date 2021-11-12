@@ -7,8 +7,6 @@ from flask import Flask
 from app.cache import Cache
 from app.book import BookDir
 
-import threading
-
 def create_app(config_name):
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -18,9 +16,7 @@ def create_app(config_name):
     cache = Cache.get_instance(Config.CACHE_DIR)
     app.bookdir = BookDir(Config.BOOK_DB)
     # initial scan of available books
-    #app.bookdir.scan_dir(Config.BOOK_DIR)
-    t = threading.Thread(target=app.bookdir.scan_dir, args=(Config.BOOK_DIR,))
-    t.start()
+    app.bookdir.scan_dir(Config.BOOK_DIR)
 
     # Blueprint registration
     from app.main import main as main_blueprint
