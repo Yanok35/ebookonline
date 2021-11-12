@@ -58,7 +58,7 @@ def browser():
     if selected_category and selected_category != "all":
         booklist = d.get_subset_by_category(selected_category)
     else:
-        booklist = d.booklist
+        booklist = d.get_booklist()
 
     return render_template("browser.html",
                            titre = "eBook browser",
@@ -75,12 +75,13 @@ def browser_lazy():
         return redirect(url_for(".login"))
 
     d = current_app.bookdir
-    booklist = d.booklist[:SUBSET_NBBOOKS]
+    booklist = d.get_booklist()
+    subset = booklist[:SUBSET_NBBOOKS]
 
     return render_template("browser_lazy.html",
                            titre = "eBook browser",
-                           books = booklist,
-                           nbSubset = max(1, len(d.booklist) / SUBSET_NBBOOKS),
+                           books = subset,
+                           nbSubset = max(1, len(booklist) / SUBSET_NBBOOKS),
                            )
 
 @main.route('/browser_subset', methods=['GET', 'POST'])
@@ -89,7 +90,7 @@ def browser_subset():
         return redirect(url_for(".login"))
 
     d = current_app.bookdir
-    booklist = d.booklist
+    booklist = d.get_booklist()
     nbBooks = len(booklist)
 
     subset_id = int(request.values.get('subset-id'))
@@ -237,7 +238,7 @@ def bookadmin(sha1 = None):
                             d = d,
                             bsel = bsel,
                             sha1 = sha1,
-                            books = d.booklist,
+                            books = d.get_booklist(),
                             titre = "eBook admin")
 
 #@main.errorhandler(401)

@@ -91,6 +91,9 @@ class BookDir:
                 return b
         return None
 
+    def get_booklist(self):
+        return self.booklist
+
     def get_subset_by_category(self, category):
         sublist = []
         for b in self.booklist:
