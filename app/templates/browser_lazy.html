@@ -30,6 +30,7 @@
         }
 
         // Search bar
+        var keyTimer;
         $(function() {
             $('#input-search-pattern').each(function() {
                 var elem = $(this);
@@ -48,10 +49,12 @@
                         console.log(elem.val());
 
                         if (elem.val() != "") {
-                            debounce(
-                                booklistSearch(elem.val()),
-                                250
-                            );
+                            // inspired by https://grafikart.fr/tutoriels/debounce-throttle-642
+                            clearTimeout(keyTimer);
+                            keyTimer = setTimeout(function() {
+                                console.log(">"+elem.val());
+                                booklistSearch(elem.val());
+                            }, 150);
                         } else {
                             // No search string, fallback to subset #0 display
                             document.getElementById('main-book-view').innerHTML = "";
@@ -72,19 +75,6 @@
                 if (Http.readyState == Http.DONE) {
                     document.getElementById('main-book-view').innerHTML = Http.responseText;
                 }
-            }
-        }
-
-        // https://grafikart.fr/tutoriels/debounce-throttle-642
-        function debounce(callback, delay){
-            var timer;
-            return function(){
-                var args = arguments;
-                var context = this;
-                clearTimeout(timer);
-                timer = setTimeout(function(){
-                    callback.apply(context, args);
-                }, delay)
             }
         }
     </script>
