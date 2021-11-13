@@ -14,6 +14,10 @@ Observed with following conditions:
  - Automatic isbn analysis
  - Booklib array statistics : nb of books, size of database in GB,
  - Move from ajax to websocket design (Flask -> Quart)
+ - SystemD service:
+   restart on crash
+   start: todo
+   stop: pkill -f 'python ./ebookonline.py'
 
 # PDF reader interaction:
  Add ability to add a mark on the current page/view.
@@ -31,3 +35,5 @@ number of time a book has been open/read ( popularity )
  Add ability to give a score (5x star like  style maybe)
   Bookmark in library (star notation / in pinned book ?)
  'admin' page to have a summary of duplicated pdf, missing pdf?
+ Afficher la version du site sur la page
+ Logout button en haut a droite
