@@ -1,5 +1,11 @@
 # Assets summary
 
+### book-reading.svg
+
+- ![BookReading](book-reading.svg)
+- Licence: Free
+- <https://www.iconfinder.com/icons/3817209/book_reading_icon>
+
 ### bookmark.svg:
 
 - ![Bookmark](bookmark.svg)
@@ -19,4 +25,3 @@
 - ![Star-active](star-active.svg)
 - Licence: MIT
 - <https://www.iconfinder.com/icons/3669176/grade_ic_icon>
-
