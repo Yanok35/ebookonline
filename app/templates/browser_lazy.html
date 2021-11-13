@@ -104,14 +104,16 @@
             <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
             </div>
             </a>
-            <span class="caption simple-caption">
-            <p>{{ b.get_name_and_size_as_str() }}</p>
-            <p>
-              <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">
-              <img src="/static/pencil.svg" width="20" height="20" />
-              </a>
-            </p>
-            </span>
+            <div class="simple-caption">
+                <div class="book-filename">
+                    <p>{{ b.get_name_and_size_as_str() }}</p>
+                </div>
+                <div class="book-actions">
+                    <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">
+                    <img src="/static/pencil.svg" width="20" height="20" />
+                    </a>
+                </div>
+            </div>
           </div>
         {% endfor %}
         </div>

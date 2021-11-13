@@ -47,7 +47,7 @@ class Book:
         self.tags = tags
 
     def get_name_and_size_as_str(self):
-        return ("%s (%.2f MB)"
+        return ("%s (%.2f\u00A0MB)"
             % (os.path.basename(self.filename),
                (self.filesize / 1024.0 / 1024.0)))
 

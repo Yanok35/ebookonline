@@ -72,3 +72,15 @@
     transform: translateY(-100%);
 }
 
+.book-filename {
+    font-size: small;
+}
+
+.book-actions {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    margin: 10px;
+    /* justify-content: left;
+    gap: 20px; */
+}
