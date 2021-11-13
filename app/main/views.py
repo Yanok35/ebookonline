@@ -4,7 +4,7 @@
 import os
 import sys
 import json
-from flask import abort, current_app, make_response, redirect, render_template, request, session, url_for
+from flask import abort, current_app, make_response, redirect, render_template, request, send_from_directory, session, url_for
 from . import main
 from ..book import BookDir
 from ..cache import Cache
@@ -69,6 +69,10 @@ def browser():
                            )
 
 SUBSET_NBBOOKS = 20
+
+@main.route('/favicon.ico', methods=['GET'])
+def favicon():
+    return send_from_directory('static', 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @main.route('/browser_lazy', methods=['GET'])
 def browser_lazy():
