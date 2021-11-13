@@ -8,7 +8,7 @@
         <style>
         </style>
     <script>
-        var nextSubset=1;
+        var nextSubset=0;
         $(window).scroll(function () {
             if ($(window).scrollTop() == $(document).height() - $(window).height() && nextSubset < {{ nbSubset }}) {
                 appendBooklistSubset();
@@ -28,6 +28,8 @@
                 }
             }
         }
+        // Initial subset #0 display to populate when arriving on page
+        appendBooklistSubset();
 
         // Search bar
         var keyTimer;
@@ -97,25 +99,7 @@
         </div>
 
         <div class="book-view" id="main-book-view">
-        {% for b in books %}
-          <div class="book-box">
-            <a href="{{ url_for('.pdf_read', pdffile = b.filename) }}">
-            <div class="book-img">
-            <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
-            </div>
-            </a>
-            <div class="simple-caption">
-                <div class="book-filename">
-                    <p>{{ b.get_name_and_size_as_str() }}</p>
-                </div>
-                <div class="book-actions">
-                    <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">
-                    <img src="/static/pencil.svg" width="20" height="20" />
-                    </a>
-                </div>
-            </div>
-          </div>
-        {% endfor %}
+            <!-- This is part is fulfilled by AJAX -->
         </div>
     </body>
 
