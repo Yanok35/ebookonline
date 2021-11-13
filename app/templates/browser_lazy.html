@@ -58,6 +58,7 @@
                         } else {
                             // No search string, fallback to subset #0 display
                             document.getElementById('main-book-view').innerHTML = "";
+                            document.getElementById('info-text').innerHTML = "";
                             nextSubset = 0;
                             appendBooklistSubset();
                         }
@@ -73,7 +74,9 @@
 
             Http.onreadystatechange = (e) => {
                 if (Http.readyState == Http.DONE) {
-                    document.getElementById('main-book-view').innerHTML = Http.responseText;
+                    var jsonResponse = JSON.parse(Http.responseText);
+                    document.getElementById('main-book-view').innerHTML = jsonResponse["body"];
+                    document.getElementById('info-text').innerHTML = jsonResponse["info-text"];
                 }
             }
         }
@@ -87,6 +90,7 @@
         <div class="actionbar">
             <div class="linksbar">
                 <a href="{{ url_for('.logout') }}">Logout</a><br/>
+                <div id="info-text"></div>
                 La librairie contient {{ nbBooklist }} livres<br/>
             </div>
             <input id="input-search-pattern" type="text" />

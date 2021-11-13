@@ -3,6 +3,7 @@
 
 import os
 import sys
+import json
 from flask import abort, current_app, make_response, redirect, render_template, request, session, url_for
 from . import main
 from ..book import BookDir
@@ -159,7 +160,6 @@ def browser_search():
     elif len(s) < 1000:
 
         html += '   <div>\n'
-        html += 'Search results founds ' + str(len(s)) + ' books<br/>\n'
 
         for b in s:
                 html += '    <p><a href="' + url_for('.pdf_read', pdffile = b.filename) + '">'
@@ -167,8 +167,16 @@ def browser_search():
                 html += "</a></p>\n"
         html += '   </div>\n'
 
+    pluriel = 's' if len(s) > 1 else ''
+    info_text = 'La recherche a identifiée ' + str(len(s)) + ' livre' + pluriel + ' | '
 
-    return html
+    # return a json
+    j = {
+        "body": html,
+        "info-text": info_text,
+    }
+
+    return json.dumps(j)
 
 
 dummyimg_resp = None
