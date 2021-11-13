@@ -19,13 +19,23 @@ class Book:
         self.book_dir = book_dir
         self.sha1 = None
         self.filename = None
-        self.category = None
         self.mtime = -1
         self.filesize = 0
 
-        # following are user-defined books attributes
-        # (mostly empty after scan_dir)
+        # Following are user-defined books attributes
+        # - prefilled at book insertion (parent dirname)
+        self.category = None
+
+        # - empty after scan_dir
+        self.year = 0
+        self.editor = ""
+        self.isbn = ""
         self.tags = ""
+
+        # - those one should be user related/preferences
+        self.score = 0 # between 0..5
+        self.bookmarked = False
+        self.nb_time_opened = 0
 
     def set_sha1(self, sha1):
         self.sha1 = sha1
