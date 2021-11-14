@@ -23,7 +23,7 @@
 
             Http.onreadystatechange = (e) => {
                 if (Http.readyState == Http.DONE) {
-                    console.log(Http.responseText)
+                    // console.log(Http.responseText)
                     $('#main-book-view').append(Http.responseText);
                 }
             }
