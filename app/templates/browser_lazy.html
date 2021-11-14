@@ -82,6 +82,32 @@
                 }
             }
         }
+
+        // Note: this handler address a dynamically loaded content. This requires event delegation to work as expected.
+        //  https://stackoverflow.com/questions/16598213/how-to-bind-events-on-ajax-loaded-content
+        $(document).on("click", '.pinbook-action-icon', function(event) {
+
+            var id = $(this).attr("id");
+            console.log("bookmark " + id + " clicked ");
+
+            req = $.ajax({
+                url: '/pinbook',
+                type: 'POST',
+                data: {
+                    id: id,
+                }
+            });
+
+            req.done(function(data) {
+                console.log("req.done data = " + data);
+                // $("#" + id).fadeOut(1000).fadeIn(1000);
+                var newSrc = '/static/bookmark.svg'
+                if (data["pinned"]) {
+                    newSrc = '/static/bookmark-active.svg'
+                }
+                $("#" + id).attr('src', newSrc);
+            });
+        });
     </script>
 </head>
     <body>

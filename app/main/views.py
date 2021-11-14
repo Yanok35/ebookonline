@@ -4,7 +4,7 @@
 import os
 import sys
 import json
-from flask import abort, current_app, make_response, redirect, render_template, request, send_from_directory, session, url_for
+from flask import abort, current_app, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
 from . import main
 from ..book import BookDir
 from ..cache import Cache
@@ -215,6 +215,28 @@ def bookadmin(sha1 = None):
                             sha1 = sha1,
                             books = d.get_booklist(),
                             titre = "eBook admin")
+
+
+@main.route("/pinbook", methods=['POST'])
+def pinbook(sha1 = None):
+    if not 'username' in session:
+        return redirect(url_for("login"))
+
+    # mandatory field
+    if not request.form['id']:
+        abort(400) # malformed
+
+    d = current_app.bookdir
+
+    sha1 = request.form['id']
+    bsel = d.find_book_by_sha1(sha1)
+
+    bsel.bookmarked = not bsel.bookmarked
+    print("bsel.bookmarked = ", bsel.bookmarked)
+
+    d.save_db()
+
+    return jsonify({"pinned": bsel.bookmarked}), 200
 
 #@main.errorhandler(401)
 #@main.errorhandler(404)

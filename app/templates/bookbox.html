@@ -10,8 +10,16 @@
                 <p>{{ b.get_name_and_size_as_str() }}</p>
             </div>
             <div class="book-actions">
+                <img class="pinbook-action-icon" id="{{ b.sha1 }}"
+                     {% if b.bookmarked %}
+                     src="/static/bookmark-active.svg"
+                     {% else %}
+                     src="/static/bookmark.svg"
+                     {% endif %}
+                     width="20" height="20" />
+
                 <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">
-                <img src="/static/pencil.svg" width="20" height="20" />
+                    <img src="/static/pencil.svg" width="20" height="20" />
                 </a>
             </div>
         </div>
