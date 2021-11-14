@@ -62,7 +62,7 @@ class Book:
                (self.filesize / 1024.0 / 1024.0)))
 
     def to_json(self):
-        j = {
+        d = {
             "sha1": self.sha1,
             "mtime": self.mtime,
             "filename": self.filename,
@@ -71,7 +71,7 @@ class Book:
             "tags": self.tags,
             "bookmarked": self.bookmarked,
         }
-        return json.dumps(j, default=lambda o: o.__dict__, indent=2)
+        return json.dumps(d, default=lambda o: o.__dict__, indent=2)
 
 class BookDir:
 
@@ -112,9 +112,17 @@ class BookDir:
 
                 self.booklist.append(new)
 
+    def to_json(self):
+        d = {
+            'dirpath': self.dirpath,
+            # Following reconstruct a dict from b.to_json() string. XXX
+            'booklist': [ json.loads(b.to_json()) for b in self.booklist ],
+        }
+        return json.dumps(d, default=lambda o: o.__dict__, indent=2)
+
     def save_db(self):
         with open(self.dbfile, "w") as f:
-            s = json.dumps(self, default=lambda o: o.__dict__, indent=2)
+            s = self.to_json()
             f.write(s)
 
     def find_book_by_sha1(self, sha1):
