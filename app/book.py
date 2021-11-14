@@ -68,7 +68,8 @@ class Book:
             "filename": self.filename,
             "category": self.category,
             "filesize": self.filesize,
-            "tags": self.tags
+            "tags": self.tags,
+            "bookmarked": self.bookmarked,
         }
         return json.dumps(j, default=lambda o: o.__dict__, indent=2)
 
@@ -105,6 +106,9 @@ class BookDir:
 
                 if "tags" in b.keys():
                     new.set_tags(b["tags"])
+
+                if "bookmarked" in b.keys():
+                    new.bookmarked = b["bookmarked"]
 
                 self.booklist.append(new)
 
