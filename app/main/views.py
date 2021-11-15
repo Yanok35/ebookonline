@@ -134,7 +134,7 @@ def browser_search():
         html += '   </div>\n'
 
     pluriel = 's' if len(s) > 1 else ''
-    info_text = 'La recherche a identifiée ' + str(len(s)) + ' livre' + pluriel + ' | '
+    info_text = ' | La recherche a identifiée ' + str(len(s)) + ' livre' + pluriel
 
     # return a json
     j = {
