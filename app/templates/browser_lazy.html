@@ -50,19 +50,19 @@
                         // Do action
                         console.log(elem.val());
 
-                        if (elem.val() != "") {
-                            // inspired by https://grafikart.fr/tutoriels/debounce-throttle-642
-                            clearTimeout(keyTimer);
-                            keyTimer = setTimeout(function() {
-                                console.log(">"+elem.val());
-                                booklistSearch(elem.val());
-                            }, 150);
-                        } else {
+                        if (elem.val() == "") {
                             // No search string, fallback to subset #0 display
                             document.getElementById('main-book-view').innerHTML = "";
                             document.getElementById('info-text').innerHTML = "";
                             nextSubset = 0;
                             appendBooklistSubset();
+                        } else {
+                            // inspired by https://grafikart.fr/tutoriels/debounce-throttle-642
+                            clearTimeout(keyTimer);
+                            keyTimer = setTimeout(function() {
+                                // console.log(">"+elem.val());
+                                booklistSearch(elem.val(), pinnedBookFilter);
+                            }, 150);
                         }
                     }
                 });
