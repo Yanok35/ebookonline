@@ -140,6 +140,16 @@ class BookDir:
     def get_booklist(self):
         return self.booklist
 
+    def get_subset_if_bookmarked(self, srclist = None):
+        sublist = []
+        if not srclist:
+            srclist = self.booklist
+
+        for b in srclist:
+            if b.bookmarked:
+                sublist.append(b)
+        return sublist
+
     def get_subset_by_category(self, category, srclist = None):
         sublist = []
         if not srclist:
