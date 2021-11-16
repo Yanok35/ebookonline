@@ -31,6 +31,14 @@
         // Initial subset #0 display to populate when arriving on page
         appendBooklistSubset();
 
+        // Fill the main-book-view with first subset of booklist, as on page arrival.
+        function resetViewToFirstSubset() {
+            document.getElementById('main-book-view').innerHTML = "";
+            document.getElementById('info-text').innerHTML = "";
+            nextSubset = 0;
+            appendBooklistSubset();
+        }
+
         // Search bar
         var keyTimer;
         $(function() {
@@ -50,12 +58,9 @@
                         // Do action
                         console.log(elem.val());
 
-                        if (elem.val() == "") {
-                            // No search string, fallback to subset #0 display
-                            document.getElementById('main-book-view').innerHTML = "";
-                            document.getElementById('info-text').innerHTML = "";
-                            nextSubset = 0;
-                            appendBooklistSubset();
+                        var pinnedBookFilter = $('#search-pinned-book').is(':checked');
+                        if (elem.val() == "" && !pinnedBookFilter) {
+                            resetViewToFirstSubset();
                         } else {
                             // inspired by https://grafikart.fr/tutoriels/debounce-throttle-642
                             clearTimeout(keyTimer);
@@ -67,10 +72,22 @@
                     }
                 });
             });
+            // Checkbox toggling event activated whether research should applies on bookmarked/pinned book only
+            $('#search-pinned-book').on("change", function(event) {
+                var pinnedBookFilter = $('#search-pinned-book').is(':checked');
+                var searchPattern = $('#input-search-pattern').val();
+                if (!pinnedBookFilter && searchPattern == "") {
+                    resetViewToFirstSubset();
+                }
+                else
+                    booklistSearch(searchPattern, pinnedBookFilter);
+            });
         });
-        function booklistSearch(pattern) {
+        function booklistSearch(pattern, pinned) {
             const Http = new XMLHttpRequest();
             url='/browser_search?pat=' + encodeURIComponent(pattern);
+            if (pinned)
+                url = url + '&pinned=true'; // optional parameter
             Http.open("GET", url);
             Http.send();
 
@@ -119,6 +136,8 @@
             <div class="linksbar">
                 <a href="{{ url_for('.logout') }}">Logout</a><br/>
                 La librairie contient {{ nbBooklist }} livres |<br/>
+                <div id="info-filtres">Filtre sur les livres
+                    <input type="checkbox" id="search-pinned-book">épinglés</input> </div>
                 <div id="info-text"></div>
             </div>
             <input id="input-search-pattern" type="text" title="Patron de recherche textuelle"/>

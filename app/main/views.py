@@ -112,11 +112,18 @@ def browser_search():
 
     d = current_app.bookdir
 
-    pattern = request.values.get('pat')
-    print("pattern: " + pattern)
+    s = []
+    pinned = request.values.get('pinned')
+    if pinned:
+        print("pinned = " + str(pinned))
+        s = d.get_subset_if_bookmarked()
+        print("sublist(1) size = " + str(len(s)))
 
-    s = d.get_subset_by_regexp(pattern)
-    print("sublist size = " + str(len(s)))
+    pattern = request.values.get('pat')
+    if pattern:
+        print("pattern: " + pattern)
+        s = d.get_subset_by_regexp(pattern, s)
+        print("sublist(2) size = " + str(len(s)))
 
     html = ""
     if len(s) < 200:
