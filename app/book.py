@@ -140,16 +140,22 @@ class BookDir:
     def get_booklist(self):
         return self.booklist
 
-    def get_subset_by_category(self, category):
+    def get_subset_by_category(self, category, srclist = None):
         sublist = []
-        for b in self.booklist:
+        if not srclist:
+            srclist = self.booklist
+
+        for b in srclist:
             if b.category == category:
                 sublist.append(b)
         return sublist
 
-    def get_subset_by_regexp(self, pattern):
+    def get_subset_by_regexp(self, pattern, srclist = None):
         sublist = []
-        for b in self.booklist:
+        if not srclist:
+            srclist = self.booklist
+
+        for b in srclist:
             name = b.filename.lower()
             if name.endswith(".pdf"):
                 name = name[:-4]
