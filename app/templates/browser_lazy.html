@@ -134,10 +134,10 @@
 
         <div class="actionbar">
             <div class="linksbar">
-                <a href="{{ url_for('.logout') }}">Logout</a><br/>
-                La librairie contient {{ nbBooklist }} livres |<br/>
+                <div><a href="{{ url_for('.logout') }}">Logout</a> |
+                    La librairie contient {{ nbBooklist }} livres |</div>
                 <div id="info-filtres">Filtre sur les livres
-                    <input type="checkbox" id="search-pinned-book">épinglés</input> </div>
+                    <input type="checkbox" id="search-pinned-book">épinglés</input></div>
                 <div id="info-text"></div>
             </div>
             <input id="input-search-pattern" type="text" title="Patron de recherche textuelle"/>
