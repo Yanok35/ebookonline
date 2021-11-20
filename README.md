@@ -38,9 +38,9 @@ entry in ```/etc/ImageMagick-6/policy.xml```
 
 ## Configure the service
 
-You should edit ```ebookonline.conf``` file and modify following variables. A
+You should edit ```config.py``` file and modify following variables. A
 secret key is required for cookies encryption in the
-[Flask session documentation](http://flask.pocoo.org/docs/0.11/quickstart/#sessions).
+[Flask session documentation](https://flask.palletsprojects.com/en/2.0.x/quickstart/?highlight=session#sessions).
 Also, you should configure the user/password list by filling up the "creds"
 dictionnary.
 
@@ -72,3 +72,7 @@ FLASK_ENV=debug FLASK_APP=ebookonline.py flask run --host=0.0.0.0
 ./ebookonline.py runserver --host=0.0.0.0
 ```
 
+# Licence
+
+This project is shared under the GPL-3.0 licence terms and conditions.
+Please refer to LICENCE file.
