@@ -37,3 +37,17 @@ number of time a book has been open/read ( popularity )
  'admin' page to have a summary of duplicated pdf, missing pdf?
  Afficher la version du site sur la page
  Logout button en haut a droite
+
+
+# Debugging notes:
+
+One can use following in interactive python console to dive into the book database:
+
+```python
+from app.book import BookDir
+from app.book import Cache
+
+cache = Cache.get_instance("/home/yannick/Projects/python/ebookonline/cache")
+bdir = BookDir("book.db")
+bdir.scan_dir("/home/yannick/Projects/python/ebookonline/books")
+```
