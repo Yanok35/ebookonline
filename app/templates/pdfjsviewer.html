@@ -8,12 +8,12 @@
     <title>{{ titre }}</title>
 
     <!-- PDF.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="{{ url_for('static', filename='libs/pdf.min_3.11.174.js')}}"></script>
 
     <!-- Feuille de style officielle de PDF.js pour la couche de texte -->
     <link
         rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css"
+        href="{{ url_for('static', filename='libs/pdf_viewer.min_3.11.174.css')}}"
     >
 
     <style>
@@ -1084,7 +1084,7 @@
                 }
 
                 pdfjsLib.GlobalWorkerOptions.workerSrc =
-                    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+                    "{{ url_for('static', filename='libs/pdf.worker.min_3.11.174.js')}}";
 
                 const loadingTask = pdfjsLib.getDocument({
                     url: PDF_URL,
