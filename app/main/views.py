@@ -210,6 +210,12 @@ def pdf_read(pdffile):
     response.mimetype = "application/pdf"
     return response
 
+@main.route('/pdfjsviewer/<path:pdffile>')
+def pdfjs_read(pdffile):
+    return render_template("pdfjsviewer.html",
+                            pdfurl = url_for('.pdf_read', pdffile = pdffile),
+                            titre = "PDFJS View")
+
 @main.route("/bookadmin/")
 @main.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
 def bookadmin(sha1 = None):
