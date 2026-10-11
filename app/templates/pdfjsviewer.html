@@ -68,6 +68,10 @@
             z-index: 10;
         }
 
+        #filler {
+            flex-grow: 1;
+        }
+
         #toolbar button {
             padding: 6px 10px;
             border: 1px solid #777;
@@ -489,6 +493,16 @@
             ☰ Signets
         </button>
 
+        <div id="filler"></div>
+
+        <button
+            id="toggleSearch"
+            type="button"
+            title="Rechercher dans le PDF (Ctrl+F)"
+        >
+            🔎 Rechercher
+        </button>
+
         <button
             id="goBack"
             type="button"
@@ -497,8 +511,6 @@
         >
             ← Précédent
         </button>
-
-        <!-- NOUVEAU : navigation vers l'avant dans l'historique -->
 
         <button
             id="goForward"
@@ -509,13 +521,7 @@
             Suivant →
         </button>
 
-        <button
-            id="toggleSearch"
-            type="button"
-            title="Rechercher dans le PDF (Ctrl+F)"
-        >
-            🔎 Rechercher
-        </button>
+        <div id="filler"></div>
 
         <label for="currentPage">Page :</label>
 
@@ -559,6 +565,8 @@
         >
             ↔ Largeur page
         </button>
+
+        <div id="filler"></div>
 
         <span id="status">Initialisation...</span>
 
