@@ -113,7 +113,15 @@ def browser_subset():
         return redirect(url_for(".login"))
 
     d = current_app.bookdir
-    booklist = d.get_booklist()
+
+    s = d.get_booklist()
+    sorted = request.values.get('sorted')
+    if sorted:
+        print("sorted = " + str(sorted))
+        s = d.sort_by_date()
+        print("sublist(3) size = " + str(len(s)))
+
+    booklist = s
     nbBooks = len(booklist)
 
     subset_id = int(request.values.get('subset-id'))

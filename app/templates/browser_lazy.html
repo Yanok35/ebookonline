@@ -17,6 +17,9 @@
         function appendBooklistSubset() {
             const Http = new XMLHttpRequest();
             url='/browser_subset?subset-id=' + nextSubset;
+            var sorted = $('#display-sorted').is(':checked');
+            if (sorted)
+                url = url + '&sorted=true'; // optional parameter
             Http.open("GET", url);
             Http.send();
             nextSubset++;
@@ -82,6 +85,14 @@
                 else
                     booklistSearch(searchPattern, pinnedBookFilter);
             });
+            // Checkbox toggling event activated to change the ordering of the book list
+            $('#display-sorted').on("change", function(event) {
+                var searchPattern = $('#input-search-pattern').val();
+                if (searchPattern == "") {
+                    resetViewToFirstSubset();
+                    // booklistSearch(searchPattern, pinnedBookFilter, sortedBookList);
+                }
+            });
         });
         function booklistSearch(pattern, pinned) {
             const Http = new XMLHttpRequest();
@@ -135,9 +146,13 @@
         <div class="actionbar">
             <div class="linksbar">
                 <div><a href="{{ url_for('.logout') }}">Logout</a> |
-                    La librairie contient {{ nbBooklist }} livres |</div>
+                    La librairie contient {{ nbBooklist }} livres
+                    <input type="checkbox" id="display-sorted">ajouts récents</input>
+                    |
+                </div>
                 <div id="info-filtres">Filtre sur les livres
-                    <input type="checkbox" id="search-pinned-book">épinglés</input></div>
+                    <input type="checkbox" id="search-pinned-book">épinglés</input>
+                </div>
                 <div id="info-text"></div>
             </div>
             <input id="input-search-pattern" type="text" title="Patron de recherche textuelle"/>
