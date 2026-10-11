@@ -196,6 +196,27 @@ class BookDir:
                 sublist.append(b)
         return sublist
 
+    def sort_by_date(self):
+        orderedList = []
+        # make a copy of booklist
+        for b in self.booklist:
+            orderedList.append(b)
+
+        # bubble sort
+        n = len(orderedList)
+        for i in range(n):
+            for j in range(0, n-i-1):
+                if (
+                    # first sort criteria: descending mtime
+                    orderedList[j].mtime < orderedList[j+1].mtime
+                    # second sort criteria, when mtime are equals : ascending filename
+                    or (orderedList[j].mtime == orderedList[j+1].mtime)
+                        and (orderedList[j].filename > orderedList[j+1].filename)
+                ):
+                    orderedList[j], orderedList[j+1] = orderedList[j+1], orderedList[j]
+
+        return orderedList
+
     def get_list_of_category(self):
         categories = []
         for b in self.booklist:
