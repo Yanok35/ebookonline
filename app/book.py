@@ -188,6 +188,7 @@ class BookDir:
             name = name.replace(".", " ")
             name = name.replace("-", " ")
             name = name.replace("_", " ")
+            name = name.replace("'", "")
             if pattern.lower() in name:
                 sublist.append(b)
         return sublist
