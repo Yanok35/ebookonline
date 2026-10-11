@@ -214,7 +214,7 @@ def pdf_read(pdffile):
 def pdfjs_read(pdffile):
     return render_template("pdfjsviewer.html",
                             pdfurl = url_for('.pdf_read', pdffile = pdffile),
-                            titre = "PDFJS View")
+                            titre = os.path.basename(pdffile))
 
 @main.route("/bookadmin/")
 @main.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
