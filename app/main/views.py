@@ -25,6 +25,8 @@ from . import main
 from srcs.book import BookDir
 from srcs.cache import Cache
 
+from datetime import datetime
+
 import io
 
 @main.route('/')
@@ -247,6 +249,7 @@ def bookadmin(sha1 = None):
                             bsel = bsel,
                             sha1 = sha1,
                             books = d.get_booklist(),
+                            mtimestr = datetime.fromtimestamp(bsel.mtime).strftime('%Y-%m-%d %H:%M:%S'),
                             titre = "eBook admin")
 
 
