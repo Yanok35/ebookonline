@@ -20,7 +20,7 @@
 import os
 import sys
 import json
-from flask import abort, current_app, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
+from flask import abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from . import main
 from ..book import BookDir
 from ..cache import Cache
@@ -200,14 +200,13 @@ def image(sha1):
 
 @main.route('/readpdf/<path:pdffile>')
 def pdf_read(pdffile):
-    #print(pdffile)
-    #response = make_response(pdffile)
-    #return response
     abspath = os.path.join(current_app.bookdir.dirpath, pdffile)
-    n = open(abspath, 'rb')
-    allin = n.read() #.decode('latin1')#.decode('iso8859-15')
-    response = make_response(allin)
-    response.mimetype = "application/pdf"
+    response = send_file(
+        abspath,
+        conditional=True
+    )
+    # Allow Range HTTP request to get file by chunk (pdfjs uses chunks of 64KB)
+    response.headers["Accept-Ranges"] = "bytes"
     return response
 
 @main.route('/pdfjsviewer/<path:pdffile>')

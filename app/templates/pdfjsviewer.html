@@ -1089,6 +1089,9 @@
                 const loadingTask = pdfjsLib.getDocument({
                     url: PDF_URL,
                     rangeChunkSize: 65536,
+                    disableRange: false,
+                    disableStream: true,
+                    disableAutoFetch: true,
                     stopAtErrors: false
                 });
 
