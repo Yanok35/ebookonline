@@ -570,6 +570,11 @@
 
         <span id="status">Initialisation...</span>
 
+        <a href="{{ pdfurl }}">
+            <button id="downloadPdf" type="button" disabled title="Télécharger le PDF">
+                💾
+            </button>
+        </a>
     </div>
 
 
@@ -1103,6 +1108,7 @@
                 $("zoomIn").disabled = false;
                 $("zoomOut").disabled = false;
                 $("fitWidth").disabled = false;
+                $("downloadPdf").disabled = false;
 
                 const firstPage = await pdfDoc.getPage(1);
 
