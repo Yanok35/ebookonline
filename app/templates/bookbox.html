@@ -1,6 +1,6 @@
 {% for b in books %}
     <div class="book-box">
-        <a href="{{ url_for('.pdf_read', pdffile = b.filename) }}">
+        <a href="{{ url_for('.pdfjs_read', pdffile = b.filename) }}">
         <div class="book-img">
         <img src="{{ url_for('.image', sha1 = b.sha1) }}" width="300px" />
         </div>
