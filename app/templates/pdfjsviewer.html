@@ -689,6 +689,14 @@
         // CONFIGURATION
         // =========================================
 
+        const params = new URLSearchParams(window.location.search);
+
+        const DOCUMENT_ID =
+            params.get("documentId") || "{{ documentId }}";
+
+        const DOCUMENT_NAME =
+            params.get("documentName") || "{{ documentName }}";
+
         /*
          * Le paramètre de version évite de conserver
          * une ancienne version du PDF dans le cache HTTP.
@@ -696,6 +704,11 @@
 
         // const PDF_URL = "document.pdf?v=" + Date.now();
         const PDF_URL = "{{ pdfurl }}?v=" + Date.now();
+
+        /*
+         * L'API Flask est servie sur la même origine.
+         */
+        const API_BASE_URL = "/api";
 
         const MAX_CACHED_CANVASES = 8;
         const OBSERVER_MARGIN = "1000px 0px";
@@ -708,6 +721,8 @@
 
         const MAX_DEVICE_PIXEL_RATIO = 1.5;
         const MAX_CONCURRENT_RENDERS = 2;
+
+        const STATE_SYNC_DELAY = 500;
 
         // =========================================
         // ÉLÉMENTS HTML
@@ -754,6 +769,7 @@
         let resizeTimer = null;
 
         let destroyed = false;
+        let restoringState = false;
 
         const pages = [];
         let outlineEntries = [];
@@ -770,272 +786,29 @@
         // =========================================
 
         /*
-         * L'historique fonctionne comme celui d'un navigateur.
+         * Historique de navigation interne.
          *
-         * navigationHistory contient les différents points
-         * de vue enregistrés.
-         *
-         * navigationHistoryIndex désigne le point de vue
-         * actuellement sélectionné dans cet historique.
-         *
-         * Exemple :
-         *
-         *   [Page A, Page B, Page C]
-         *                 ^
-         *                 |
-         *          index = 2
-         *
-         * Après un retour :
-         *
-         *   [Page A, Page B, Page C]
-         *          ^
-         *          |
-         *       index = 1
-         *
-         * Le bouton Suivant permet alors de retrouver C.
+         * Les états contiennent page, coordonnées PDF et zoom.
          */
-
-        const navigationHistory = [];
-
-        let navigationHistoryIndex = -1;
+        const backHistory = [];
+        const forwardHistory = [];
 
         /*
-         * Capture l'état actuel du lecteur.
+         * État transmis au serveur.
          */
+        const pdfReaderState = {
+            documentId: DOCUMENT_ID,
+            documentName: DOCUMENT_NAME,
+            pageNumber: 1,
+            positionX: 0,
+            positionY: 0,
+            zoom: 1,
+            updatedAt: null
+        };
 
-        function captureCurrentView() {
-            return {
-                pageNumber: findCurrentPage(),
-
-                scrollTop: container.scrollTop,
-                scrollLeft: container.scrollLeft,
-
-                scale: scale
-            };
-        }
-
-        /*
-         * Met à jour l'état des boutons Précédent et Suivant.
-         */
-
-        function updateBackButton() {
-            const canGoBack =
-                navigationHistoryIndex > 0;
-
-            backButton.disabled = !canGoBack;
-
-            backButton.title = canGoBack
-                ? "Revenir au point de vue précédent"
-                : "Aucune navigation précédente";
-
-            const canGoForward =
-                navigationHistoryIndex >= 0 &&
-                navigationHistoryIndex <
-                    navigationHistory.length - 1;
-
-            forwardButton.disabled = !canGoForward;
-
-            forwardButton.title = canGoForward
-                ? "Avancer au point de vue suivant"
-                : "Aucune navigation suivante";
-        }
-
-        /*
-         * Enregistre le point de vue qui précède
-         * une navigation interne.
-         *
-         * Si l'utilisateur est revenu en arrière puis
-         * clique sur un nouveau lien, les anciennes
-         * entrées situées après sa position sont supprimées.
-         */
-
-        function saveCurrentView() {
-            if (!pdfDoc) return;
-
-            const view = captureCurrentView();
-
-            if (navigationHistoryIndex < 0) {
-                /*
-                 * Première navigation :
-                 * enregistrer le point de départ.
-                 */
-
-                navigationHistory.push(view);
-
-                navigationHistoryIndex = 0;
-
-            } else {
-                /*
-                 * Mettre à jour le point de vue actuel.
-                 */
-
-                navigationHistory[navigationHistoryIndex] =
-                    view;
-            }
-
-            /*
-             * Supprimer les anciennes entrées futures.
-             *
-             * C'est le comportement classique d'un navigateur :
-             * après un retour arrière, une nouvelle navigation
-             * remplace l'ancienne branche de l'historique.
-             */
-
-            navigationHistory.splice(
-                navigationHistoryIndex + 1
-            );
-
-            updateBackButton();
-        }
-
-        /*
-         * Enregistre le point de vue atteint après
-         * une navigation interne.
-         */
-
-        function saveDestinationView() {
-            if (!pdfDoc) return;
-
-            const view = captureCurrentView();
-
-            /*
-             * Supprimer d'abord les éventuelles entrées futures.
-             */
-
-            navigationHistory.splice(
-                navigationHistoryIndex + 1
-            );
-
-            navigationHistory.push(view);
-
-            navigationHistoryIndex =
-                navigationHistory.length - 1;
-
-            updateBackButton();
-        }
-
-        /*
-         * Restaure un point de vue enregistré.
-         *
-         * La position verticale, la position horizontale,
-         * la page et le zoom sont restaurés.
-         */
-
-        async function restoreView(previousView) {
-            if (!pdfDoc || !previousView) return;
-
-            try {
-                /*
-                 * Restaurer le zoom avant la position
-                 * de défilement, car le zoom modifie
-                 * la géométrie des pages.
-                 */
-
-                if (
-                    Math.abs(scale - previousView.scale) >
-                    0.001
-                ) {
-                    await setZoom(
-                        previousView.scale,
-                        false
-                    );
-                }
-
-                /*
-                 * Attendre que le navigateur ait appliqué
-                 * les nouvelles dimensions.
-                 */
-
-                await nextFrame();
-                await nextFrame();
-
-                currentPageNumber =
-                    previousView.pageNumber;
-
-                currentPageInput.value =
-                    previousView.pageNumber;
-
-                /*
-                 * Restaurer précisément la position
-                 * de défilement enregistrée.
-                 */
-
-                container.scrollTo({
-                    top: previousView.scrollTop,
-                    left: previousView.scrollLeft,
-                    behavior: "auto"
-                });
-
-                /*
-                 * Demander le rendu de la page restaurée.
-                 */
-
-                const info =
-                    pages[previousView.pageNumber - 1];
-
-                if (info) {
-                    requestRender(info, 1000);
-                }
-
-                scheduleViewportUpdate();
-
-            } catch (error) {
-                console.error(
-                    "Erreur lors de la restauration du point de vue :",
-                    error
-                );
-            }
-        }
-
-        /*
-         * Bouton Précédent.
-         */
-
-        async function goBack() {
-            if (
-                !pdfDoc ||
-                navigationHistoryIndex <= 0
-            ) {
-                return;
-            }
-
-            navigationHistoryIndex--;
-
-            const previousView =
-                navigationHistory[navigationHistoryIndex];
-
-            updateBackButton();
-
-            await restoreView(previousView);
-        }
-
-        /*
-         * Bouton Suivant.
-         */
-
-        async function goForward() {
-            if (
-                !pdfDoc ||
-                navigationHistoryIndex < 0 ||
-                navigationHistoryIndex >=
-                    navigationHistory.length - 1
-            ) {
-                return;
-            }
-
-            navigationHistoryIndex++;
-
-            const nextView =
-                navigationHistory[navigationHistoryIndex];
-
-            updateBackButton();
-
-            await restoreView(nextView);
-        }
-
-        // =========================================
+        // =====================================================
         // UTILITAIRES
-        // =========================================
+        // =====================================================
 
         function updateStatus(message) {
             statusElement.textContent = message;
@@ -1050,14 +823,333 @@
             return Math.max(min, Math.min(max, value));
         }
 
-        function getContainerRect() {
-            return container.getBoundingClientRect();
-        }
-
         function nextFrame() {
             return new Promise(resolve =>
                 requestAnimationFrame(resolve)
             );
+        }
+
+        function getContainerRect() {
+            return container.getBoundingClientRect();
+        }
+
+        function updateHistoryButtons() {
+            backButton.disabled = backHistory.length === 0;
+            forwardButton.disabled = forwardHistory.length === 0;
+        }
+
+        // =====================================================
+        // POSITION DU LECTEUR
+        // =====================================================
+
+        /*
+        * Calcule l'état de lecture.
+        *
+        * positionX et positionY sont convertis en coordonnées
+        * du PDF d'origine à l'aide de PDF.js.
+        */
+        async function getPdfReaderState() {
+            if (!pdfDoc || !pages.length) {
+                return null;
+            }
+
+            const pageNumber = findCurrentPage();
+            const info = pages[pageNumber - 1];
+
+            if (!info) {
+                return null;
+            }
+
+            await loadPageMetadata(info);
+
+            const pdfPage = await pdfDoc.getPage(pageNumber);
+
+            const viewport = pdfPage.getViewport({
+                scale
+            });
+
+            const containerRect = getContainerRect();
+            const pageRect = info.shell.getBoundingClientRect();
+
+            /*
+            * Coordonnées du coin supérieur gauche du conteneur
+            * par rapport au coin supérieur gauche de la page.
+            */
+            const displayedX = clamp(
+                containerRect.left - pageRect.left,
+                0,
+                viewport.width
+            );
+
+            const displayedY = clamp(
+                containerRect.top - pageRect.top,
+                0,
+                viewport.height
+            );
+
+            /*
+            * Conversion depuis les coordonnées d'affichage
+            * vers le repère PDF.
+            */
+            const pdfPoint = viewport.convertToPdfPoint(
+                displayedX,
+                displayedY
+            );
+
+            return {
+                documentId: DOCUMENT_ID,
+                documentName: DOCUMENT_NAME,
+                pageNumber,
+                positionX: pdfPoint[0],
+                positionY: pdfPoint[1],
+                zoom: scale,
+                updatedAt: new Date().toISOString()
+            };
+        }
+
+            /*
+        * Conserve l'état courant dans l'historique.
+            */
+        async function captureView() {
+            const state = await getPdfReaderState();
+
+            if (!state) return null;
+
+                return {
+                pageNumber: state.pageNumber,
+                positionX: state.positionX,
+                positionY: state.positionY,
+                zoom: state.zoom
+                };
+            }
+
+        // =====================================================
+        // COMMUNICATION AVEC FLASK
+        // =====================================================
+
+        let stateSyncTimer = null;
+        let stateSyncInProgress = false;
+        let stateSyncPending = false;
+
+        /*
+        * Envoi de l'état au serveur.
+        *
+        * Si une requête est en cours, une nouvelle sauvegarde
+        * est programmée plutôt que de lancer des requêtes
+        * concurrentes susceptibles d'arriver dans le désordre.
+        */
+        async function sendPdfReaderState() {
+            if (destroyed || restoringState || !pdfDoc) {
+                return;
+            }
+
+            if (stateSyncInProgress) {
+                stateSyncPending = true;
+                return;
+            }
+
+            const state = await getPdfReaderState();
+
+            if (!state || destroyed || restoringState) {
+                return;
+            }
+
+            stateSyncInProgress = true;
+            stateSyncPending = false;
+
+            try {
+                const response = await fetch(
+                    `${API_BASE_URL}/reader/state`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(state)
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Erreur HTTP ${response.status}`
+                    );
+                }
+
+                Object.assign(pdfReaderState, state);
+
+            } catch (error) {
+                console.error(
+                    "Impossible de sauvegarder l'état du lecteur :",
+                    error
+                );
+
+                updateStatus(
+                    "Lecture locale — sauvegarde serveur indisponible"
+                );
+
+            } finally {
+                stateSyncInProgress = false;
+
+                if (stateSyncPending && !destroyed) {
+                    stateSyncPending = false;
+                    scheduleStateSync(100);
+                }
+            }
+        }
+
+        /*
+        * Regroupe les événements rapprochés.
+        */
+        function scheduleStateSync(delay = STATE_SYNC_DELAY) {
+            if (restoringState || destroyed) return;
+
+            clearTimeout(stateSyncTimer);
+
+            stateSyncTimer = setTimeout(
+                sendPdfReaderState,
+                delay
+            );
+        }
+
+        /*
+        * Récupération de l'état enregistré dans le fichier JSON.
+        */
+        async function loadPdfReaderState() {
+            try {
+                const response = await fetch(
+                    `${API_BASE_URL}/reader/state/` +
+                    encodeURIComponent(DOCUMENT_ID),
+                    {
+                        method: "GET",
+                        cache: "no-store"
+                    }
+                );
+
+                if (response.status === 404) {
+                    return null;
+                }
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Erreur HTTP ${response.status}`
+                    );
+                }
+
+                return await response.json();
+
+            } catch (error) {
+                console.warn(
+                    "Impossible de récupérer l'état enregistré :",
+                    error
+                );
+
+                return null;
+            }
+        }
+
+        /*
+        * Restaure un état venant du serveur.
+        */
+        async function restorePdfReaderState(state) {
+            if (!state || !pdfDoc) return;
+
+            restoringState = true;
+
+            try {
+                const pageNumber = clamp(
+                    Math.trunc(Number(state.pageNumber) || 1),
+                    1,
+                    pdfDoc.numPages
+                );
+
+                const savedZoom = clamp(
+                    Number(state.zoom) || 1,
+                    MIN_SCALE,
+                    MAX_SCALE
+                );
+
+                await setZoom(savedZoom, false);
+
+                const info = pages[pageNumber - 1];
+
+                await loadPageMetadata(info);
+
+                /*
+                * Attendre que les dimensions des conteneurs
+                * soient à jour après le changement de zoom.
+                */
+                await nextFrame();
+                await nextFrame();
+
+                const pdfPage = await pdfDoc.getPage(pageNumber);
+
+                const viewport = pdfPage.getViewport({
+                    scale
+                });
+
+                const x = Number(state.positionX) || 0;
+                const y = Number(state.positionY) || 0;
+
+                /*
+                * Conversion des coordonnées PDF sauvegardées
+                * vers les coordonnées affichées.
+                */
+                const point = viewport.convertToViewportPoint(x, y);
+
+                const containerRect = getContainerRect();
+                const pageRect = info.shell.getBoundingClientRect();
+
+                const pageTop =
+                    pageRect.top -
+                    containerRect.top +
+                    container.scrollTop;
+
+                const pageLeft =
+                    pageRect.left -
+                    containerRect.left +
+                    container.scrollLeft;
+
+                const targetTop = pageTop + point[1];
+                const targetLeft = pageLeft + point[0];
+
+                container.scrollTo({
+                    top: clamp(
+                        targetTop,
+                        0,
+                        Math.max(
+                            0,
+                            container.scrollHeight - container.clientHeight
+                        )
+                    ),
+                    left: clamp(
+                        targetLeft,
+                        0,
+                        Math.max(
+                            0,
+                            container.scrollWidth - container.clientWidth
+                        )
+                    ),
+                    behavior: "auto"
+                });
+
+                currentPageNumber = pageNumber;
+                currentPageInput.value = pageNumber;
+
+                requestRender(info, 1000);
+
+                await nextFrame();
+
+                scheduleViewportUpdate();
+
+            } finally {
+                /*
+                * Laisse la restauration se terminer avant
+                * de réactiver les sauvegardes automatiques.
+                */
+                await nextFrame();
+
+                restoringState = false;
+            }
         }
 
         // =========================================
@@ -1116,7 +1208,7 @@
 
                 const firstPage = await pdfDoc.getPage(1);
 
-                const viewport = firstPage.getViewport({
+                const firstViewport = firstPage.getViewport({
                     scale: 1
                 });
 
@@ -1149,8 +1241,8 @@
                         pageNumber: number,
                         shell,
 
-                        widthAtScale1: viewport.width,
-                        heightAtScale1: viewport.height,
+                        widthAtScale1: firstViewport.width,
+                        heightAtScale1: firstViewport.height,
 
                         metadataLoaded: number === 1,
 
@@ -1177,6 +1269,7 @@
 
                         pdfTextContent: null,
                         pdfTextPromise: null,
+
                         textLayer: null,
                         textLayerTask: null,
 
@@ -1201,13 +1294,25 @@
                 setupObserver();
                 setupControls();
 
-                requestRender(pages[0], 1000);
+                /*
+                 * La position sauvegardée est restaurée après
+                 * la création des pages et de l'observateur.
+                 */
+                const savedState = await loadPdfReaderState();
+
+                if (destroyed) return;
+
+                if (savedState) {
+                    await restorePdfReaderState(savedState);
+                } else {
+                    requestRender(pages[0], 1000);
+                }
 
                 updateStatus(
                     pdfDoc.numPages + " pages"
                 );
 
-                updateBackButton();
+                updateHistoryButtons();
 
             } catch (error) {
                 console.error(error);
@@ -1290,9 +1395,14 @@
                  * Enregistrer le point de départ avant
                  * de suivre le lien interne.
                  */
-
                 if (saveHistory) {
-                    saveCurrentView();
+                    const current = await captureView();
+
+                    if (current) {
+                        backHistory.push(current);
+                        forwardHistory.length = 0;
+                        updateHistoryButtons();
+                    }
                 }
 
                 const pageNumber = resolved.pageNumber;
@@ -1462,18 +1572,8 @@
 
                 updateActiveOutline(pageNumber);
 
-                /*
-                 * Enregistrer le point d'arrivée.
-                 *
-                 * Il sera la destination du bouton Suivant
-                 * après un retour en arrière.
-                 */
-
-                if (saveHistory) {
-                    saveDestinationView();
-                }
-
                 scheduleViewportUpdate();
+                scheduleStateSync();
 
             } catch (error) {
                 console.warn(
@@ -1482,6 +1582,101 @@
                 );
             }
         }
+
+    // =====================================================
+    // HISTORIQUE PRÉCÉDENT / SUIVANT
+    // =====================================================
+
+    async function restoreHistoryView(view) {
+        if (!view || !pdfDoc) return;
+
+        restoringState = true;
+
+        try {
+            await setZoom(view.zoom, false);
+
+            const info = pages[view.pageNumber - 1];
+
+            await loadPageMetadata(info);
+
+            const pdfPage = await pdfDoc.getPage(view.pageNumber);
+
+            const viewport = pdfPage.getViewport({
+                scale
+            });
+
+            const point = viewport.convertToViewportPoint(
+                view.positionX,
+                view.positionY
+            );
+
+            await nextFrame();
+
+            const containerRect = getContainerRect();
+            const pageRect = info.shell.getBoundingClientRect();
+
+            const pageTop =
+                pageRect.top -
+                containerRect.top +
+                container.scrollTop;
+
+            const pageLeft =
+                pageRect.left -
+                containerRect.left +
+                container.scrollLeft;
+
+            container.scrollTo({
+                top: Math.max(0, pageTop + point[1]),
+                left: Math.max(0, pageLeft + point[0]),
+                behavior: "auto"
+            });
+
+            currentPageNumber = view.pageNumber;
+            currentPageInput.value = view.pageNumber;
+
+            requestRender(info, 1000);
+
+        } finally {
+            await nextFrame();
+            restoringState = false;
+
+            updateHistoryButtons();
+            scheduleViewportUpdate();
+            scheduleStateSync();
+        }
+    }
+
+    async function goBack() {
+        if (!backHistory.length) return;
+
+        const current = await captureView();
+
+        if (current) {
+            forwardHistory.push(current);
+        }
+
+        const previous = backHistory.pop();
+
+        updateHistoryButtons();
+
+        await restoreHistoryView(previous);
+    }
+
+    async function goForward() {
+        if (!forwardHistory.length) return;
+
+        const current = await captureView();
+
+        if (current) {
+            backHistory.push(current);
+        }
+
+        const next = forwardHistory.pop();
+
+        updateHistoryButtons();
+
+        await restoreHistoryView(next);
+    }
 
         // =========================================
         // SIGNETS / INDEX DU DOCUMENT
@@ -3011,6 +3206,12 @@
                 updateActiveOutline(currentPageNumber);
 
                 evictCanvases(null);
+
+                /*
+                 * L'état est sauvegardé après la fin du défilement,
+                 * et non à chaque événement scroll.
+                 */
+                scheduleStateSync();
             });
         }
 
@@ -3056,6 +3257,7 @@
             requestRender(info, 1000);
 
             scheduleViewportUpdate();
+            scheduleStateSync();
         }
 
         // =========================================
@@ -3267,6 +3469,7 @@
             requestRender(anchor, 1000);
 
             scheduleViewportUpdate();
+            scheduleStateSync();
         }
 
         // =========================================
@@ -3539,6 +3742,7 @@
 
                 clearTimeout(searchTimer);
                 clearTimeout(resizeTimer);
+                clearTimeout(stateSyncTimer);
 
                 if (pageObserver) {
                     pageObserver.disconnect();

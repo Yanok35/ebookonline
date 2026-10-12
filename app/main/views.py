@@ -209,11 +209,15 @@ def pdf_read(pdffile):
     response.headers["Accept-Ranges"] = "bytes"
     return response
 
-@main.route('/pdfjsviewer/<path:pdffile>')
-def pdfjs_read(pdffile):
+@main.route('/pdfjsviewer/<string:sha1>/<path:pdffile>')
+def pdfjs_read(sha1, pdffile):
+    docId = sha1
+    docName = os.path.basename(pdffile)
     return render_template("pdfjsviewer.html",
                             pdfurl = url_for('.pdf_read', pdffile = pdffile),
-                            titre = os.path.basename(pdffile))
+                            documentId = docId,
+                            documentName = docName,
+                            titre = docName)
 
 @main.route("/bookadmin/")
 @main.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
