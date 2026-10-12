@@ -3150,8 +3150,12 @@
                 "Saisissez un texte";
         }
 
+        let beforeSearchView;
         function openSearch() {
             searchbar.classList.add("visible");
+
+            beforeSearchView = captureCurrentView();
+            saveCurrentView();
 
             searchInput.focus();
             searchInput.select();
@@ -3161,6 +3165,10 @@
             searchbar.classList.remove("visible");
 
             clearSearch();
+
+            if (beforeSearchView !== captureCurrentView()) {
+                saveDestinationView();
+            }
 
             container.focus();
         }
