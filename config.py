@@ -33,5 +33,7 @@ class Config:
 
     BOOK_DIR = os.path.join(basedir, "books")
     CACHE_DIR = os.path.join(basedir, "cache")
-    BOOK_DB = "book.db"
 
+    # Following are in current directory
+    BOOK_DB = "book.db"
+    STATE_FILE = "reader_states.json"
