@@ -27,7 +27,7 @@ import traceback
 
 import multiprocessing
 
-from PyPDF2 import PdfFileReader, PdfFileWriter
+from pypdf import PdfReader, PdfWriter
 
 from wand.image import Image
 
@@ -160,7 +160,7 @@ class Cache:
 
         try:
             f = open(pdffilename, 'rb') 
-            pdf = PdfFileReader(f)
+            pdf = PdfReader(f)
             if pdf.isEncrypted:
                 pdf.decrypt('')
             # It has been observed working on a second call on some file.
@@ -169,7 +169,7 @@ class Cache:
             except:
                 contents = pdf.pages[0]
 
-            pdf = PdfFileWriter()
+            pdf = PdfWriter()
             pdf.addPage(contents)
             inter = f"/tmp/temp_output_{os.getpid()}.pdf"
             f = open(inter, 'wb') 

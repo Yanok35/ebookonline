@@ -7,6 +7,6 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.4
 pillow==12.3.0
-PyPDF2==3.0.1
+pypdf==6.21.1
 Wand==0.7.2
 Werkzeug==3.1.9
