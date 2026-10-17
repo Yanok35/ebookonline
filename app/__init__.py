@@ -19,6 +19,7 @@
 
 from config import Config
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from srcs.cache import Cache
 from srcs.book import BookDir
@@ -26,6 +27,15 @@ from srcs.book import BookDir
 def create_app(config_name):
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    if app.config['BEHIND_REVERSE_PROXY']:
+        # Single reverse proxy to trust
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app,
+            x_for=1,
+            x_proto=1,
+            x_host=1
+        )
 
     app.secret_key = app.config['SECRET_KEY']
 

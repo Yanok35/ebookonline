@@ -37,3 +37,7 @@ class Config:
     # Following are in current directory
     BOOK_DB = "book.db"
     STATE_FILE = "reader_states.json"
+
+    # Enable real IP coming before the Reverse proxy (this will allow to
+    # identify suspicious scan with fail2ban)
+    BEHIND_REVERSE_PROXY = True
