@@ -72,6 +72,21 @@ FLASK_ENV=debug FLASK_APP=ebookonline.py flask run --host=0.0.0.0
 ./ebookonline.py runserver --host=0.0.0.0
 ```
 
+# Development environement
+
+## Extend dependencies for dev
+
+The project had initiated a use of `pytest` test framework, which can be installed using:
+
+```bash
+pip3 install -r requirements-dev.txt
+```
+
+And launch using:
+```bash
+pytest -s -v tests/
+```
+
 # Licence
 
 This project is shared under the GPL-3.0 licence terms and conditions.
