@@ -22,8 +22,8 @@ import json
 import sys
 from threading import Thread
 
-from app.cache import Cache
-from app.cache import sha1_file
+from srcs.cache import Cache
+from srcs.cache import sha1_file
 
 import os
 

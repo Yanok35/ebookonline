@@ -22,8 +22,8 @@ import sys
 import json
 from flask import abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from . import main
-from ..book import BookDir
-from ..cache import Cache
+from srcs.book import BookDir
+from srcs.cache import Cache
 
 import io
 

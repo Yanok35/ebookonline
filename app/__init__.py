@@ -20,8 +20,8 @@
 from config import Config
 from flask import Flask
 
-from app.cache import Cache
-from app.book import BookDir
+from srcs.cache import Cache
+from srcs.book import BookDir
 
 def create_app(config_name):
     app = Flask(__name__)
