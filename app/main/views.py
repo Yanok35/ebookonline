@@ -213,8 +213,10 @@ def pdf_read(pdffile):
 def pdfjs_read(sha1, pdffile):
     docId = sha1
     docName = os.path.basename(pdffile)
+    # TODO: Check RFC-3986 & reserved char when present in 'pdffile' filename.
+    #  https://metacpan.org/pod/URI::Escape
     return render_template("pdfjsviewer.html",
-                            pdfurl = url_for('.pdf_read', pdffile = pdffile),
+                            pdfurl = url_for('.pdf_read', pdffile = pdffile).replace("'", "%27"),
                             documentId = docId,
                             documentName = docName,
                             titre = docName)
