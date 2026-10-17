@@ -31,15 +31,9 @@ from PyPDF2 import PdfFileReader, PdfFileWriter
 from wand.image import Image
 
 def sha1_file(filename):
-    if not os.path.exists(filename):
-        raise getopt.error("file %s not found" % str(filename))
-
-    fd_in = open(filename, 'rb')
-    allin = fd_in.read() #.decode('latin1')#.decode('iso8859-15')
-
-    m = hashlib.sha1()
-    m.update(allin)
-    return m.hexdigest()
+    with open(filename, 'rb') as fd_in:
+        digest = hashlib.file_digest(fd_in, "sha1")
+        return digest.hexdigest()
 
 class Cache:
 
