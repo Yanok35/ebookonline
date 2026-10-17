@@ -65,11 +65,10 @@ BOOK_DB = "book.db"
 
 TODO
 
-## Start the Flask server
+## Start the Flask production server
+
 ```bash
-# ./ebookonline.py
-FLASK_ENV=debug FLASK_APP=ebookonline.py flask run --host=0.0.0.0
-./ebookonline.py runserver --host=0.0.0.0
+gunicorn -w 1 -t 4 -b 0.0.0.0:5000 'ebookonline:create_app("default")'
 ```
 
 # Development environement
@@ -85,6 +84,13 @@ pip3 install -r requirements-dev.txt
 And launch using:
 ```bash
 pytest -s -v tests/
+```
+
+## Start the Flask server
+```bash
+# ./ebookonline.py
+FLASK_ENV=debug FLASK_APP=ebookonline.py flask run --host=0.0.0.0
+./ebookonline.py runserver --host=0.0.0.0
 ```
 
 # Licence
