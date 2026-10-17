@@ -91,8 +91,11 @@ class Book:
 
 class BookDir:
 
-    def __init__(self, dbfile):
+    def __init__(self, dbfile : str, cache : Cache):
+        assert isinstance(cache, Cache)
+
         self.booklist = []
+        self.cache = cache
         self.dbfile = dbfile
         self.dirpath = None
 
@@ -241,7 +244,6 @@ class BookDir:
             if category == '':
                 category = 'Generals'
 
-            c = Cache.get_instance()
             # For all files found in current directory
             for f in files:
                 abspath = os.path.join(dir, f)
@@ -257,7 +259,7 @@ class BookDir:
                     if b and b.mtime == os.path.getmtime(abspath):
                         # Let's create thumbnail, in case it is missing for
                         # any reason
-                        c.create_thumbnail(abspath, b.sha1)
+                        self.cache.create_thumbnail(abspath, b.sha1)
 
                         refreshed_booklist.append(b)
                         self.booklist.remove(b)
@@ -297,7 +299,7 @@ class BookDir:
                     b.set_sha1(k)
                     b.set_filename(relpath)
                     b.set_category(category)
-                    c.create_thumbnail(abspath, k)
+                    self.cache.create_thumbnail(abspath, k)
 
                     refreshed_booklist.append(b)
 

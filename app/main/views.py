@@ -187,8 +187,7 @@ def dummyimg_get_response():
 def image(sha1):
     #print(sha1)
 
-    cache = Cache.get_instance()
-    mon_image = cache.get_thumbnail(sha1)
+    mon_image = current_app.cache.get_thumbnail(sha1)
 
     if mon_image:
         response = make_response(mon_image)

@@ -29,8 +29,8 @@ def create_app(config_name):
 
     app.secret_key = app.config['SECRET_KEY']
 
-    cache = Cache.get_instance(Config.CACHE_DIR)
-    app.bookdir = BookDir(Config.BOOK_DB)
+    app.cache = Cache.get_instance(Config.CACHE_DIR)
+    app.bookdir = BookDir(Config.BOOK_DB, app.cache)
     # initial scan of available books
     app.bookdir.scan_dir(Config.BOOK_DIR)
 
