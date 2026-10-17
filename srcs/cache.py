@@ -22,6 +22,7 @@ import hashlib
 import os
 import sys
 import math
+import signal
 import traceback
 
 import multiprocessing
@@ -42,6 +43,7 @@ class Cache:
 
     @classmethod
     def get_instance(cls, *args):
+        print("Cache::get_instance()")
         if cls.instance == None:
             #print(**args)
             #print(*args)
@@ -50,11 +52,13 @@ class Cache:
         return cls.instance
 
     def __init__(self, cachedir):
+        print("Cache::__init__()")
         if not os.path.exists(cachedir):
             os.mkdir(cachedir)
         self.cachedir = cachedir
 
-        self.sha1_queue = multiprocessing.Queue()
+        self.shouldRun = True
+        self.sha1_queue = multiprocessing.JoinableQueue()
         self.subproc = []
         for num in range(max(1, os.cpu_count()-1)):
             p = multiprocessing.Process(target=self.__subproc_thumbnail_create, args=(num,))
@@ -89,12 +93,32 @@ class Cache:
         self.sha1_queue.put(msg)
 
     def __del__(self):
+        print(f"Cache::__dtor__()")
+        self.shouldRun = False
+        # TODO: in python3.14, replace by: [p.interrupt() for p in self.subproc]
+        for p in self.subproc:
+            try:
+                os.kill(p.pid, signal.SIGINT)
+            except:
+                continue
         self.sha1_queue.close()
         self.sha1_queue.join_thread()
 
+    def __enter__(self):
+        """
+        Following is python context manager within a class (with" block statement prelude)
+        """
+        self.get_instance()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        This is called automatically when exiting "with" block statement
+        """
+        self.get_instance().__del__()
+
     def __subproc_thumbnail_create(self, subprocId: int):
 
-        while True:
+        while self.shouldRun:
             print(f"{subprocId}: waiting for orders")
 
             try:
