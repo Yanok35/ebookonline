@@ -4,3 +4,4 @@ pluggy==1.7.0
 Pygments==2.21.0
 pytest==9.1.1
 pytest-mock==3.16.0
+ruff==0.17.1
