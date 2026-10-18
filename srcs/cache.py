@@ -108,7 +108,7 @@ class Cache:
         """
         Following is python context manager within a class (with" block statement prelude)
         """
-        self.get_instance()
+        return self.get_instance()
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
