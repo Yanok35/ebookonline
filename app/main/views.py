@@ -260,6 +260,20 @@ def bookadmin(sha1 = None):
                             mtimestr = datetime.fromtimestamp(bsel.mtime).strftime('%Y-%m-%d %H:%M:%S'),
                             titre = "eBook admin")
 
+@main.route("/reset-thumbnail/<sha1>", methods=['POST'])
+def reset_thumbnail(sha1):
+    try:
+        current_app.logger.warning(f"get_thumbname = {current_app.cache.get_thumbname(sha1)}")
+        os.remove(current_app.cache.get_thumbname(sha1))
+    except Exception:
+        return make_response(f"Reset thumbnail {sha1} failed !")
+
+    d = current_app.bookdir
+    b = d.find_book_by_sha1(sha1)
+    pdffile = os.path.join(b.book_dir, b.filename)
+    current_app.logger.warning(f"filename= '{pdffile}'")
+    current_app.cache.create_thumbnail(pdffile, sha1)
+    return redirect(url_for(".bookadmin", sha1 = sha1))
 
 @main.route("/pinbook", methods=['POST'])
 def pinbook(sha1 = None):

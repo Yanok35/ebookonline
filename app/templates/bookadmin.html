@@ -53,6 +53,11 @@
         <button class="btn" type="submit">Save</button>
         </p>
         </form>
+
+        <form action="{{ url_for('.reset_thumbnail', sha1 = bsel.sha1) }}" method="post">
+            Delete and regenerate the thumbnail
+            <input type="submit" value="RESET" name="submit" />
+        </form>
         {% else %}
         <h2>Book list</h2>
         <ul>
