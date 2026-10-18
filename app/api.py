@@ -250,3 +250,12 @@ def put_reader_state():
         "message": "État du lecteur enregistré.",
         "state": state,
     }), 200
+
+# # Useful to debug reverse proxy configurations
+# @api.route("/debug-proxy", methods=['GET'])
+# def debug_proxy():
+#     return {
+#         "remote_addr": request.remote_addr,
+#         "x_forwarded_for": request.headers.get("X-Forwarded-For"),
+#         "x_forwarded_proto": request.headers.get("X-Forwarded-Proto"),
+#     }
