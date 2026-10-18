@@ -181,9 +181,9 @@ class Cache:
             # http://docs.wand-py.org/en/0.4.3/
             # sudo apt-get install python-wand
 
-            with Image() as img:
+            with Image(filename=inter) as img:
+                img.alpha_channel = "remove"
                 img.options['pdf:use-cropbox'] = 'true'
-                img.read(filename=inter)
                 img.save(filename=thumbname)
 
             os.remove(inter)
