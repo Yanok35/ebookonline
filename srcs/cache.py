@@ -161,16 +161,16 @@ class Cache:
         try:
             f = open(pdffilename, 'rb') 
             pdf = PdfReader(f)
-            if pdf.isEncrypted:
+            if pdf.is_encrypted:
                 pdf.decrypt('')
             # It has been observed working on a second call on some file.
             try:
-                contents = pdf.getPage(0)
+                contents = pdf.get_page(0)
             except:
                 contents = pdf.pages[0]
 
             pdf = PdfWriter()
-            pdf.addPage(contents)
+            pdf.add_page(contents)
             inter = f"/tmp/temp_output_{os.getpid()}.pdf"
             f = open(inter, 'wb') 
             pdf.write(f)
