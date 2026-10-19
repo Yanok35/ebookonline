@@ -10,7 +10,7 @@
     <script>
         var nextSubset=0;
         $(window).scroll(function () {
-            if ($(window).scrollTop() == $(document).height() - $(window).height() && nextSubset < {{ nbSubset }}) {
+            if ($(window).scrollTop() + 1 >= $(document).height() - $(window).height() && nextSubset < {{ nbSubset }}) {
                 appendBooklistSubset();
             }
         });
