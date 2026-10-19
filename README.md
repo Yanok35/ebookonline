@@ -1,12 +1,9 @@
 # EBookOnLine
 
-This project aim to provides a simple Http server based on Flask framework to
-remotely access a local directory containing PDF Files. The tools offer a very
+This project aim to provide a simple Http server based on Flask framework to
+remotely access a local directory containing PDF files. The tool offers a very
 basic login page and then an overview of all PDF as a set of clickable
 thumbnails.
-
-Note that the authentication mechanism is completely unsecured, but it relied on
-the use of an https server!
 
 # Installation steps
 
