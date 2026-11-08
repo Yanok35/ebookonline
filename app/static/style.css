@@ -22,6 +22,17 @@
    color: darkred;
 }
 
+.titlebar a{
+    text-decoration: none;
+    color: inherit;
+}
+
+.titlebar a:hover
+{
+   text-decoration: underline;
+   color: darkred;
+}
+
 .book-view {
     /* https://css-tricks.com/snippets/css/a-guide-to-flexbox/ */
     display: flex;
