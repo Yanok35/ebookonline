@@ -37,53 +37,48 @@
     /* https://css-tricks.com/snippets/css/a-guide-to-flexbox/ */
     display: flex;
     flex-flow: row wrap;
+    align-items: center;
     writing-mode: horizontal-tb;
 }
 
 .book-box {
     border: 1px solid #00000080;
-    float: left;
+    /* float: left; */
     position: relative;
     overflow: hidden;
-    width: 300px;
-    height: 424px; /* (A4 ratio) */
-    /* box-shadow: 3px 3px 5px #3f3f3f; */
-    /* -webkit-box-shadow: 1px 1px 1px 1px #ccc; */
-    /* -moz-box-shadow: 1px 1px 1px 1px #ccc; */
+    width: fit-content;
+    height: fit-content;
+    max-width: 300px;
+    max-height: 424px; /* (A4 ratio) */
     box-shadow: 1px 1px 5px 1px #808080;
     background-color: #fff;
     margin: 5px;
 }
 
 .book-img img {
+    display: block;
     /* following makes the image shrinked by its container */
-    position: absolute;
-    -webkit-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
-    -moz-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
-    -o-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
-    -ms-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
+    position: relative;
+    max-width: 300px;
+    max-height: 424px; /* (A4 ratio) */
+    width: 300px;
+    height: auto;
     transition: all 200ms cubic-bezier(.25,.46,.45,.94);
 }
 
 .simple-caption {
     position: absolute;
-    width: 300px;
+    width: 100%;
     display: block;
-    top: 424px;
-    -webkit-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
-    -moz-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
-    -o-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
-    -ms-transition: all 200ms cubic-bezier(.25,.46,.45,.94);
+    bottom: 0;
+    transform: translateY(100%);
     transition: all 200ms cubic-bezier(.25,.46,.45,.94);
 }
 
 .book-box:hover .simple-caption {
     color: #fff;
     background-color: rgba(0,0,0,0.8) !important;
-    -moz-transform: translateY(-100%);
-    -o-transform: translateY(-100%);
-    -webkit-transform: translateY(-100%);
-    transform: translateY(-100%);
+    transform: translateY(0);
     /* Effet "glow" sur les livres "hover-ed" */
     /* box-shadow: 5px 5px 100px 400px #fff2d41f; */
     box-shadow: 5px 5px 1px 400px #f9e3b012;
