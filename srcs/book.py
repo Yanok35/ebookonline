@@ -59,8 +59,6 @@ class Book:
     def set_filename(self, filename):
         fullpath = os.path.join(self.book_dir, filename)
         here = os.path.exists(fullpath)
-        if not here:
-            print("*** %s not here" % filename)
 
         self.filename = filename
         self.mtime = os.path.getmtime(fullpath) if here else -1
