@@ -376,6 +376,17 @@ class BookDir:
                     take(e)
                     continue
 
+                # Same path but new content (file replaced in place): same
+                # book entry, user settings kept, new sha1 and thumbnail
+                if b:
+                    print("Book modified: '%s'" % relpath)
+                    b.sha1 = k
+                    b.mtime = mtime
+                    b.filesize = filesize
+                    self.cache.create_thumbnail(abspath, k)
+                    take(b)
+                    continue
+
                 # A new book which was not in db
                 b = Book(book_dir)
                 b.set_sha1(k)
