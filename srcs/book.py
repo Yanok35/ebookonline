@@ -324,28 +324,35 @@ class BookDir:
             # For all files found in current directory
             for f in files:
                 abspath = os.path.join(dir, f)
-                if not (abspath.lower().endswith("pdf") and os.path.exists(abspath)):
+                if not abspath.lower().endswith("pdf"):
                     continue
-
-                # a valid pdf filename has been found
-                print(" Scan '%s'... \r" % f, end='')
+                try:
+                    mtime = os.path.getmtime(abspath)
+                    filesize = os.stat(abspath).st_size
+                except OSError:
+                    # removed in the meantime (or dangling symlink)
+                    continue
 
                 # Book object path are relative to BookDir path
                 relpath = os.path.relpath(abspath, book_dir)
 
                 # check if present in book database, unchanged
                 b = next((b for b in remaining if b.filename == relpath), None)
-                if b and b.mtime == os.path.getmtime(abspath):
+                if b and b.mtime == mtime:
                     # Let's create thumbnail, in case it is missing for
                     # any reason
                     self.cache.create_thumbnail(abspath, b.sha1)
                     take(b)
                     continue
 
-                print ("Compute sha1 for %s..." % f, end="")
+                print("Compute sha1 for %s..." % f, end="")
                 sys.stdout.flush()
-                k = sha1_file(abspath)
-                print ("done")
+                try:
+                    k = sha1_file(abspath)
+                except OSError as e:
+                    print("failed: %s" % e)
+                    continue
+                print("done")
 
                 # if file found in refreshed_booklist, its a duplicate
                 dup = next((b for b in refreshed_booklist
@@ -362,9 +369,9 @@ class BookDir:
                 if e:
                     # entry found in db and was moved in dir.
                     e.filename = relpath
-                    e.mtime = os.path.getmtime(abspath)
+                    e.mtime = mtime
                     e.category = category
-                    e.filesize = os.stat(abspath).st_size
+                    e.filesize = filesize
                     self.cache.create_thumbnail(abspath, k)
                     take(e)
                     continue
