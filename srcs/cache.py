@@ -22,6 +22,7 @@ import hashlib
 import os
 import sys
 import math
+import queue
 import signal
 import traceback
 
@@ -58,10 +59,15 @@ class Cache:
         self.cachedir = cachedir
 
         self.shouldRun = True
+        self.parent_pid = os.getpid()
         self.sha1_queue = multiprocessing.JoinableQueue()
         self.subproc = []
         for num in range(max(1, os.cpu_count()-1)):
-            p = multiprocessing.Process(target=self.__subproc_thumbnail_create, args=(num,))
+            p = multiprocessing.Process(
+                target=self.__subproc_thumbnail_create,
+                args=(num,),
+                daemon=True,
+            )
             p.start()
             self.subproc.append(p)
 
@@ -118,11 +124,16 @@ class Cache:
 
     def __subproc_thumbnail_create(self, subprocId: int):
 
+        print(f"{subprocId}: waiting for orders")
         while self.shouldRun:
-            print(f"{subprocId}: waiting for orders")
-
             try:
-                (pdffilename, thumbname) = self.sha1_queue.get()
+                if os.getppid() != self.parent_pid:
+                    print(f"{subprocId}: parent process is gone, exit")
+                    break
+                try:
+                    (pdffilename, thumbname) = self.sha1_queue.get(timeout=1)
+                except queue.Empty:
+                    continue
 
                 print(f"{subprocId}, {os.getpid()}: thumb gen: {pdffilename} -> {thumbname}")
                 self.__pdf2jpeg(pdffilename, thumbname)
