@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from srcs.book import BookDir
 from srcs.watcher import BookDirWatcher
 
-from tests.conftest import make_pdf, wait_until
+from tests.conftest import FakeCache, make_pdf, wait_until
 
 DELAY = 0.2
 
@@ -94,3 +95,28 @@ def test_non_pdf_files_are_ignored(watched):
 
     time.sleep(DELAY * 4)
     assert rescans == []
+
+
+def test_symlinked_book_dir(tmp_path):
+    """ BOOK_DIR may be a symbolic link to the real library directory """
+    real = tmp_path / "library"
+    real.mkdir()
+    link = tmp_path / "books"
+    link.symlink_to(real)
+    library = BookDir(str(tmp_path / "book.db"), FakeCache(tmp_path / "cache"))
+    library.open(str(link))
+    library.rescan()
+
+    watcher = BookDirWatcher(library, delay=DELAY)
+    watcher.start()
+    try:
+        # added in the target directory, at its root and in a subdirectory
+        make_pdf(real / "root.pdf")
+        make_pdf(real / "Science" / "sub.pdf")
+        assert wait_until(
+            lambda: present_names(library) == ["Science/sub.pdf", "root.pdf"])
+
+        os.remove(real / "root.pdf")
+        assert wait_until(lambda: present_names(library) == ["Science/sub.pdf"])
+    finally:
+        watcher.stop()
