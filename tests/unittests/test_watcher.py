@@ -120,3 +120,15 @@ def test_symlinked_book_dir(tmp_path):
         assert wait_until(lambda: present_names(library) == ["Science/sub.pdf"])
     finally:
         watcher.stop()
+
+
+def test_stop_cancels_pending_rescan(library):
+    root = Path(library.dirpath)
+    watcher = BookDirWatcher(library, delay=1.0)
+    watcher.start()
+    make_pdf(root / "a.pdf")
+    time.sleep(0.2)  # event received, rescan pending
+    watcher.stop()
+
+    time.sleep(1.2)
+    assert present_names(library) == []
