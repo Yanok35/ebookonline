@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import srcs.book
@@ -46,3 +47,22 @@ def test_rescan_only_hashes_new_files(library, mocker):
     assert library.rescan() is True
     assert spy.call_count == 1
     assert names(library.get_booklist()) == ["a.pdf", "b.pdf"]
+
+
+def test_move_keeps_user_settings(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    library.rescan()
+    book = library.get_booklist()[0]
+    book.bookmarked = True
+    book.tags = "python"
+
+    (root / "Art").mkdir()
+    shutil.move(root / "a.pdf", root / "Art" / "renamed.pdf")
+    library.rescan()
+
+    assert library.get_booklist() == [book]
+    assert book.filename == "Art/renamed.pdf"
+    assert book.category == "Art"
+    assert book.bookmarked and book.tags == "python"
+    assert len(library.booklist) == 1
