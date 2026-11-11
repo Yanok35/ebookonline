@@ -21,6 +21,7 @@
 import json
 import sys
 import tempfile
+import threading
 from threading import Thread
 
 from srcs.cache import Cache
@@ -102,6 +103,14 @@ class Book:
         return d
 
 class BookDir:
+    """
+    The list of books found in a directory, persisted in a JSON file.
+
+    Thread-safety: the book list is never modified in place by a scan; a new
+    list is built and swapped under self.lock, so readers iterating over
+    self.booklist always see a consistent list. Scans are serialized by
+    self._scan_lock (startup scan and rescans requested by the watcher).
+    """
 
     def __init__(self, dbfile : str, cache : Cache):
         assert isinstance(cache, Cache)
@@ -111,6 +120,8 @@ class BookDir:
         self.dbfile = dbfile
         self.dirpath = None
 
+        self.lock = threading.RLock()
+        self._scan_lock = threading.Lock()
         self._loaded = False
 
     def open(self, book_dir):
@@ -152,7 +163,8 @@ class BookDir:
 
                 booklist.append(new)
 
-        self.booklist = booklist
+        with self.lock:
+            self.booklist = booklist
 
     def to_json(self):
         d = {
@@ -166,19 +178,20 @@ class BookDir:
         Write the database in a temporary file, then replace the previous
         one, so that an interruption can not leave a truncated JSON file.
         """
-        s = json.dumps(self.to_json(), default=lambda o: o.__dict__, indent=2)
+        with self.lock:
+            s = json.dumps(self.to_json(), default=lambda o: o.__dict__, indent=2)
 
-        dbdir = os.path.dirname(os.path.abspath(self.dbfile))
-        fd, tmpname = tempfile.mkstemp(prefix=".book_db_", suffix=".tmp", dir=dbdir)
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(s)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmpname, self.dbfile)
-        finally:
-            if os.path.exists(tmpname):
-                os.unlink(tmpname)
+            dbdir = os.path.dirname(os.path.abspath(self.dbfile))
+            fd, tmpname = tempfile.mkstemp(prefix=".book_db_", suffix=".tmp", dir=dbdir)
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(s)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmpname, self.dbfile)
+            finally:
+                if os.path.exists(tmpname):
+                    os.unlink(tmpname)
 
     def find_book_by_sha1(self, sha1):
         """ Search all books, including missing ones (admin page) """
@@ -273,11 +286,27 @@ class BookDir:
 
     def rescan(self):
         """
-        Synchronize the book list with the content of the book directory.
+        Synchronize the book list with the content of the book directory:
+        new PDF are added (and their thumbnail requested), moved PDF are
+        detected by their sha1, missing PDF are kept but marked as missing.
+        Only new or modified files are hashed.
         """
+        with self._scan_lock:
+            self.__rescan()
+
+    def __rescan(self):
         book_dir = self.dirpath
 
+        # Work on a copy: requests keep using the current list until the new
+        # one is complete. Book objects are shared, so a bookmark toggled
+        # during the scan is not lost.
+        with self.lock:
+            remaining = list(self.booklist)
         refreshed_booklist = []
+
+        def take(book):
+            remaining.remove(book)
+            refreshed_booklist.append(book)
 
         print("Scanning directory %s for PDF files..." % book_dir)
         for (dir, _, files) in os.walk(book_dir):
@@ -304,15 +333,13 @@ class BookDir:
                 # Book object path are relative to BookDir path
                 relpath = os.path.relpath(abspath, book_dir)
 
-                # check if present in book database
-                b = self.find_book_by_filename(relpath)
+                # check if present in book database, unchanged
+                b = next((b for b in remaining if b.filename == relpath), None)
                 if b and b.mtime == os.path.getmtime(abspath):
                     # Let's create thumbnail, in case it is missing for
                     # any reason
                     self.cache.create_thumbnail(abspath, b.sha1)
-
-                    refreshed_booklist.append(b)
-                    self.booklist.remove(b)
+                    take(b)
                     continue
 
                 print ("Compute sha1 for %s..." % f, end="")
@@ -321,27 +348,25 @@ class BookDir:
                 print ("done")
 
                 # if file found in refreshed_booklist, its a duplicate
-                dup = False
-                for b in refreshed_booklist:
-                    if b.sha1 == k and b.filesize:
-                        print("*** Warning: duplicate PDF files:\n"
-                              "not adding\t%s\n"
-                              "already   \t%s" % (relpath, b.filename))
-                        dup = True
+                dup = next((b for b in refreshed_booklist
+                            if b.sha1 == k and b.filesize), None)
                 if dup:
+                    print("*** Warning: duplicate PDF files:\n"
+                          "not adding\t%s\n"
+                          "already   \t%s" % (relpath, dup.filename))
                     continue
 
-                # if file found in self.booklist, its a moved file
-                e = self.find_book_by_sha1(k)
+                # if file found in remaining books, it is a moved (or
+                # modified, or reappeared) file: keep its user settings
+                e = next((b for b in remaining if b.sha1 == k), None)
                 if e:
                     # entry found in db and was moved in dir.
                     e.filename = relpath
                     e.mtime = os.path.getmtime(abspath)
                     e.category = category
                     e.filesize = os.stat(abspath).st_size
-
-                    refreshed_booklist.append(e)
-                    self.booklist.remove(e)
+                    self.cache.create_thumbnail(abspath, k)
+                    take(e)
                     continue
 
                 # A new book which was not in db
@@ -353,14 +378,13 @@ class BookDir:
 
                 refreshed_booklist.append(b)
 
-        # booklist still contains all db file not found in dir, thus removed.
-        # let's keep those entry to keep user settings in case they reappears
-        books_notfound = self.booklist
-        self.booklist = refreshed_booklist
-        for b in books_notfound:
+        # remaining contains all db entries not found in dir, thus removed.
+        # let's keep those entry to keep user settings in case they reappears
+        for b in remaining:
             b.mark_missing()
-            self.booklist.append(b)
+            refreshed_booklist.append(b)
 
-        print("\nDirectory db fully parsed. Save JSON db file...")
-        self.save_db()
-
+        with self.lock:
+            self.booklist = refreshed_booklist
+            print("Directory db fully parsed. Save JSON db file...")
+            self.save_db()
