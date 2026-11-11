@@ -117,3 +117,22 @@ def test_load_db_keeps_missing_books(library, tmp_bookdir):
     missing = reopened.find_book_by_filename("a.pdf")
     assert missing is not None and not missing.present and missing.bookmarked
     assert names(reopened.get_booklist()) == ["b.pdf"]
+
+
+def test_file_replaced_in_place(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="v1")
+    library.rescan()
+    book = library.get_booklist()[0]
+    book.bookmarked = True
+    old_sha1 = book.sha1
+
+    make_pdf(root / "a.pdf", title="v2")
+    st = os.stat(root / "a.pdf")
+    os.utime(root / "a.pdf", ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    library.cache.requests.clear()
+    library.rescan()
+
+    assert library.booklist == [book]
+    assert book.sha1 != old_sha1 and book.bookmarked
+    assert library.cache.requests == [(str(root / "a.pdf"), book.sha1)]
