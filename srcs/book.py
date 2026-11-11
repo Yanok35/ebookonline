@@ -64,6 +64,19 @@ class Book:
         self.mtime = os.path.getmtime(fullpath) if here else -1
         self.filesize = os.stat(fullpath).st_size if here else 0
 
+    @property
+    def present(self):
+        """
+        False when the PDF file is missing from the book directory. Such
+        books are kept in the database (bookmark, tags, ... are restored if
+        the file comes back) but hidden from the views.
+        """
+        return self.mtime >= 0
+
+    def mark_missing(self):
+        self.filesize = 0
+        self.mtime = -1
+
     def set_category(self, category):
         self.category = category
 
@@ -312,8 +325,7 @@ class BookDir:
         books_notfound = self.booklist
         self.booklist = refreshed_booklist
         for b in books_notfound:
-            b.filesize = 0
-            b.mtime = -1
+            b.mark_missing()
             self.booklist.append(b)
 
         print("\nDirectory db fully parsed. Save JSON db file...")
