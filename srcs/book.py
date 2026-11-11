@@ -156,6 +156,7 @@ class BookDir:
             f.write(s)
 
     def find_book_by_sha1(self, sha1):
+        """ Search all books, including missing ones (admin page) """
         for b in self.booklist:
             if b.sha1 == sha1:
                 return b
@@ -168,12 +169,13 @@ class BookDir:
         return None
 
     def get_booklist(self):
-        return self.booklist
+        """ Books whose PDF is present in the book directory """
+        return [b for b in self.booklist if b.present]
 
     def get_subset_if_bookmarked(self, srclist = None):
         sublist = []
         if not srclist:
-            srclist = self.booklist
+            srclist = self.get_booklist()
 
         for b in srclist:
             if b.bookmarked:
@@ -183,7 +185,7 @@ class BookDir:
     def get_subset_by_category(self, category, srclist = None):
         sublist = []
         if not srclist:
-            srclist = self.booklist
+            srclist = self.get_booklist()
 
         for b in srclist:
             if b.category == category:
@@ -193,7 +195,7 @@ class BookDir:
     def get_subset_by_regexp(self, pattern, srclist = None):
         sublist = []
         if not srclist:
-            srclist = self.booklist
+            srclist = self.get_booklist()
 
         for b in srclist:
             name = b.filename.lower()
@@ -209,20 +211,20 @@ class BookDir:
 
     def sort_by_date(self):
         return sorted(
-            self.booklist,
+            self.get_booklist(),
             key=lambda b: (-b.mtime, b.filename)
         )
 
     def get_list_of_category(self):
         categories = []
-        for b in self.booklist:
+        for b in self.get_booklist():
             if not b.category in categories:
                 categories.append(b.category)
         return categories
 
     def get_list_of_tags(self):
         tags = []
-        for b in self.booklist:
+        for b in self.get_booklist():
             for t in b.tags.split(' '):
                 if not t in tags:
                     tags.append(t)
