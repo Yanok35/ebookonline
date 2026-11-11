@@ -71,12 +71,18 @@ class BookDirWatcher(FileSystemEventHandler):
         self._observer = None
 
     def start(self):
+        # watchdog sets IN_DONT_FOLLOW on its inotify watches: when the book
+        # directory is a symbolic link, the link itself would be watched and
+        # files added directly in the target directory would go unnoticed.
+        # Watch the real directory instead (event paths are only used to
+        # filter events, the rescan still uses bookdir.dirpath).
+        watched_path = os.path.realpath(self.bookdir.dirpath)
         self._observer = Observer()
         self._observer.daemon = True
-        self._observer.schedule(self, self.bookdir.dirpath, recursive=True)
+        self._observer.schedule(self, watched_path, recursive=True)
         self._observer.start()
         print("Watching %s for changes (delay %.1fs)"
-              % (self.bookdir.dirpath, self.delay))
+              % (watched_path, self.delay))
 
     def stop(self):
         with self._timer_lock:
