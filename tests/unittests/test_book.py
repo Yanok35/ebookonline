@@ -4,8 +4,9 @@ import shutil
 from pathlib import Path
 
 import srcs.book
+from srcs.book import BookDir
 
-from tests.conftest import make_pdf
+from tests.conftest import FakeCache, make_pdf
 
 
 def names(books):
@@ -98,3 +99,21 @@ def test_deleted_book_is_hidden_kept_and_restored(library):
     assert book.filename == "Back/a-again.pdf"
     assert book.bookmarked
     assert len(library.booklist) == 2
+
+
+def test_load_db_keeps_missing_books(library, tmp_bookdir):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "b.pdf")
+    library.rescan()
+    library.find_book_by_filename("a.pdf").bookmarked = True
+    library.save_db()
+
+    # file removed while the server is stopped
+    os.remove(root / "a.pdf")
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+
+    missing = reopened.find_book_by_filename("a.pdf")
+    assert missing is not None and not missing.present and missing.bookmarked
+    assert names(reopened.get_booklist()) == ["b.pdf"]
