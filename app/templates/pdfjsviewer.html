@@ -72,6 +72,22 @@
             flex-grow: 1;
         }
 
+        #homeLink {
+            display: flex;
+            align-items: center;
+            padding: 2px;
+            border-radius: 3px;
+        }
+
+        #homeLink:hover,
+        #homeLink:focus-visible {
+            background: #555b60;
+        }
+
+        #homeLink img {
+            display: block;
+        }
+
         #toolbar button {
             padding: 6px 10px;
             border: 1px solid #777;
@@ -488,6 +504,15 @@
          ===================================== -->
 
     <div id="toolbar">
+
+        <a
+            id="homeLink"
+            href="{{ url_for('.index') }}"
+            title="Retour à la liste des livres"
+            aria-label="Retour à la liste des livres"
+        >
+            <img src="{{ url_for('.favicon') }}" alt="" width="26" height="26">
+        </a>
 
         <button id="toggleSidebar" type="button">
             ☰ Signets
