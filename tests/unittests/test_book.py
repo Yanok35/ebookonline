@@ -136,3 +136,12 @@ def test_file_replaced_in_place(library):
     assert library.booklist == [book]
     assert book.sha1 != old_sha1 and book.bookmarked
     assert library.cache.requests == [(str(root / "a.pdf"), book.sha1)]
+
+
+def test_duplicate_is_not_added(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="same")
+    make_pdf(root / "copy" / "a.pdf", title="same")
+    library.rescan()
+
+    assert len(library.booklist) == 1
