@@ -8,9 +8,6 @@ Observed with following conditions:
  - when a PDF file ownership is set to "nobody.nogroup", and "-rw-------" permissions,
 
 # System requirements:
- - Scan bookdir on startup
- - Ctrl+C handler (to avoid dbfile corruption?)
- - iNotify bookdir when running
  - Automatic isbn analysis
  - Booklib array statistics : nb of books, size of database in GB,
  - Move from ajax to websocket design (Flask -> Quart)
