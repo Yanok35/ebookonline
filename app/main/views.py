@@ -27,8 +27,11 @@ from srcs.book import BookDir
 from srcs.cache import Cache
 
 from datetime import datetime
+from werkzeug.security import check_password_hash, generate_password_hash
 
 import io
+
+_DUMMY_PWHASH = generate_password_hash("not-a-real-password")
 
 @main.route('/')
 def index():
@@ -49,12 +52,12 @@ def login():
         p = request.form['password']
 
         creds = current_app.config['CREDENTIALS']
-        if u in creds.keys():
-            if creds[u] == p:
-
-                session['username'] = u
-
-                return redirect(url_for(".index"))
+        # Unknown users are checked against a dummy hash too, so that the
+        # response time does not reveal which usernames exist.
+        pwhash = creds.get(u, _DUMMY_PWHASH)
+        if check_password_hash(pwhash, p) and u in creds:
+            session['username'] = u
+            return redirect(url_for(".index"))
 
         abort(401)
         return ("<h3>Error</h3>")
