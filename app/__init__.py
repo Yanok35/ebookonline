@@ -25,6 +25,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from srcs.cache import Cache
 from srcs.book import BookDir
+from srcs.watcher import BookDirWatcher
 
 def create_app(config_name):
     # instance_relative_config: relative paths given to from_pyfile() are
@@ -56,8 +57,14 @@ def create_app(config_name):
     app.bookdir = BookDir(app.config['BOOK_DB'], app.cache)
     # Last known book list, available at once (no directory scan)
     app.bookdir.open(app.config['BOOK_DIR'])
-    # initial scan of available books
+
+    # Startup scan: refresh book.db and the thumbnail cache, then keep them
+    # up to date by watching the book directory.
     app.bookdir.scan_dir(app.config['BOOK_DIR'])
+    if app.config['BOOK_DIR_WATCH']:
+        app.bookdir_watcher = BookDirWatcher(
+            app.bookdir, delay=app.config['BOOK_DIR_WATCH_DELAY'])
+        app.bookdir_watcher.start()
 
     # Blueprint registration
     from app.main import main as main_blueprint
