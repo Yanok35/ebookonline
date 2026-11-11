@@ -145,3 +145,13 @@ def test_duplicate_is_not_added(library):
     library.rescan()
 
     assert len(library.booklist) == 1
+
+
+def test_ignore_dir_marker(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "private" / "b.pdf")
+    (root / "private" / ".ebook-ignore-dir").touch()
+    library.rescan()
+
+    assert names(library.get_booklist()) == ["a.pdf"]
