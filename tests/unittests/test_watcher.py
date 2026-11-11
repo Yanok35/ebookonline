@@ -83,3 +83,14 @@ def test_deleted_pdf_is_hidden(watched):
 
     assert wait_until(lambda: present_names(library) == ["b.pdf"])
     assert library.find_book_by_filename("a.pdf") is not None
+
+
+def test_non_pdf_files_are_ignored(watched):
+    library, rescans = watched
+    root = Path(library.dirpath)
+
+    (root / "notes.txt").write_text("hello")
+    (root / "notes.txt").rename(root / "notes.md")
+
+    time.sleep(DELAY * 4)
+    assert rescans == []
