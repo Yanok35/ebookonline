@@ -155,3 +155,15 @@ def test_ignore_dir_marker(library):
     library.rescan()
 
     assert names(library.get_booklist()) == ["a.pdf"]
+
+
+def test_save_db_is_atomic(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    library.rescan()
+
+    # no temporary file left behind
+    leftovers = [p for p in Path(library.dbfile).parent.iterdir()
+                 if p.name.startswith(".book_db_")]
+    assert leftovers == []
+    assert set(db_entries(library)) == {"a.pdf"}
