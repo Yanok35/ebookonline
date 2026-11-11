@@ -1,0 +1,44 @@
+import time
+from pathlib import Path
+
+import pytest
+
+from srcs.watcher import BookDirWatcher
+
+from tests.conftest import make_pdf, wait_until
+
+DELAY = 0.2
+
+
+@pytest.fixture
+def watched(library):
+    """ A started watcher on the library, counting the rescans it triggers """
+    library.rescan()
+
+    rescans = []
+    original = library.rescan
+
+    def counting_rescan():
+        rescans.append(time.monotonic())
+        return original()
+
+    library.rescan = counting_rescan
+
+    watcher = BookDirWatcher(library, delay=DELAY)
+    watcher.start()
+    yield library, rescans
+    watcher.stop()
+
+
+def present_names(library):
+    return sorted(b.filename for b in library.get_booklist())
+
+
+def test_new_pdf_is_added(watched):
+    library, rescans = watched
+    root = Path(library.dirpath)
+
+    make_pdf(root / "new.pdf")
+
+    assert wait_until(lambda: present_names(library) == ["new.pdf"])
+    assert library.cache.requests[-1][0] == str(root / "new.pdf")
