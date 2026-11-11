@@ -134,17 +134,19 @@ def browser_subset():
 def browser_search():
     d = current_app.bookdir
 
-    s = []
     pinned = request.values.get('pinned')
     if pinned:
         print("pinned = " + str(pinned))
         s = d.get_subset_if_bookmarked()
         print("sublist(1) size = " + str(len(s)))
+    else:
+        s = d.get_booklist()
 
     pattern = request.values.get('pat')
     if pattern:
         print("pattern: " + pattern)
-        s = d.get_subset_by_regexp(pattern, s)
+        # typo tolerant, most relevant first
+        s = d.search(pattern, s)
         print("sublist(2) size = " + str(len(s)))
 
     html = ""
