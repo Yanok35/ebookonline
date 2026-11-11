@@ -1,3 +1,4 @@
+import shutil
 import time
 from pathlib import Path
 
@@ -54,3 +55,17 @@ def test_burst_of_events_triggers_a_single_rescan(watched):
     assert wait_until(lambda: len(present_names(library)) == 5)
     time.sleep(DELAY * 3)
     assert len(rescans) == 1
+
+
+def test_moved_directory(watched):
+    library, rescans = watched
+    root = Path(library.dirpath)
+    make_pdf(root / "Old" / "a.pdf")
+    assert wait_until(lambda: present_names(library) == ["Old/a.pdf"])
+    book = library.get_booklist()[0]
+    book.bookmarked = True
+
+    shutil.move(root / "Old", root / "New")
+
+    assert wait_until(lambda: present_names(library) == ["New/a.pdf"])
+    assert book.category == "New" and book.bookmarked
