@@ -292,7 +292,8 @@ class BookDir:
         Only new or modified files are hashed.
         """
         with self._scan_lock:
-            self.__rescan()
+            changed = self.__rescan()
+        return changed
 
     def __rescan(self):
         book_dir = self.dirpath
@@ -303,6 +304,7 @@ class BookDir:
         with self.lock:
             remaining = list(self.booklist)
         refreshed_booklist = []
+        changed = False
 
         def take(book):
             remaining.remove(book)
@@ -353,6 +355,7 @@ class BookDir:
                     print("failed: %s" % e)
                     continue
                 print("done")
+                changed = True
 
                 # if file found in refreshed_booklist, its a duplicate
                 dup = next((b for b in refreshed_booklist
@@ -367,7 +370,7 @@ class BookDir:
                 # modified, or reappeared) file: keep its user settings
                 e = next((b for b in remaining if b.sha1 == k), None)
                 if e:
-                    # entry found in db and was moved in dir.
+                    print("Book moved: '%s' -> '%s'" % (e.filename, relpath))
                     e.filename = relpath
                     e.mtime = mtime
                     e.category = category
@@ -388,6 +391,7 @@ class BookDir:
                     continue
 
                 # A new book which was not in db
+                print("New book: '%s'" % relpath)
                 b = Book(book_dir)
                 b.set_sha1(k)
                 b.set_filename(relpath)
@@ -399,6 +403,9 @@ class BookDir:
         # remaining contains all db entries not found in dir, thus removed.
         # let's keep those entry to keep user settings in case they reappears
         for b in remaining:
+            if b.present:
+                print("Book missing: '%s'" % b.filename)
+                changed = True
             b.mark_missing()
             refreshed_booklist.append(b)
 
@@ -406,3 +413,5 @@ class BookDir:
             self.booklist = refreshed_booklist
             print("Directory db fully parsed. Save JSON db file...")
             self.save_db()
+
+        return changed
