@@ -285,61 +285,63 @@ class BookDir:
             # For all files found in current directory
             for f in files:
                 abspath = os.path.join(dir, f)
-                if (abspath.lower().endswith("pdf")) and os.path.exists(abspath):
-                    # a valid pdf filename has been found
-                    print(" Scan '%s'... \r" % f, end='')
+                if not (abspath.lower().endswith("pdf") and os.path.exists(abspath)):
+                    continue
 
-                    # Book object path are relative to BookDir path
-                    relpath = os.path.relpath(abspath, book_dir)
+                # a valid pdf filename has been found
+                print(" Scan '%s'... \r" % f, end='')
 
-                    # check if present in book database
-                    b = self.find_book_by_filename(relpath)
-                    if b and b.mtime == os.path.getmtime(abspath):
-                        # Let's create thumbnail, in case it is missing for
-                        # any reason
-                        self.cache.create_thumbnail(abspath, b.sha1)
+                # Book object path are relative to BookDir path
+                relpath = os.path.relpath(abspath, book_dir)
 
-                        refreshed_booklist.append(b)
-                        self.booklist.remove(b)
-                        continue
-
-                    print ("Compute sha1 for %s..." % f, end="")
-                    sys.stdout.flush()
-                    k = sha1_file(abspath)
-                    print ("done")
-
-                    # if file found in refreshed_booklist, its a duplicate
-                    dup = False
-                    for b in refreshed_booklist:
-                        if b.sha1 == k and b.filesize:
-                            print("*** Warning: duplicate PDF files:\n"
-                                  "not adding\t%s\n"
-                                  "already   \t%s" % (relpath, b.filename))
-                            dup = True
-                    if dup:
-                        continue
-
-                    # if file found in self.booklist, its a moved file
-                    e = self.find_book_by_sha1(k)
-                    if e:
-                        # entry found in db and was moved in dir.
-                        e.filename = relpath
-                        e.mtime = os.path.getmtime(abspath)
-                        e.category = category
-                        e.filesize = os.stat(abspath).st_size
-
-                        refreshed_booklist.append(e)
-                        self.booklist.remove(e)
-                        continue
-
-                    # A new book which was not in db
-                    b = Book(book_dir)
-                    b.set_sha1(k)
-                    b.set_filename(relpath)
-                    b.set_category(category)
-                    self.cache.create_thumbnail(abspath, k)
+                # check if present in book database
+                b = self.find_book_by_filename(relpath)
+                if b and b.mtime == os.path.getmtime(abspath):
+                    # Let's create thumbnail, in case it is missing for
+                    # any reason
+                    self.cache.create_thumbnail(abspath, b.sha1)
 
                     refreshed_booklist.append(b)
+                    self.booklist.remove(b)
+                    continue
+
+                print ("Compute sha1 for %s..." % f, end="")
+                sys.stdout.flush()
+                k = sha1_file(abspath)
+                print ("done")
+
+                # if file found in refreshed_booklist, its a duplicate
+                dup = False
+                for b in refreshed_booklist:
+                    if b.sha1 == k and b.filesize:
+                        print("*** Warning: duplicate PDF files:\n"
+                              "not adding\t%s\n"
+                              "already   \t%s" % (relpath, b.filename))
+                        dup = True
+                if dup:
+                    continue
+
+                # if file found in self.booklist, its a moved file
+                e = self.find_book_by_sha1(k)
+                if e:
+                    # entry found in db and was moved in dir.
+                    e.filename = relpath
+                    e.mtime = os.path.getmtime(abspath)
+                    e.category = category
+                    e.filesize = os.stat(abspath).st_size
+
+                    refreshed_booklist.append(e)
+                    self.booklist.remove(e)
+                    continue
+
+                # A new book which was not in db
+                b = Book(book_dir)
+                b.set_sha1(k)
+                b.set_filename(relpath)
+                b.set_category(category)
+                self.cache.create_thumbnail(abspath, k)
+
+                refreshed_booklist.append(b)
 
         # booklist still contains all db file not found in dir, thus removed.
         # let's keep those entry to keep user settings in case they reappears
