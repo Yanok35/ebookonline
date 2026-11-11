@@ -2,3 +2,5 @@
 cache*/
 books*/
 venv/
+instance/*
+!instance/*.example

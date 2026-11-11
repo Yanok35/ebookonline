@@ -1,0 +1,11 @@
+# Local configuration, loaded after the defaults of ../config.py.
+# Copy this file to instance/config.py (never commit it) and fill it in.
+# In production, prefer environment variables (EBOOKONLINE_SECRET_KEY, ...).
+
+# python -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
+
+# python -c "import getpass; from werkzeug.security import generate_password_hash as h; print(h(getpass.getpass()))"
+CREDENTIALS = {
+    'yannick': 'scrypt:32768:8:1$oSl1VyQACTL6wcST$75127405df4b217f8e600dade29d9d2a31e2d6e1bc1d4825c11865850f5b5fa65f8fe9c7c83bd5a0ef46f5c70dd0a96791be7a15fb83cae1e607cfc592c65cdd',
+}

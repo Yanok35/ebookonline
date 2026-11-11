@@ -24,12 +24,19 @@ import os
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    # You should generate a new one before hosting, using 'os.urandom(24)'
-    SECRET_KEY = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
+    """
+    This class contains application default configuration. They can be
+    overriden using:
+     - `instance/config.py` (e.g. installed on production server),
+     - environment variables prefixed with `EBOOKONLINE_`.
+    """
 
-    CREDENTIALS = {
-        'yannick':  'test',
-    }
+    # Required: the application refuses to start without it.
+    SECRET_KEY = None
+
+    # {username: password hash}, hashes are generated with
+    # werkzeug.security.generate_password_hash() (see README).
+    CREDENTIALS = {}
 
     BOOK_DIR = os.path.join(basedir, "books")
     CACHE_DIR = os.path.join(basedir, "cache")

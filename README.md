@@ -35,28 +35,51 @@ entry in ```/etc/ImageMagick-6/policy.xml```
 
 ## Configure the service
 
-You should edit ```config.py``` file and modify following variables. A
-secret key is required for cookies encryption in the
-[Flask session documentation](https://flask.palletsprojects.com/en/2.0.x/quickstart/?highlight=session#sessions).
-Also, you should configure the user/password list by filling up the "creds"
-dictionnary.
+`config.py` only holds non-sensitive defaults. Secrets are loaded at startup,
+in this order (last one wins):
+
+1. `config.py` (defaults, versioned),
+2. `instance/config.py` (optional, **not versioned**), handy for development,
+3. environment variables prefixed with `EBOOKONLINE_`, recommended in
+   production. Values are parsed as JSON when possible.
+
+Two settings are required:
+
+- `SECRET_KEY`: used to sign session cookies, see the
+  [Flask session documentation](https://flask.palletsprojects.com/en/stable/quickstart/#sessions).
+- `CREDENTIALS`: a `{username: password hash}` dictionary.
+
+Generate them with:
+
+```bash
+# secret key
+python -c "import secrets; print(secrets.token_hex(32))"
+# password hash (asked interactively)
+python -c "import getpass; from werkzeug.security import generate_password_hash as h; print(h(getpass.getpass()))"
+```
+
+### Development: instance/config.py
+
+```bash
+cp instance/config.py.example instance/config.py
+# then edit instance/config.py
+```
+
+### Production: environment variables
+
+For instance in a systemd unit (or an `EnvironmentFile=` readable by root only):
+
+```ini
+[Service]
+Environment="EBOOKONLINE_SECRET_KEY=<generated key>"
+Environment='EBOOKONLINE_CREDENTIALS={"yannick": "scrypt:32768:8:1$..."}'
+```
+
+### Paths
 
 By default the server will search for PDF files in a subdirectory "books" as
-referenced by the BOOK_DIR variable. You can configure this one according to
-your needs.
-
-```python
-# You should generate a new one before hosting, using 'os.urandom(24)'
-SECRET_KEY = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
-
-creds = {
-    'yannick':  'test',
-}
-
-BOOK_DIR = os.path.abspath("books")
-CACHE_DIR = os.path.abspath("cache")
-BOOK_DB = "book.db"
-```
+referenced by the `BOOK_DIR` variable. Like any other setting it can be
+overridden, e.g. `EBOOKONLINE_BOOK_DIR=/srv/books`.
 
 ## Configure Apache as an Https proxy
 
