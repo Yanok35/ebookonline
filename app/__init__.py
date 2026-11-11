@@ -54,6 +54,8 @@ def create_app(config_name):
 
     app.cache = Cache.get_instance(app.config['CACHE_DIR'])
     app.bookdir = BookDir(app.config['BOOK_DB'], app.cache)
+    # Last known book list, available at once (no directory scan)
+    app.bookdir.open(app.config['BOOK_DIR'])
     # initial scan of available books
     app.bookdir.scan_dir(app.config['BOOK_DIR'])
 

@@ -111,7 +111,19 @@ class BookDir:
         self.dbfile = dbfile
         self.dirpath = None
 
+        self._loaded = False
+
+    def open(self, book_dir):
+        """
+        Set the book directory and load the database file, without scanning
+        the directory (fast): the last known book list is available at once.
+        """
+        self.dirpath = book_dir
+        self.load_db()
+
     def load_db(self):
+        self._loaded = True
+
         if not os.path.exists(self.dbfile):
             return
 
@@ -246,14 +258,16 @@ class BookDir:
 
     def scan_dir(self, book_dir):
         """
-            Open 'dbfile' (JSon format) and refresh its content by searching
-            for PDF files in 'book_dir' filesystem tree.
+            Refresh the database content by searching for PDF files in
+            'book_dir' filesystem tree, in a background thread.
 
             The filename is researched, and if found, the mtime is checked.
             If both match between dbfile and book_dir entry, then the dbfile
             cached informations are considered consistents and reused.
         """
         self.dirpath = book_dir
+        if not self._loaded:
+            self.load_db()
         thr = Thread(target=self.rescan, name="bookdir-scan", daemon=True)
         thr.start()
         return thr
@@ -263,9 +277,6 @@ class BookDir:
         Synchronize the book list with the content of the book directory.
         """
         book_dir = self.dirpath
-
-        print("Open directory db...")
-        self.load_db()
 
         refreshed_booklist = []
 
