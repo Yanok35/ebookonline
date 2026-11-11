@@ -41,6 +41,12 @@ class Config:
     BOOK_DIR = os.path.join(basedir, "books")
     CACHE_DIR = os.path.join(basedir, "cache")
 
+    # Watch BOOK_DIR (inotify) and update the book database when PDF files
+    # are added, moved or removed, once the directory has been quiet for
+    # BOOK_DIR_WATCH_DELAY seconds.
+    BOOK_DIR_WATCH = True
+    BOOK_DIR_WATCH_DELAY = 2.0
+
     # Following are in current directory
     BOOK_DB = "book.db"
     STATE_FILE = "reader_states.json"
