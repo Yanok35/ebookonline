@@ -254,10 +254,15 @@ class BookDir:
             cached informations are considered consistents and reused.
         """
         self.dirpath = book_dir
-        thr = Thread(target=self.__scan_dir_thr, args=(book_dir,))
+        thr = Thread(target=self.rescan, name="bookdir-scan", daemon=True)
         thr.start()
+        return thr
 
-    def __scan_dir_thr(self, book_dir):
+    def rescan(self):
+        """
+        Synchronize the book list with the content of the book directory.
+        """
+        book_dir = self.dirpath
 
         print("Open directory db...")
         self.load_db()
