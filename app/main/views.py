@@ -22,6 +22,7 @@ import sys
 import json
 from flask import abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from . import main
+from app.auth import login_required
 from srcs.book import BookDir
 from srcs.cache import Cache
 
@@ -65,10 +66,8 @@ def logout():
     return redirect(url_for('.index'))
 
 @main.route('/browser', methods=['GET', 'POST'])
+@login_required
 def browser():
-    if not 'username' in session:
-        return redirect(url_for(".login"))
-
     d = current_app.bookdir
     categories = d.get_list_of_category()
 
@@ -93,10 +92,8 @@ def favicon():
     return send_from_directory('static', 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @main.route('/browser_lazy', methods=['GET'])
+@login_required
 def browser_lazy():
-    if not 'username' in session:
-        return redirect(url_for(".login"))
-
     d = current_app.bookdir
     booklist = d.get_booklist()
     subset = booklist[:SUBSET_NBBOOKS]
@@ -108,10 +105,8 @@ def browser_lazy():
                            )
 
 @main.route('/browser_subset', methods=['GET', 'POST'])
+@login_required
 def browser_subset():
-    if not 'username' in session:
-        return redirect(url_for(".login"))
-
     d = current_app.bookdir
 
     s = d.get_booklist()
@@ -132,10 +127,8 @@ def browser_subset():
 
 
 @main.route('/browser_search', methods=['GET', 'POST'])
+@login_required
 def browser_search():
-    if not 'username' in session:
-        return redirect(url_for(".login"))
-
     d = current_app.bookdir
 
     s = []
@@ -194,6 +187,7 @@ def dummyimg_get_response():
     return dummyimg_resp
 
 @main.route('/images/<sha1>')
+@login_required
 def image(sha1):
     #print(sha1)
 
@@ -208,6 +202,7 @@ def image(sha1):
     return response
 
 @main.route('/readpdf/<path:pdffile>')
+@login_required
 def pdf_read(pdffile):
     abspath = os.path.join(current_app.bookdir.dirpath, pdffile)
     response = send_file(
@@ -219,6 +214,7 @@ def pdf_read(pdffile):
     return response
 
 @main.route('/pdfjsviewer/<string:sha1>/<path:pdffile>')
+@login_required
 def pdfjs_read(sha1, pdffile):
     docId = sha1
     docName = os.path.basename(pdffile)
@@ -232,10 +228,8 @@ def pdfjs_read(sha1, pdffile):
 
 @main.route("/bookadmin/")
 @main.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
+@login_required
 def bookadmin(sha1 = None):
-    if not 'username' in session:
-        return redirect(url_for("login"))
-
     d = current_app.bookdir
 
     bsel = None
@@ -261,6 +255,7 @@ def bookadmin(sha1 = None):
                             titre = "eBook admin")
 
 @main.route("/reset-thumbnail/<sha1>", methods=['POST'])
+@login_required
 def reset_thumbnail(sha1):
     try:
         current_app.logger.warning(f"get_thumbname = {current_app.cache.get_thumbname(sha1)}")
@@ -276,10 +271,8 @@ def reset_thumbnail(sha1):
     return redirect(url_for(".bookadmin", sha1 = sha1))
 
 @main.route("/pinbook", methods=['POST'])
+@login_required
 def pinbook(sha1 = None):
-    if not 'username' in session:
-        return redirect(url_for("login"))
-
     # mandatory field
     if not request.form['id']:
         abort(400) # malformed

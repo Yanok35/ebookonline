@@ -9,6 +9,8 @@ from pathlib import Path
 
 from flask import Blueprint, Flask, jsonify, request, send_from_directory
 
+from app.auth import api_login_required
+
 # =========================================================
 # CONFIGURATION
 # =========================================================
@@ -181,6 +183,7 @@ def validate_state(data):
 # =========================================================
 
 @api.route("/api/reader/state/<document_id>", methods=['GET'])
+@api_login_required
 def get_reader_state(document_id):
     """
     Retourne le dernier état enregistré pour un document.
@@ -213,6 +216,7 @@ def get_reader_state(document_id):
 # =========================================================
 
 @api.put("/api/reader/state")
+@api_login_required
 def put_reader_state():
     """
     Reçoit l'état du lecteur et l'enregistre dans le JSON.
