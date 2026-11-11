@@ -19,13 +19,46 @@
 
 import os
 
+import click
 from config import Config
 from flask import Flask
+from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from srcs.cache import Cache
 from srcs.book import BookDir
 from srcs.watcher import BookDirWatcher
+
+def _serves_requests():
+    """
+    False when the application is loaded by a process which will never serve
+    requests, where the directory scan and watcher must not run:
+
+    - the 'flask run --reload' (or --debug) watching process: Flask also loads
+      the application there, before spawning the serving child process. Two
+      scans and watchers in two processes would both rewrite book.db, each
+      one with its own in-memory state, and generate the same thumbnails;
+    - other flask commands (flask shell, flask routes, ...).
+
+    gunicorn, app.run() and 'flask run' without reloader serve requests.
+    """
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        # child process spawned by the reloader: it serves requests
+        return True
+
+    ctx = click.get_current_context(silent=True)
+    if ctx is None:
+        # not started by the flask command (gunicorn, app.run(), ...)
+        return True
+    if ctx.command.name != "run":
+        return False
+
+    # Same rule as 'flask run': the reloader is enabled by --reload, or by
+    # default in debug mode.
+    reload = ctx.params.get("reload")
+    if reload is None:
+        reload = get_debug_flag()
+    return not reload
 
 def create_app(config_name):
     # instance_relative_config: relative paths given to from_pyfile() are
@@ -60,11 +93,12 @@ def create_app(config_name):
 
     # Startup scan: refresh book.db and the thumbnail cache, then keep them
     # up to date by watching the book directory.
-    app.bookdir.scan_dir(app.config['BOOK_DIR'])
-    if app.config['BOOK_DIR_WATCH']:
-        app.bookdir_watcher = BookDirWatcher(
-            app.bookdir, delay=app.config['BOOK_DIR_WATCH_DELAY'])
-        app.bookdir_watcher.start()
+    if _serves_requests():
+        app.bookdir.scan_dir(app.config['BOOK_DIR'])
+        if app.config['BOOK_DIR_WATCH']:
+            app.bookdir_watcher = BookDirWatcher(
+                app.bookdir, delay=app.config['BOOK_DIR_WATCH_DELAY'])
+            app.bookdir_watcher.start()
 
     # Blueprint registration
     from app.main import main as main_blueprint
