@@ -127,21 +127,18 @@ class BookDir:
         if not os.path.exists(self.dbfile):
             return
 
-        self.booklist = []
-
         # When dbfile is empty, json parser trig an exception.
         if not os.stat(self.dbfile).st_size:
             print("Warning: dbfile is empty")
             return
 
+        booklist = []
         with open(self.dbfile, "r") as f:
             inp = json.load(f)
 
             for b in inp['booklist']:
-                # only append referenced PDF which still present on disk
-                if not os.path.exists(os.path.join(self.dirpath, b["filename"])):
-                    continue
-
+                # Books whose PDF is missing are kept (marked as missing by
+                # set_filename), to restore their settings if they come back.
                 new = Book(self.dirpath)
                 new.set_sha1(b["sha1"])
                 new.set_filename(b["filename"])
@@ -153,7 +150,9 @@ class BookDir:
                 if "bookmarked" in b.keys():
                     new.bookmarked = b["bookmarked"]
 
-                self.booklist.append(new)
+                booklist.append(new)
+
+        self.booklist = booklist
 
     def to_json(self):
         d = {
