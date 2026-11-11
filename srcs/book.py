@@ -20,6 +20,7 @@
 
 import json
 import sys
+import tempfile
 from threading import Thread
 
 from srcs.cache import Cache
@@ -150,10 +151,23 @@ class BookDir:
         return d
 
     def save_db(self):
-        with open(self.dbfile, "w") as f:
-            d = self.to_json()
-            s = json.dumps(d, default=lambda o: o.__dict__, indent=2)
-            f.write(s)
+        """
+        Write the database in a temporary file, then replace the previous
+        one, so that an interruption can not leave a truncated JSON file.
+        """
+        s = json.dumps(self.to_json(), default=lambda o: o.__dict__, indent=2)
+
+        dbdir = os.path.dirname(os.path.abspath(self.dbfile))
+        fd, tmpname = tempfile.mkstemp(prefix=".book_db_", suffix=".tmp", dir=dbdir)
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(s)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmpname, self.dbfile)
+        finally:
+            if os.path.exists(tmpname):
+                os.unlink(tmpname)
 
     def find_book_by_sha1(self, sha1):
         """ Search all books, including missing ones (admin page) """
