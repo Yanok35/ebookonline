@@ -81,6 +81,9 @@
     max-height: 424px; /* (A4 ratio) */
     width: 300px;
     height: auto;
+    aspect-ratio: auto 210 / 297;
+    /* Light "paper" tint shown until the image covers it */
+    background-color: #f4f2ef;
     transition: all 200ms cubic-bezier(.25,.46,.45,.94);
 }
 
