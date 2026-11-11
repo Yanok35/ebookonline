@@ -42,3 +42,15 @@ def test_new_pdf_is_added(watched):
 
     assert wait_until(lambda: present_names(library) == ["new.pdf"])
     assert library.cache.requests[-1][0] == str(root / "new.pdf")
+
+
+def test_burst_of_events_triggers_a_single_rescan(watched):
+    library, rescans = watched
+    root = Path(library.dirpath)
+
+    for i in range(5):
+        make_pdf(root / f"book{i}.pdf")
+
+    assert wait_until(lambda: len(present_names(library)) == 5)
+    time.sleep(DELAY * 3)
+    assert len(rescans) == 1
