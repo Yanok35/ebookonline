@@ -1,3 +1,4 @@
+import os
 import shutil
 import time
 from pathlib import Path
@@ -69,3 +70,16 @@ def test_moved_directory(watched):
 
     assert wait_until(lambda: present_names(library) == ["New/a.pdf"])
     assert book.category == "New" and book.bookmarked
+
+
+def test_deleted_pdf_is_hidden(watched):
+    library, rescans = watched
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "b.pdf")
+    assert wait_until(lambda: len(present_names(library)) == 2)
+
+    os.remove(root / "a.pdf")
+
+    assert wait_until(lambda: present_names(library) == ["b.pdf"])
+    assert library.find_book_by_filename("a.pdf") is not None
