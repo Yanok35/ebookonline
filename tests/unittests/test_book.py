@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -66,3 +67,34 @@ def test_move_keeps_user_settings(library):
     assert book.category == "Art"
     assert book.bookmarked and book.tags == "python"
     assert len(library.booklist) == 1
+
+
+def test_deleted_book_is_hidden_kept_and_restored(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="A")
+    make_pdf(root / "b.pdf")
+    library.rescan()
+    book = library.find_book_by_filename("a.pdf")
+    book.bookmarked = True
+    sha1 = book.sha1
+
+    os.remove(root / "a.pdf")
+    assert library.rescan() is True
+
+    # hidden from every view...
+    assert names(library.get_booklist()) == ["b.pdf"]
+    assert library.get_subset_if_bookmarked() == []
+    assert library.get_subset_by_regexp("a") == []
+    assert names(library.sort_by_date()) == ["b.pdf"]
+    # ... but kept, in memory and in book.db
+    assert library.find_book_by_sha1(sha1) is book
+    assert not book.present
+    assert db_entries(library)["a.pdf"]["mtime"] == -1
+
+    # same content comes back, elsewhere: settings are restored
+    make_pdf(root / "Back" / "a-again.pdf", title="A")
+    library.rescan()
+    assert book.present
+    assert book.filename == "Back/a-again.pdf"
+    assert book.bookmarked
+    assert len(library.booklist) == 2
