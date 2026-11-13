@@ -448,6 +448,21 @@ class BookDir:
             raise BookFileError(f"unknown book: {sha1}")
         return self.move_book(sha1, posixpath.join(posixpath.dirname(book.filename), name))
 
+    def move_book_to_category(self, sha1, category):
+        """
+        Move the file of a book to a category: an existing first level
+        directory (see bookfileops.list_categories()), or the root of the
+        book directory for ''. Returns the new path of the book, see
+        move_book().
+        """
+        if category and category not in bookfileops.list_categories(self.dirpath):
+            raise BookFileError(f"unknown category: {category!r}")
+        book = self.find_book_by_sha1(sha1)
+        if book is None:
+            raise BookFileError(f"unknown book: {sha1}")
+        name = posixpath.basename(book.filename)
+        return self.move_book(sha1, posixpath.join(category, name) if category else name)
+
     def trash_book(self, sha1):
         """
         Move the file of a book to the trash, at the same path in it (e.g.
