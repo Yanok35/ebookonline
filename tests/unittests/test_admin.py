@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -167,3 +168,14 @@ def test_reset_thumbnail_of_a_missing_book(app, client, book):
 
 def test_reset_thumbnail_unknown_sha1(client):
     assert client.post("/reset-thumbnail/" + "0" * 40).status_code == 404
+
+
+def test_book_page_shows_copies(app, client, book):
+    root = Path(app.config["BOOK_DIR"])
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "Copies" not in html
+
+    shutil.copy(root / book.filename, root / "copy.pdf")
+    app.bookdir.rescan()
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "<dt>Copies</dt>" in html and "copy.pdf" in html
