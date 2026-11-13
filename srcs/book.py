@@ -26,6 +26,7 @@ import threading
 from collections import namedtuple
 from threading import Thread
 
+from srcs.bookfileops import IGNORE_MARKER
 from srcs.cache import Cache
 from srcs.cache import sha1_file
 from srcs.search import fuzzy_search
@@ -71,10 +72,6 @@ def migrate_db(db):
     db["version"] = DB_VERSION
     return db
 
-
-# A directory containing this file is ignored by the scan, with its
-# subdirectories
-IGNORE_MARKER = ".ebook-ignore-dir"
 
 # A PDF file found in the book directory
 PdfFile = namedtuple("PdfFile", "filename category mtime filesize sha1")
