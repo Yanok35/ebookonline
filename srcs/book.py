@@ -99,6 +99,9 @@ class Book:
             "category": self.category,
             "filesize": self.filesize,
             "tags": self.tags,
+            "editor": self.editor,
+            "year": self.year,
+            "isbn": self.isbn,
             "bookmarked": self.bookmarked,
         }
         return d
@@ -162,6 +165,10 @@ class BookDir:
                 if "bookmarked" in b.keys():
                     new.bookmarked = b["bookmarked"]
 
+                new.editor = b.get("editor", "")
+                new.year = b.get("year", 0)
+                new.isbn = b.get("isbn", "")
+
                 booklist.append(new)
 
         with self.lock:
@@ -210,6 +217,10 @@ class BookDir:
     def get_booklist(self):
         """ Books whose PDF is present in the book directory """
         return [b for b in self.booklist if b.present]
+
+    def get_all_books(self):
+        """ All books of book.db, including the missing ones (admin page) """
+        return list(self.booklist)
 
     def get_subset_if_bookmarked(self, srclist = None):
         sublist = []

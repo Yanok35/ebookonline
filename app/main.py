@@ -20,16 +20,16 @@
 import os
 import sys
 import json
-from flask import abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
-from . import main
+from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from app.auth import login_required
 from srcs.book import BookDir
 from srcs.cache import Cache
 
-from datetime import datetime
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import io
+
+main = Blueprint('main', __name__)
 
 _DUMMY_PWHASH = generate_password_hash("not-a-real-password")
 
@@ -230,50 +230,6 @@ def pdfjs_read(sha1, pdffile):
                             documentId = docId,
                             documentName = docName,
                             titre = docName)
-
-@main.route("/bookadmin/")
-@main.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
-@login_required
-def bookadmin(sha1 = None):
-    d = current_app.bookdir
-
-    bsel = None
-    if sha1:
-        bsel = d.find_book_by_sha1(sha1)
-
-    edit_book_sha1 = request.values.get('book-sha1')
-
-    if request.method == "POST":
-        if 'tags' in request.form.keys():
-            bsel.tags = request.form['tags']
-
-        # Write json db
-        d.save_db()
-        return redirect(url_for(".bookadmin", sha1 = sha1))
-
-    return render_template("bookadmin.html",
-                            d = d,
-                            bsel = bsel,
-                            sha1 = sha1,
-                            books = d.get_booklist(),
-                            mtimestr = datetime.fromtimestamp(bsel.mtime).strftime('%Y-%m-%d %H:%M:%S'),
-                            titre = "eBook admin")
-
-@main.route("/reset-thumbnail/<sha1>", methods=['POST'])
-@login_required
-def reset_thumbnail(sha1):
-    try:
-        current_app.logger.warning(f"get_thumbname = {current_app.cache.get_thumbname(sha1)}")
-        os.remove(current_app.cache.get_thumbname(sha1))
-    except Exception:
-        return make_response(f"Reset thumbnail {sha1} failed !")
-
-    d = current_app.bookdir
-    b = d.find_book_by_sha1(sha1)
-    pdffile = os.path.join(b.book_dir, b.filename)
-    current_app.logger.warning(f"filename= '{pdffile}'")
-    current_app.cache.create_thumbnail(pdffile, sha1)
-    return redirect(url_for(".bookadmin", sha1 = sha1))
 
 @main.route("/pinbook", methods=['POST'])
 @login_required

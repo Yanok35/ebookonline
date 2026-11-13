@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{{ titre }}</title>
+        <link rel="icon" href="{{ url_for('main.favicon') }}" />
+        <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css" media="screen" />
+    </head>
+
+    <body>
+        <div class="titlebar">
+            <h1><a href="{{ url_for('.book_list') }}">Administration</a></h1>
+        </div>
+
+        <div class="actionbar">
+            <div class="linksbar">
+                <div><a href="{{ url_for('main.index') }}">Bibliothèque</a> |
+                    {{ books | length }} livre{{ 's' if books | length > 1 }}
+                    {%- if nb_missing %}, dont {{ nb_missing }} absent{{ 's' if nb_missing > 1 }} du répertoire{% endif %}.
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-panel">
+            <h2>Liste des livres</h2>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Fichier</th>
+                        <th>Catégorie</th>
+                        <th>Taille</th>
+                        <th>Modifié le</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for b in books %}
+                    <tr{% if not b.present %} class="missing"{% endif %}>
+                        <td>
+                            <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">{{ b.filename }}</a>
+                            {% if not b.present %}<span class="badge">absent</span>{% endif %}
+                        </td>
+                        <td>{{ b.category or '' }}</td>
+                        {% if b.present %}
+                        <td class="size">{{ '%.2f' % (b.filesize / 1024 / 1024) }}&nbsp;Mo</td>
+                        <td class="date">{{ b.mtime | datetime }}</td>
+                        {% else %}
+                        <td class="size">&mdash;</td>
+                        <td class="date">&mdash;</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </body>
+</html>

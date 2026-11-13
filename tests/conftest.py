@@ -68,3 +68,37 @@ def library(tmp_bookdir):
     d = BookDir(str(tmp_path / "book.db"), cache)
     d.open(str(bookdir))
     return d
+
+
+@pytest.fixture
+def app(tmp_bookdir, monkeypatch):
+    """
+    The Flask application on an empty temporary book directory, with a
+    FakeCache and without the watcher.
+    """
+    from app import create_app
+
+    tmp_path, bookdir, cachedir = tmp_bookdir
+    for name, value in {
+        "SECRET_KEY": "test",
+        "BOOK_DIR": str(bookdir),
+        "BOOK_DB": str(tmp_path / "book.db"),
+        "CACHE_DIR": str(cachedir),
+        "BOOK_DIR_WATCH": "false",
+    }.items():
+        monkeypatch.setenv("EBOOKONLINE_" + name, value)
+    monkeypatch.setattr(Cache, "get_instance",
+                        classmethod(lambda cls, cachedir: FakeCache(cachedir)))
+
+    app = create_app("default")
+    app.config["TESTING"] = True
+    return app
+
+
+@pytest.fixture
+def client(app):
+    """ A test client with a logged in user """
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["username"] = "test"
+    return client

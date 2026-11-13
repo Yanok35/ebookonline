@@ -17,8 +17,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint
+from .views import admin
 
-main = Blueprint('main', __name__)
-
-from . import views
+__all__ = ["admin"]
