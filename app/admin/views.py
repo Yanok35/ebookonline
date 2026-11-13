@@ -22,14 +22,16 @@ from datetime import datetime
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
+    flash,
     make_response,
     redirect,
     render_template,
-    request,
     url_for,
 )
 
+from app.admin.forms import BookForm
 from app.auth import login_required
 
 admin = Blueprint('admin', __name__)
@@ -53,31 +55,40 @@ def book_list():
                            titre="eBook admin")
 
 
-@admin.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
+@admin.route("/bookadmin/<sha1>", methods=["GET", "POST"])
 @login_required
-def bookadmin(sha1 = None):
+def bookadmin(sha1):
+    """ Book page: file information and user-defined attributes """
     d = current_app.bookdir
+    book = d.find_book_by_sha1(sha1)
+    if book is None:
+        abort(404)
 
-    bsel = None
-    if sha1:
-        bsel = d.find_book_by_sha1(sha1)
-
-    edit_book_sha1 = request.values.get('book-sha1')
-
-    if request.method == "POST":
-        if 'tags' in request.form.keys():
-            bsel.tags = request.form['tags']
-
-        # Write json db
+    # Without POST data, the form shows the current values (0: no year)
+    form = BookForm(data={
+        "tags": book.tags,
+        "editor": book.editor,
+        "year": book.year or None,
+        "isbn": book.isbn,
+    })
+    if form.validate_on_submit():
+        book.tags = form.tags.data
+        book.editor = form.editor.data
+        book.year = form.year.data or 0
+        book.isbn = form.isbn.data or ""
         d.save_db()
-        return redirect(url_for(".bookadmin", sha1 = sha1))
+        flash("Modifications enregistrées.")
+        return redirect(url_for(".bookadmin", sha1=sha1))
 
-    return render_template("bookadmin.html",
-                            d = d,
-                            bsel = bsel,
-                            sha1 = sha1,
-                            mtimestr = datetime.fromtimestamp(bsel.mtime).strftime('%Y-%m-%d %H:%M:%S'),
-                            titre = "eBook admin")
+    books = d.get_all_books()
+    return render_template(
+        "admin/book.html",
+        book=book,
+        form=form,
+        library_tags=sorted({t for b in books for t in b.tags.split()}),
+        library_editors=sorted({b.editor for b in books if b.editor}),
+        titre=f"eBook admin - {os.path.basename(book.filename)}")
+
 
 @admin.route("/reset-thumbnail/<sha1>", methods=['POST'])
 @login_required

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{{ titre }}</title>
+        <link rel="icon" href="{{ url_for('main.favicon') }}" />
+        <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css" media="screen" />
+        <style>
+            .field .hint { font-size: 0.85em; color: #666; margin: 0.2em 0 0 0; }
+            .field .error { color: #c0392b; margin: 0.2em 0 0 0; }
+            .flash { padding: 0.5em 1em; background-color: #e8f5e9; border-left: 4px solid #2e7d32; }
+            .badge { font-size: 0.8em; padding: 0.1em 0.4em; border-radius: 0.3em;
+                     background-color: #c0392b; color: white; }
+            details { margin-top: 2em; color: #666; }
+        </style>
+    </head>
+
+    <body class="admin">
+        <div class="titlebar">
+            <h1><a href="{{ url_for('.book_list') }}">Administration</a></h1>
+        </div>
+
+        <div class="actionbar">
+            <div class="linksbar">
+                <div><a href="{{ url_for('.book_list') }}">Liste des livres</a> |
+                    <a href="{{ url_for('main.index') }}">Bibliothèque</a>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="admin-book-title">{{ book.filename }}
+            {% if not book.present %}<span class="badge">absent</span>{% endif %}</h2>
+
+        {% for message in get_flashed_messages() %}
+        <p class="flash">{{ message }}</p>
+        {% endfor %}
+
+        <div class="book">
+            <div class="book-cover">
+                <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
+                <form action="{{ url_for('.reset_thumbnail', sha1 = book.sha1) }}" method="post">
+                    <button type="submit">Régénérer la miniature</button>
+                </form>
+            </div>
+
+            <div class="book-details">
+                <h2>Fichier</h2>
+                <dl>
+                    <dt>Catégorie</dt><dd>{{ book.category or '' }}</dd>
+                    {% if book.present %}
+                    <dt>Taille</dt><dd>{{ '%.2f' % (book.filesize / 1024 / 1024) }}&nbsp;Mo ({{ book.filesize }} octets)</dd>
+                    <dt>Modifié le</dt><dd>{{ book.mtime | datetime }}</dd>
+                    {% else %}
+                    <dt>Statut</dt><dd>absent du répertoire des livres</dd>
+                    {% endif %}
+                    <dt>Épinglé</dt><dd>{{ 'oui' if book.bookmarked else 'non' }}</dd>
+                    <dt>SHA1</dt><dd><code>{{ book.sha1 }}</code></dd>
+                </dl>
+
+                <h2>Informations</h2>
+                <form method="post" novalidate>
+                    {{ form.hidden_tag() }}
+                    {% for field in [form.tags, form.editor, form.year, form.isbn] %}
+                    <div class="field">
+                        {{ field.label }}
+                        {% if field is sameas form.editor %}
+                        {{ field(list="library-editors") }}
+                        {% else %}
+                        {{ field() }}
+                        {% endif %}
+                        {% if field.description %}<p class="hint">{{ field.description }}</p>{% endif %}
+                        {% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}
+                    </div>
+                    {% endfor %}
+                    {% if form.csrf_token.errors %}
+                    <p class="error">Formulaire expiré ou invalide, merci de réessayer.</p>
+                    {% endif %}
+                    {% if library_tags %}
+                    <p class="hint">Tags de la bibliothèque : {{ library_tags | join(' ') }}</p>
+                    {% endif %}
+                    <datalist id="library-editors">
+                        {% for editor in library_editors %}<option value="{{ editor }}">{% endfor %}
+                    </datalist>
+                    {{ form.submit() }}
+                </form>
+            </div>
+        </div>
+
+        <details class="admin-db">
+            <summary>Entrée book.db</summary>
+            <pre>{{ book.to_json() | tojson(indent=2) }}</pre>
+        </details>
+    </body>
+</html>

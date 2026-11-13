@@ -190,3 +190,95 @@ body {
     background-color: darkred;
     color: #fff;
 }
+
+/* Admin: book page */
+
+.admin .admin-book-title {
+    margin: 0.5em 5px;
+    overflow-wrap: anywhere;
+}
+
+.admin .book {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.admin .book-cover {
+    margin: 5px;
+}
+
+.admin .book-cover img {
+    display: block;
+    width: 300px;
+    height: auto;
+    aspect-ratio: auto 210 / 297;
+    background-color: #f4f2ef;
+    border: 1px solid #00000080;
+    box-shadow: 1px 1px 5px 1px #808080;
+}
+
+.admin .book-cover form {
+    margin-top: 10px;
+    text-align: center;
+}
+
+.admin .book-details {
+    flex: 1;
+    min-width: 20em;
+    border: 1px solid #00000080;
+    background-color: #fff;
+    margin: 5px;
+    padding: 0 1em 1em 1em;
+}
+
+.admin .book-details h2 {
+    font-variant: small-caps;
+}
+
+.admin dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.3em 1em;
+}
+
+.admin dt {
+    font-variant: small-caps;
+    font-weight: bold;
+}
+
+.admin dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.admin .field {
+    margin-bottom: 0.8em;
+}
+
+.admin .field label {
+    display: block;
+    font-variant: small-caps;
+    font-weight: bold;
+    margin-bottom: 0.2em;
+}
+
+.admin .field input {
+    width: 100%;
+    max-width: 30em;
+    padding: 0.3em;
+    box-sizing: border-box;
+}
+
+.admin details.admin-db {
+    border: 1px solid #00000080;
+    background-color: #fff;
+    margin: 5px;
+    padding: 0.5em 1em;
+    color: #666;
+}
+
+.admin details.admin-db summary {
+    font-variant: small-caps;
+    cursor: pointer;
+}
