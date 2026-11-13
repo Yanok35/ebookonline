@@ -376,3 +376,37 @@ def test_duplicates_are_kept_and_not_hashed_again(library, mocker):
     os.remove(root / "copy" / "a.pdf")
     assert library.rescan() is True
     assert library.duplicates == []
+
+
+def test_duplicates_are_saved(library, tmp_bookdir, mocker):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="same")
+    make_pdf(root / "copy" / "a.pdf", title="same")
+    library.rescan()
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    assert reopened.duplicates == library.duplicates
+
+    spy = mocker.spy(srcs.book, "sha1_file")
+    assert reopened.rescan() is False
+    assert spy.call_count == 0
+
+
+def test_db_version_1_is_migrated(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    db["version"] = 1
+    del db["duplicates"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    assert reopened.duplicates == []
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    assert db["version"] == 2 and db["duplicates"] == []
+    assert Path(library.dbfile + ".v1.bak").exists()
