@@ -50,6 +50,22 @@ def category_of(relpath):
     return parts[0] if len(parts) > 1 else ROOT_CATEGORY
 
 
+def list_categories(book_dir):
+    """
+    The categories a book can be moved to: the first level directories of
+    the book directory, except hidden, ignored (and the trash) and symbolic
+    links (not followed by the scan). Sorted.
+    """
+    categories = []
+    for entry in os.scandir(book_dir):
+        if entry.name.startswith(".") or entry.name == TRASH_DIR \
+                or not entry.is_dir(follow_symlinks=False) \
+                or os.path.exists(os.path.join(entry.path, IGNORE_MARKER)):
+            continue
+        categories.append(entry.name)
+    return sorted(categories, key=str.lower)
+
+
 def check_relpath(relpath):
     """
     The normalized relpath of a PDF file of the book directory, or raise
