@@ -72,6 +72,10 @@ def migrate_db(db):
     return db
 
 
+# A directory containing this file is ignored by the scan, with its
+# subdirectories
+IGNORE_MARKER = ".ebook-ignore-dir"
+
 # A PDF file found in the book directory
 PdfFile = namedtuple("PdfFile", "filename category mtime filesize sha1")
 
@@ -530,10 +534,12 @@ class BookDir:
         files = []
         hashed = False
         print("Scanning directory %s for PDF files..." % book_dir)
-        for (dir, _, filenames) in os.walk(book_dir):
+        for (dir, subdirs, filenames) in os.walk(book_dir):
 
-            # Allow user to ignore some directories using a marker hidden file
-            if (os.path.exists(dir + "/.ebook-ignore-dir")):
+            # Allow user to ignore some directories using a marker hidden
+            # file, with their subdirectories (e.g. the trash)
+            if os.path.exists(os.path.join(dir, IGNORE_MARKER)):
+                subdirs[:] = []
                 continue
 
             # Book category is first level directory name
