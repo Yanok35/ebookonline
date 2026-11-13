@@ -213,8 +213,8 @@ body {
     width: 300px;
     height: auto;
     aspect-ratio: auto 210 / 297;
-    background-color: #f4f2ef;
-    border: 1px solid #00000080;
+    /* background-color: #f4f2ef; */
+    /* border: 1px solid #00000080; */
     box-shadow: 1px 1px 5px 1px #808080;
 }
 
@@ -226,8 +226,8 @@ body {
 .admin .book-details {
     flex: 1;
     min-width: 20em;
-    border: 1px solid #00000080;
-    background-color: #fff;
+    /* border: 1px solid #00000080; */
+    /* background-color: #fff; */
     margin: 5px;
     padding: 0 1em 1em 1em;
 }
@@ -271,8 +271,8 @@ body {
 }
 
 .admin details.admin-db {
-    border: 1px solid #00000080;
-    background-color: #fff;
+    /* border: 1px solid #00000080; */
+    /* background-color: #fff; */
     margin: 5px;
     padding: 0.5em 1em;
     color: #666;
