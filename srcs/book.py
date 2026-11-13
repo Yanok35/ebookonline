@@ -211,6 +211,10 @@ class BookDir:
         """ Books whose PDF is present in the book directory """
         return [b for b in self.booklist if b.present]
 
+    def get_all_books(self):
+        """ All books of book.db, including the missing ones (admin page) """
+        return list(self.booklist)
+
     def get_subset_if_bookmarked(self, srclist = None):
         sublist = []
         if not srclist:
