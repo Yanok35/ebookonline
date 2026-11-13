@@ -221,3 +221,44 @@ def test_book_list_summary_with_missing_and_duplicates(app, client):
     html = client.get("/bookadmin/").text
     assert "2 livres, dont 1 absent du répertoire et" in html
     assert ">1 en doublon</a>." in html
+
+
+@pytest.fixture
+def read_only_app(app, book):
+    """ The application on a book.db written by a newer, compatible, version """
+    import srcs.book
+    from app import create_app
+
+    with open(app.config["BOOK_DB"]) as f:
+        db = json.load(f)
+    db["version"] = srcs.book.DB_VERSION + 1
+    with open(app.config["BOOK_DB"], "w") as f:
+        json.dump(db, f)
+    app = create_app("default")
+    assert app.bookdir.read_only
+    return app
+
+
+def test_read_only_banner(app, client, book):
+    for url in ["/bookadmin/", "/bookadmin/duplicates", f"/bookadmin/{book.sha1}"]:
+        assert "Base en lecture seule" not in client.get(url).text
+
+
+def test_read_only_book_page(read_only_app):
+    client = read_only_app.test_client()
+    with client.session_transaction() as session:
+        session["username"] = "test"
+    book = read_only_app.bookdir.find_book_by_filename("Python Algorithms.pdf")
+    db_content = Path(read_only_app.config["BOOK_DB"]).read_text()
+
+    for url in ["/bookadmin/", "/bookadmin/duplicates", f"/bookadmin/{book.sha1}"]:
+        assert "Base en lecture seule" in client.get(url).text
+
+    url = f"/bookadmin/{book.sha1}"
+    client.post(url, data={"csrf_token": csrf_token(client, url), "tags": "algo"})
+    html = client.get(url).text
+    assert "modifications conservées en mémoire" in html
+    assert "Modifications enregistrées." not in html
+    # applied in memory, not saved
+    assert book.tags == "algo"
+    assert Path(read_only_app.config["BOOK_DB"]).read_text() == db_content
