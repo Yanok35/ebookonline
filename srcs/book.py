@@ -19,6 +19,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
+import shutil
 import sys
 import tempfile
 import threading
@@ -29,6 +30,34 @@ from srcs.cache import sha1_file
 from srcs.search import fuzzy_search
 
 import os
+
+# Schema version of the book database file (book.db). A file without version
+# is version 0. Increment it when the file format changes, and append the
+# conversion from the previous version to _MIGRATIONS.
+DB_VERSION = 1
+
+
+class BookDbVersionError(RuntimeError):
+    """ book.db was written by a newer version of ebookonline """
+
+
+def _migrate_v0(db):
+    """ 0 -> 1: the 'version' key is added, nothing else changes """
+    return db
+
+
+# _MIGRATIONS[n] converts the JSON content of a version n file to version n+1
+_MIGRATIONS = [_migrate_v0]
+assert len(_MIGRATIONS) == DB_VERSION
+
+
+def migrate_db(db):
+    """ Convert the JSON content of an older book.db to DB_VERSION """
+    for migrate in _MIGRATIONS[db.get("version", 0):]:
+        db = migrate(db)
+    db["version"] = DB_VERSION
+    return db
+
 
 class Book:
 
@@ -151,6 +180,16 @@ class BookDir:
         with open(self.dbfile, "r") as f:
             inp = json.load(f)
 
+            # Rewriting a newer file would silently drop the data this
+            # version does not know (e.g. after a rollback of the server).
+            version = inp.get("version", 0)
+            if version > DB_VERSION:
+                raise BookDbVersionError(
+                    f"{self.dbfile}: schema version {version} is newer than "
+                    f"the supported version {DB_VERSION}, upgrade ebookonline")
+            if version < DB_VERSION:
+                inp = migrate_db(inp)
+
             for b in inp['booklist']:
                 # Books whose PDF is missing are kept (marked as missing by
                 # set_filename), to restore their settings if they come back.
@@ -174,8 +213,18 @@ class BookDir:
         with self.lock:
             self.booklist = booklist
 
+        if version < DB_VERSION:
+            # Keep the file of the previous version, the first time only
+            backup = f"{self.dbfile}.v{version}.bak"
+            if not os.path.exists(backup):
+                shutil.copy2(self.dbfile, backup)
+            print(f"Migrate {self.dbfile} from schema version {version} to "
+                  f"{DB_VERSION} (backup: {backup})")
+            self.save_db()
+
     def to_json(self):
         d = {
+            'version': DB_VERSION,
             'dirpath': self.dirpath,
             'booklist': [ b.to_json() for b in self.booklist ],
         }
