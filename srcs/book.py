@@ -37,6 +37,12 @@ import os
 # conversion from the previous version to _MIGRATIONS.
 DB_VERSION = 2
 
+# Oldest schema version whose code can read a book.db of version DB_VERSION
+# (saved in the file as 'min_reader_version'). Unchanged by a compatible
+# change, e.g. a new key, which older code ignores; set to DB_VERSION by an
+# incompatible one, e.g. a key whose type or meaning changes.
+DB_MIN_READER_VERSION = 1
+
 
 class BookDbVersionError(RuntimeError):
     """ book.db was written by a newer version of ebookonline """
@@ -241,6 +247,7 @@ class BookDir:
     def to_json(self):
         d = {
             'version': DB_VERSION,
+            'min_reader_version': DB_MIN_READER_VERSION,
             'dirpath': self.dirpath,
             'booklist': [ b.to_json() for b in self.booklist ],
             'duplicates': [ d._asdict() for d in self.duplicates ],
