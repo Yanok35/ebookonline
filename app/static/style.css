@@ -349,3 +349,12 @@ button.danger,
 input.danger {
     color: darkred;
 }
+
+form.inline {
+    display: inline;
+    margin-left: 0.5em;
+}
+
+form.inline button {
+    font-size: 0.8em;
+}

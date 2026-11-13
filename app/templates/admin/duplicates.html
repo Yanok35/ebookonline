@@ -7,7 +7,7 @@
         <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css" media="screen" />
     </head>
 
-    <body>
+    <body class="admin">
         <div class="titlebar">
             <h1><a href="{{ url_for('.book_list') }}">Administration</a></h1>
         </div>
@@ -22,6 +22,10 @@
         </div>
 
         {% include "admin/_read_only.html" %}
+
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="flash {{ category }}">{{ message }}</p>
+        {% endfor %}
 
         <div class="admin-panel">
             <h2>Doublons</h2>
@@ -42,7 +46,13 @@
                         <td>
                             <ul class="copies">
                             {% for copy in copies %}
-                                <li>{{ copy.filename }}</li>
+                                <li>{{ copy.filename }}
+                                    <form class="inline" action="{{ url_for('.trash_duplicate') }}" method="post">
+                                        <input type="hidden" name="csrf_token" value="{{ trash_form.csrf_token.current_token }}">
+                                        <input type="hidden" name="filename" value="{{ copy.filename }}">
+                                        <button type="submit" class="danger" title="Mettre cette copie à la corbeille">Corbeille</button>
+                                    </form>
+                                </li>
                             {% endfor %}
                             </ul>
                         </td>

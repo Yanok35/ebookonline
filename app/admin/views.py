@@ -37,6 +37,7 @@ from app.admin.forms import (
     RenameBookForm,
     ResetThumbnailForm,
     TrashBookForm,
+    TrashDuplicateForm,
 )
 from app.auth import login_required
 from srcs.book import DB_VERSION
@@ -93,6 +94,7 @@ def duplicates():
                    key=lambda b: b.filename.lower())
     return render_template("admin/duplicates.html",
                            duplicate_books=[(b, duplicates[b.sha1]) for b in books],
+                           trash_form=TrashDuplicateForm(),
                            titre="eBook admin - doublons")
 
 
@@ -257,3 +259,17 @@ def trash_book(sha1):
             flash(f"Fichier mis à la corbeille : {trashed}")
     return redirect(url_for(".bookadmin", sha1=sha1))
 
+
+@admin.route("/bookadmin/duplicates/trash", methods=["POST"])
+@login_required
+def trash_duplicate():
+    form = TrashDuplicateForm()
+    if not form.validate_on_submit():
+        _flash_form_errors(form)
+    else:
+        filename = form.filename.data
+        trashed = _file_operation(f"trash duplicate '{filename}'",
+                                  lambda: current_app.bookdir.trash_duplicate(filename))
+        if trashed:
+            flash(f"Copie mise à la corbeille : {trashed}")
+    return redirect(url_for(".duplicates"))

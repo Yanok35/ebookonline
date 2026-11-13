@@ -196,7 +196,7 @@ def test_duplicates_page(app, client):
 
     html = client.get("/bookadmin/duplicates").text
     assert "1 livre en doublon." in html
-    assert "<li>copy-of-a.pdf</li>" in html and "<li>z/a.pdf</li>" in html
+    assert "<li>copy-of-a.pdf" in html and "<li>z/a.pdf" in html
     sha1 = app.bookdir.find_book_by_filename("a.pdf").sha1
     assert f'/bookadmin/{sha1}"' in html
 
