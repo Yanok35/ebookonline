@@ -3,6 +3,8 @@ import os
 import shutil
 from pathlib import Path
 
+import pytest
+
 import srcs.book
 from srcs.book import BookDir
 
@@ -211,3 +213,106 @@ def test_book_metadata_defaults_with_an_old_db(library, tmp_bookdir):
     reopened.open(library.dirpath)
     book = reopened.find_book_by_filename("a.pdf")
     assert (book.editor, book.year, book.isbn) == ("", 0, "")
+
+
+def test_db_has_a_schema_version(library):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        assert json.load(f)["version"] == srcs.book.DB_VERSION
+
+
+def test_db_without_version_is_migrated(library, tmp_bookdir):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    library.rescan()
+    library.find_book_by_filename("a.pdf").tags = "algo"
+    library.save_db()
+    # book.db written before the schema version was added
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    del db["version"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+    old_content = Path(library.dbfile).read_text()
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+
+    assert reopened.find_book_by_filename("a.pdf").tags == "algo"
+    # the previous file is kept, the database is saved in the current version
+    assert Path(library.dbfile + ".v0.bak").read_text() == old_content
+    with open(library.dbfile) as f:
+        assert json.load(f)["version"] == srcs.book.DB_VERSION
+
+
+def test_db_backup_is_not_overwritten(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    backup = Path(library.dbfile + ".v0.bak")
+    backup.write_text("first backup")
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    del db["version"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+
+    BookDir(library.dbfile, FakeCache(tmp_bookdir[2])).open(library.dirpath)
+    assert backup.read_text() == "first backup"
+
+
+def test_current_db_is_not_rewritten(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    mtime = os.stat(library.dbfile).st_mtime_ns
+
+    BookDir(library.dbfile, FakeCache(tmp_bookdir[2])).open(library.dirpath)
+    assert os.stat(library.dbfile).st_mtime_ns == mtime
+    assert not list(Path(library.dbfile).parent.glob("*.bak"))
+
+
+def test_newer_db_is_refused(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    db["version"] = srcs.book.DB_VERSION + 1
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+    content = Path(library.dbfile).read_text()
+
+    with pytest.raises(srcs.book.BookDbVersionError):
+        BookDir(library.dbfile, FakeCache(tmp_bookdir[2])).open(library.dirpath)
+    # left untouched
+    assert Path(library.dbfile).read_text() == content
+
+
+def test_migrations_are_applied_in_order(library, tmp_bookdir, monkeypatch):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    del db["version"]
+    db["booklist"][0]["tags"] = "a"
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+
+    # a fake version 2, whose migration depends on the one to version 1
+    def migrate_v0(db):
+        for b in db["booklist"]:
+            b["tags"] += " v1"
+        return db
+
+    def migrate_v1(db):
+        for b in db["booklist"]:
+            b["tags"] += " v2"
+        return db
+
+    monkeypatch.setattr(srcs.book, "DB_VERSION", 2)
+    monkeypatch.setattr(srcs.book, "_MIGRATIONS", [migrate_v0, migrate_v1])
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    assert reopened.find_book_by_filename("a.pdf").tags == "a v1 v2"
+    with open(library.dbfile) as f:
+        assert json.load(f)["version"] == 2
