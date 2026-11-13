@@ -288,6 +288,16 @@ class BookDir:
         """ All books of book.db, including the missing ones (admin page) """
         return list(self.booklist)
 
+    def get_duplicates(self):
+        """
+        {sha1: [PdfFile]}: for each book having duplicates, the other files
+        with the same content, sorted by path.
+        """
+        duplicates = {}
+        for d in sorted(self.duplicates, key=lambda d: d.filename):
+            duplicates.setdefault(d.sha1, []).append(d)
+        return duplicates
+
     def get_subset_if_bookmarked(self, srclist = None):
         sublist = []
         if not srclist:
