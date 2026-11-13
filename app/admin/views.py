@@ -25,16 +25,18 @@ from flask import (
     abort,
     current_app,
     flash,
-    make_response,
     redirect,
     render_template,
     url_for,
 )
 
-from app.admin.forms import BookForm
+from app.admin.forms import BookForm, ResetThumbnailForm
 from app.auth import login_required
 
 admin = Blueprint('admin', __name__)
+
+# Two forms on the book page: distinct field names and ids
+RESET_FORM_PREFIX = "reset"
 
 
 @admin.app_template_filter("datetime")
@@ -85,23 +87,37 @@ def bookadmin(sha1):
         "admin/book.html",
         book=book,
         form=form,
+        reset_form=ResetThumbnailForm(prefix=RESET_FORM_PREFIX),
         library_tags=sorted({t for b in books for t in b.tags.split()}),
         library_editors=sorted({b.editor for b in books if b.editor}),
         titre=f"eBook admin - {os.path.basename(book.filename)}")
 
 
-@admin.route("/reset-thumbnail/<sha1>", methods=['POST'])
+@admin.route("/reset-thumbnail/<sha1>", methods=["POST"])
 @login_required
 def reset_thumbnail(sha1):
-    try:
-        current_app.logger.warning(f"get_thumbname = {current_app.cache.get_thumbname(sha1)}")
-        os.remove(current_app.cache.get_thumbname(sha1))
-    except Exception:
-        return make_response(f"Reset thumbnail {sha1} failed !")
-
+    """ Delete the thumbnail of a book, and queue its regeneration """
     d = current_app.bookdir
-    b = d.find_book_by_sha1(sha1)
-    pdffile = os.path.join(b.book_dir, b.filename)
-    current_app.logger.warning(f"filename= '{pdffile}'")
-    current_app.cache.create_thumbnail(pdffile, sha1)
-    return redirect(url_for(".bookadmin", sha1 = sha1))
+    book = d.find_book_by_sha1(sha1)
+    if book is None:
+        abort(404)
+
+    form = ResetThumbnailForm(prefix=RESET_FORM_PREFIX)
+    if not form.validate_on_submit():
+        flash("Formulaire expiré ou invalide, merci de réessayer.", "error")
+    elif not book.present:
+        flash("Le PDF est absent du répertoire des livres : "
+              "la miniature ne peut pas être régénérée.", "error")
+    else:
+        thumbname = current_app.cache.get_thumbname(sha1)
+        try:
+            os.remove(thumbname)
+        except FileNotFoundError:
+            pass
+        pdffile = os.path.join(book.book_dir, book.filename)
+        current_app.logger.info("Regenerate thumbnail of '%s'", pdffile)
+        current_app.cache.create_thumbnail(pdffile, sha1)
+        flash("Miniature en cours de régénération, "
+              "recharger la page dans quelques secondes.")
+
+    return redirect(url_for(".bookadmin", sha1=sha1))

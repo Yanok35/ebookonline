@@ -5,14 +5,6 @@
         <title>{{ titre }}</title>
         <link rel="icon" href="{{ url_for('main.favicon') }}" />
         <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css" media="screen" />
-        <style>
-            .field .hint { font-size: 0.85em; color: #666; margin: 0.2em 0 0 0; }
-            .field .error { color: #c0392b; margin: 0.2em 0 0 0; }
-            .flash { padding: 0.5em 1em; background-color: #e8f5e9; border-left: 4px solid #2e7d32; }
-            .badge { font-size: 0.8em; padding: 0.1em 0.4em; border-radius: 0.3em;
-                     background-color: #c0392b; color: white; }
-            details { margin-top: 2em; color: #666; }
-        </style>
     </head>
 
     <body class="admin">
@@ -31,16 +23,19 @@
         <h2 class="admin-book-title">{{ book.filename }}
             {% if not book.present %}<span class="badge">absent</span>{% endif %}</h2>
 
-        {% for message in get_flashed_messages() %}
-        <p class="flash">{{ message }}</p>
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="flash {{ category }}">{{ message }}</p>
         {% endfor %}
 
         <div class="book">
             <div class="book-cover">
                 <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
+                {% if book.present %}
                 <form action="{{ url_for('.reset_thumbnail', sha1 = book.sha1) }}" method="post">
-                    <button type="submit">Régénérer la miniature</button>
+                    {{ reset_form.hidden_tag() }}
+                    {{ reset_form.submit() }}
                 </form>
+                {% endif %}
             </div>
 
             <div class="book-details">

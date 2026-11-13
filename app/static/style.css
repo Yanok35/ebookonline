@@ -282,3 +282,27 @@ body {
     font-variant: small-caps;
     cursor: pointer;
 }
+
+.admin .field .hint,
+.admin .hint {
+    font-size: 0.85em;
+    color: #666;
+    margin: 0.2em 0 0 0;
+}
+
+.admin .error {
+    color: darkred;
+    margin: 0.2em 0 0 0;
+}
+
+.admin .flash {
+    margin: 5px;
+    padding: 0.5em 1em;
+    background-color: #fff;
+    border-left: 4px solid #2e7d32;
+}
+
+.admin .flash.error {
+    color: inherit;
+    border-left-color: darkred;
+}
