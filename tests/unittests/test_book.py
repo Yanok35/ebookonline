@@ -179,3 +179,35 @@ def test_get_all_books_includes_missing(library):
 
     assert names(library.get_all_books()) == ["a.pdf", "b.pdf"]
     assert names(library.get_booklist()) == ["b.pdf"]
+
+
+def test_book_metadata_is_saved(library, tmp_bookdir):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    library.rescan()
+    book = library.find_book_by_filename("a.pdf")
+    book.tags, book.editor, book.year, book.isbn = "algo", "O'Reilly", 2022, "9781098113162"
+    library.save_db()
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    book = reopened.find_book_by_filename("a.pdf")
+    assert (book.tags, book.editor, book.year, book.isbn) == ("algo", "O'Reilly", 2022, "9781098113162")
+
+
+def test_book_metadata_defaults_with_an_old_db(library, tmp_bookdir):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    library.rescan()
+    # book.db written before editor, year and isbn were saved
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    for b in db["booklist"]:
+        del b["editor"], b["year"], b["isbn"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    book = reopened.find_book_by_filename("a.pdf")
+    assert (book.editor, book.year, book.isbn) == ("", 0, "")
