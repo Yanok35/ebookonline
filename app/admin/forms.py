@@ -20,8 +20,8 @@
 import re
 
 from flask_wtf import FlaskForm
-from wtforms import IntegerField, StringField, SubmitField
-from wtforms.validators import Length, Optional, Regexp, ValidationError
+from wtforms import HiddenField, IntegerField, SelectField, StringField, SubmitField
+from wtforms.validators import DataRequired, Length, Optional, Regexp, ValidationError
 
 YEAR_MIN, YEAR_MAX = 1450, 2100
 
@@ -84,3 +84,44 @@ class ResetThumbnailForm(FlaskForm):
     """ Delete and regenerate the thumbnail of a book (CSRF protection only) """
 
     submit = SubmitField("Régénérer la miniature")
+
+
+# File operations: the paths are checked by BookDir (srcs/bookfileops.py)
+
+class RenameBookForm(FlaskForm):
+    """ Rename the file of a book, in its directory """
+
+    name = StringField(
+        "Nouveau nom",
+        filters=[_strip],
+        validators=[DataRequired(message="Nom de fichier attendu."), Length(max=255)],
+        description="Dans le même répertoire ; « .pdf » est ajouté s'il manque.")
+    submit = SubmitField("Renommer")
+
+
+class CategoryField(SelectField):
+    def pre_validate(self, form):
+        try:
+            super().pre_validate(form)
+        except ValidationError:
+            raise ValidationError("Catégorie inconnue.") from None
+
+
+class MoveBookForm(FlaskForm):
+    """ Move the file of a book to a category (choices set by the view) """
+
+    category = CategoryField("Catégorie")
+    submit = SubmitField("Déplacer")
+
+
+class TrashBookForm(FlaskForm):
+    """ Move the file of a book to the trash (CSRF protection only) """
+
+    submit = SubmitField("Mettre à la corbeille")
+
+
+class TrashDuplicateForm(FlaskForm):
+    """ Move a duplicate file to the trash """
+
+    filename = HiddenField(validators=[DataRequired()])
+    submit = SubmitField("Corbeille")
