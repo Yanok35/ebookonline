@@ -1,0 +1,7 @@
+{% if bookdir_read_only %}
+        <p class="read-only-banner">
+            Base en lecture seule : book.db a été écrit par une version plus récente
+            d'ebookonline (schéma {{ bookdir_db_version }}, ce serveur gère le schéma {{ bookdir_supported_version }}).
+            Les modifications sont conservées en mémoire et seront perdues au redémarrage.
+        </p>
+{% endif %}

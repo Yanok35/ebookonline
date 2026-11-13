@@ -320,3 +320,10 @@ ul.copies {
     margin: 0;
     padding-left: 1.2em;
 }
+
+.read-only-banner {
+    margin: 5px;
+    padding: 0.5em 1em;
+    background-color: #fff;
+    border-left: 4px solid darkred;
+}
