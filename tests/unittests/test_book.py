@@ -276,7 +276,8 @@ def test_newer_db_is_refused(library, tmp_bookdir):
     library.rescan()
     with open(library.dbfile) as f:
         db = json.load(f)
-    db["version"] = srcs.book.DB_VERSION + 1
+    # an incompatible change: this version can not read it
+    db["version"] = db["min_reader_version"] = srcs.book.DB_VERSION + 1
     with open(library.dbfile, "w") as f:
         json.dump(db, f)
     content = Path(library.dbfile).read_text()

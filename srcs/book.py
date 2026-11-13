@@ -176,6 +176,12 @@ class BookDir:
         self._scan_lock = threading.Lock()
         self._loaded = False
 
+        # book.db written by a newer version of ebookonline, but readable by
+        # this one: it is never written, changes are kept in memory only.
+        self.read_only = False
+        # Schema version of the book.db file, when read-only
+        self.db_version = None
+
     def open(self, book_dir):
         """
         Set the book directory and load the database file, without scanning
@@ -200,12 +206,22 @@ class BookDir:
             inp = json.load(f)
 
             # Rewriting a newer file would silently drop the data this
-            # version does not know (e.g. after a rollback of the server).
+            # version does not know (e.g. after a rollback of the server):
+            # it is opened read-only, if this version can read it.
             version = inp.get("version", 0)
             if version > DB_VERSION:
-                raise BookDbVersionError(
-                    f"{self.dbfile}: schema version {version} is newer than "
-                    f"the supported version {DB_VERSION}, upgrade ebookonline")
+                # missing: only its own version is known to read it
+                min_reader = inp.get("min_reader_version", version)
+                if min_reader > DB_VERSION:
+                    raise BookDbVersionError(
+                        f"{self.dbfile}: schema version {version} can only "
+                        f"be read by schema version {min_reader} or newer, "
+                        f"this is version {DB_VERSION}: upgrade ebookonline")
+                print(f"*** Warning: {self.dbfile}: schema version {version} "
+                      f"is newer than the supported version {DB_VERSION}: "
+                      f"read-only, changes are kept in memory only")
+                self.read_only = True
+                self.db_version = version
             if version < DB_VERSION:
                 inp = migrate_db(inp)
 
@@ -258,7 +274,10 @@ class BookDir:
         """
         Write the database in a temporary file, then replace the previous
         one, so that an interruption can not leave a truncated JSON file.
+        Nothing is written when read-only.
         """
+        if self.read_only:
+            return
         with self.lock:
             s = json.dumps(self.to_json(), default=lambda o: o.__dict__, indent=2)
 
