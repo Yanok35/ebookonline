@@ -50,6 +50,16 @@
                     {% endif %}
                     <dt>Épinglé</dt><dd>{{ 'oui' if book.bookmarked else 'non' }}</dd>
                     <dt>SHA1</dt><dd><code>{{ book.sha1 }}</code></dd>
+                    {% if copies %}
+                    <dt>Copies</dt>
+                    <dd>
+                        <ul class="copies">
+                        {% for copy in copies %}
+                            <li>{{ copy.filename }} ({{ copy.mtime | datetime }})</li>
+                        {% endfor %}
+                        </ul>
+                    </dd>
+                    {% endif %}
                 </dl>
 
                 <h2>Informations</h2>

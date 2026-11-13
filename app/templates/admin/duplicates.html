@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{{ titre }}</title>
+        <link rel="icon" href="{{ url_for('main.favicon') }}" />
+        <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css" media="screen" />
+    </head>
+
+    <body>
+        <div class="titlebar">
+            <h1><a href="{{ url_for('.book_list') }}">Administration</a></h1>
+        </div>
+
+        <div class="actionbar">
+            <div class="linksbar">
+                <div><a href="{{ url_for('.book_list') }}">Liste des livres</a> |
+                    <a href="{{ url_for('main.index') }}">Bibliothèque</a> |
+                    {{ duplicate_books | length }} livre{{ 's' if duplicate_books | length > 1 }} en doublon.
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-panel">
+            <h2>Doublons</h2>
+            <p class="hint">Fichiers au contenu identique (même SHA1). Seul le livre est affiché dans la bibliothèque.</p>
+            {% if duplicate_books %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Livre</th>
+                        <th>Copies</th>
+                        <th>Taille</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for b, copies in duplicate_books %}
+                    <tr>
+                        <td><a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">{{ b.filename }}</a></td>
+                        <td>
+                            <ul class="copies">
+                            {% for copy in copies %}
+                                <li>{{ copy.filename }}</li>
+                            {% endfor %}
+                            </ul>
+                        </td>
+                        <td class="size">{{ '%.2f' % (b.filesize / 1024 / 1024) }}&nbsp;Mo</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Aucun doublon dans la bibliothèque.</p>
+            {% endif %}
+        </div>
+    </body>
+</html>

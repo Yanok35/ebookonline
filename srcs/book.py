@@ -23,6 +23,7 @@ import shutil
 import sys
 import tempfile
 import threading
+from collections import namedtuple
 from threading import Thread
 
 from srcs.cache import Cache
@@ -34,7 +35,7 @@ import os
 # Schema version of the book database file (book.db). A file without version
 # is version 0. Increment it when the file format changes, and append the
 # conversion from the previous version to _MIGRATIONS.
-DB_VERSION = 1
+DB_VERSION = 2
 
 
 class BookDbVersionError(RuntimeError):
@@ -46,8 +47,14 @@ def _migrate_v0(db):
     return db
 
 
+def _migrate_v1(db):
+    """ 1 -> 2: the duplicate files are saved """
+    db["duplicates"] = []
+    return db
+
+
 # _MIGRATIONS[n] converts the JSON content of a version n file to version n+1
-_MIGRATIONS = [_migrate_v0]
+_MIGRATIONS = [_migrate_v0, _migrate_v1]
 assert len(_MIGRATIONS) == DB_VERSION
 
 
@@ -57,6 +64,10 @@ def migrate_db(db):
         db = migrate(db)
     db["version"] = DB_VERSION
     return db
+
+
+# A PDF file found in the book directory
+PdfFile = namedtuple("PdfFile", "filename category mtime filesize sha1")
 
 
 class Book:
@@ -149,6 +160,8 @@ class BookDir:
         assert isinstance(cache, Cache)
 
         self.booklist = []
+        # Other files having the content of a book ([PdfFile])
+        self.duplicates = []
         self.cache = cache
         self.dbfile = dbfile
         self.dirpath = None
@@ -210,8 +223,11 @@ class BookDir:
 
                 booklist.append(new)
 
+        duplicates = [PdfFile(**d) for d in inp.get("duplicates", [])]
+
         with self.lock:
             self.booklist = booklist
+            self.duplicates = duplicates
 
         if version < DB_VERSION:
             # Keep the file of the previous version, the first time only
@@ -227,6 +243,7 @@ class BookDir:
             'version': DB_VERSION,
             'dirpath': self.dirpath,
             'booklist': [ b.to_json() for b in self.booklist ],
+            'duplicates': [ d._asdict() for d in self.duplicates ],
         }
         return d
 
@@ -270,6 +287,16 @@ class BookDir:
     def get_all_books(self):
         """ All books of book.db, including the missing ones (admin page) """
         return list(self.booklist)
+
+    def get_duplicates(self):
+        """
+        {sha1: [PdfFile]}: for each book having duplicates, the other files
+        with the same content, sorted by path.
+        """
+        duplicates = {}
+        for d in sorted(self.duplicates, key=lambda d: d.filename):
+            duplicates.setdefault(d.sha1, []).append(d)
+        return duplicates
 
     def get_subset_if_bookmarked(self, srclist = None):
         sublist = []
@@ -373,102 +400,82 @@ class BookDir:
         # during the scan is not lost.
         with self.lock:
             remaining = list(self.booklist)
+            known_duplicates = list(self.duplicates)
         refreshed_booklist = []
+        refreshed_duplicates = []
         changed = False
 
         def take(book):
             remaining.remove(book)
             refreshed_booklist.append(book)
 
-        print("Scanning directory %s for PDF files..." % book_dir)
-        for (dir, _, files) in os.walk(book_dir):
+        # 1. List the PDF files of the directory, with their sha1. Only new
+        #    or modified files are hashed.
+        files, hashed = self.__list_pdf_files(book_dir, remaining, known_duplicates)
+        changed |= hashed
 
-            # Allow user to ignore some directories using a marker hidden file
-            if (os.path.exists(dir + "/.ebook-ignore-dir")):
+        # 2. Group the files by content (sha1). The first file of a group is
+        #    the book, the other ones are duplicates. Files are sorted, so
+        #    that the result does not depend on the directory walk order.
+        groups = {}
+        for f in sorted(files, key=lambda f: f.filename):
+            groups.setdefault(f.sha1, []).append(f)
+
+        def update(book, f):
+            book.filename = f.filename
+            book.category = f.category
+            book.mtime = f.mtime
+            book.filesize = f.filesize
+            # Create the thumbnail, in case it is missing for any reason
+            self.cache.create_thumbnail(os.path.join(book_dir, f.filename),
+                                        book.sha1)
+
+        def add_duplicates(book_file, group):
+            for d in group:
+                if d is book_file:
+                    continue
+                refreshed_duplicates.append(d)
+                if d not in known_duplicates:
+                    print("*** Warning: duplicate PDF file: '%s' (book '%s')"
+                          % (d.filename, book_file.filename))
+
+        new_contents = []
+        for sha1, group in groups.items():
+            book = next((b for b in remaining if b.sha1 == sha1), None)
+            if book is None:
+                new_contents.append(group)
                 continue
-
-            # Book category is first level directory name
-            category = dir.replace(book_dir, '')[1:]
-            category = category.split('/')[0]
-            if category == '':
-                category = 'Generals'
-
-            # For all files found in current directory
-            for f in files:
-                abspath = os.path.join(dir, f)
-                if not abspath.lower().endswith("pdf"):
-                    continue
-                try:
-                    mtime = os.path.getmtime(abspath)
-                    filesize = os.stat(abspath).st_size
-                except OSError:
-                    # removed in the meantime (or dangling symlink)
-                    continue
-
-                # Book object path are relative to BookDir path
-                relpath = os.path.relpath(abspath, book_dir)
-
-                # check if present in book database, unchanged
-                b = next((b for b in remaining if b.filename == relpath), None)
-                if b and b.mtime == mtime:
-                    # Let's create thumbnail, in case it is missing for
-                    # any reason
-                    self.cache.create_thumbnail(abspath, b.sha1)
-                    take(b)
-                    continue
-
-                print("Compute sha1 for %s..." % f, end="")
-                sys.stdout.flush()
-                try:
-                    k = sha1_file(abspath)
-                except OSError as e:
-                    print("failed: %s" % e)
-                    continue
-                print("done")
+            # Known content: the book stays on its file while it exists,
+            # even if a copy is found first. Otherwise the book was moved (or
+            # reappeared): its user settings are kept.
+            f = next((f for f in group if f.filename == book.filename), group[0])
+            if f.filename != book.filename:
+                print("Book moved: '%s' -> '%s'" % (book.filename, f.filename))
                 changed = True
+            update(book, f)
+            take(book)
+            add_duplicates(f, group)
 
-                # if file found in refreshed_booklist, its a duplicate
-                dup = next((b for b in refreshed_booklist
-                            if b.sha1 == k and b.filesize), None)
-                if dup:
-                    print("*** Warning: duplicate PDF files:\n"
-                          "not adding\t%s\n"
-                          "already   \t%s" % (relpath, dup.filename))
-                    continue
+        for group in new_contents:
+            # Same path but new content (file replaced in place): same book
+            # entry, user settings kept, new sha1 and thumbnail
+            book, f = next(((b, f) for f in group for b in remaining
+                            if b.filename == f.filename), (None, group[0]))
+            if book:
+                print("Book modified: '%s'" % f.filename)
+                book.sha1 = f.sha1
+            else:
+                print("New book: '%s'" % f.filename)
+                book = Book(book_dir)
+                book.set_sha1(f.sha1)
+                remaining.append(book)
+            changed = True
+            update(book, f)
+            take(book)
+            add_duplicates(f, group)
 
-                # if file found in remaining books, it is a moved (or
-                # modified, or reappeared) file: keep its user settings
-                e = next((b for b in remaining if b.sha1 == k), None)
-                if e:
-                    print("Book moved: '%s' -> '%s'" % (e.filename, relpath))
-                    e.filename = relpath
-                    e.mtime = mtime
-                    e.category = category
-                    e.filesize = filesize
-                    self.cache.create_thumbnail(abspath, k)
-                    take(e)
-                    continue
-
-                # Same path but new content (file replaced in place): same
-                # book entry, user settings kept, new sha1 and thumbnail
-                if b:
-                    print("Book modified: '%s'" % relpath)
-                    b.sha1 = k
-                    b.mtime = mtime
-                    b.filesize = filesize
-                    self.cache.create_thumbnail(abspath, k)
-                    take(b)
-                    continue
-
-                # A new book which was not in db
-                print("New book: '%s'" % relpath)
-                b = Book(book_dir)
-                b.set_sha1(k)
-                b.set_filename(relpath)
-                b.set_category(category)
-                self.cache.create_thumbnail(abspath, k)
-
-                refreshed_booklist.append(b)
+        if set(refreshed_duplicates) != set(known_duplicates):
+            changed = True
 
         # remaining contains all db entries not found in dir, thus removed.
         # let's keep those entry to keep user settings in case they reappears
@@ -481,7 +488,62 @@ class BookDir:
 
         with self.lock:
             self.booklist = refreshed_booklist
+            self.duplicates = refreshed_duplicates
             print("Directory db fully parsed. Save JSON db file...")
             self.save_db()
 
         return changed
+
+    @staticmethod
+    def __list_pdf_files(book_dir, books, duplicates):
+        """
+        ([PdfFile], hashed): the PDF files of book_dir, and whether some
+        files were hashed. The sha1 of a file which has the path and mtime of
+        a known book or duplicate is not computed again.
+        """
+        files = []
+        hashed = False
+        print("Scanning directory %s for PDF files..." % book_dir)
+        for (dir, _, filenames) in os.walk(book_dir):
+
+            # Allow user to ignore some directories using a marker hidden file
+            if (os.path.exists(dir + "/.ebook-ignore-dir")):
+                continue
+
+            # Book category is first level directory name
+            category = dir.replace(book_dir, '')[1:]
+            category = category.split('/')[0]
+            if category == '':
+                category = 'Generals'
+
+            for name in filenames:
+                abspath = os.path.join(dir, name)
+                if not abspath.lower().endswith("pdf"):
+                    continue
+                try:
+                    mtime = os.path.getmtime(abspath)
+                    filesize = os.stat(abspath).st_size
+                except OSError:
+                    # removed in the meantime (or dangling symlink)
+                    continue
+
+                # Book object path are relative to BookDir path
+                relpath = os.path.relpath(abspath, book_dir)
+
+                known = next((b for b in books if b.filename == relpath), None) \
+                    or next((d for d in duplicates if d.filename == relpath), None)
+                if known and known.mtime == mtime:
+                    sha1 = known.sha1
+                else:
+                    print("Compute sha1 for %s..." % name, end="")
+                    sys.stdout.flush()
+                    try:
+                        sha1 = sha1_file(abspath)
+                    except OSError as e:
+                        print("failed: %s" % e)
+                        continue
+                    print("done")
+                    hashed = True
+
+                files.append(PdfFile(relpath, category, mtime, filesize, sha1))
+        return files, hashed

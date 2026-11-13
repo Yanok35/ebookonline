@@ -316,3 +316,113 @@ def test_migrations_are_applied_in_order(library, tmp_bookdir, monkeypatch):
     assert reopened.find_book_by_filename("a.pdf").tags == "a v1 v2"
     with open(library.dbfile) as f:
         assert json.load(f)["version"] == 2
+
+
+def test_duplicate_does_not_replace_known_book(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "Science" / "book.pdf", title="same")
+    library.rescan()
+    book = library.get_booklist()[0]
+    book.tags = "python"
+
+    # copies, before and after the book in any walk order
+    for path in ["a.pdf", "Art/book.pdf", "Zoo/book.pdf", "Science/zz.pdf"]:
+        make_pdf(root / path, title="same")
+    for _ in range(2):
+        library.rescan()
+        assert library.booklist == [book]
+        assert book.filename == "Science/book.pdf" and book.tags == "python"
+
+
+def test_duplicates_of_a_new_book(library):
+    root = Path(library.dirpath)
+    for path in ["b.pdf", "Art/a.pdf", "a.pdf"]:
+        make_pdf(root / path, title="same")
+    library.rescan()
+
+    # the first file, sorted by path
+    assert names(library.booklist) == ["Art/a.pdf"]
+
+
+def test_duplicate_replaces_a_removed_book(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="same")
+    library.rescan()
+    book = library.get_booklist()[0]
+    book.bookmarked = True
+    make_pdf(root / "copy" / "a.pdf", title="same")
+    library.rescan()
+
+    os.remove(root / "a.pdf")
+    library.rescan()
+    assert library.booklist == [book]
+    assert book.filename == "copy/a.pdf" and book.present and book.bookmarked
+
+
+def test_duplicates_are_kept_and_not_hashed_again(library, mocker):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="same")
+    make_pdf(root / "copy" / "a.pdf", title="same")
+    make_pdf(root / "b.pdf")
+    library.rescan()
+    assert [(d.filename, d.sha1) for d in library.duplicates] == \
+        [("copy/a.pdf", library.find_book_by_filename("a.pdf").sha1)]
+
+    spy = mocker.spy(srcs.book, "sha1_file")
+    assert library.rescan() is False
+    assert spy.call_count == 0
+
+    # a removed copy is no longer a duplicate
+    os.remove(root / "copy" / "a.pdf")
+    assert library.rescan() is True
+    assert library.duplicates == []
+
+
+def test_duplicates_are_saved(library, tmp_bookdir, mocker):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="same")
+    make_pdf(root / "copy" / "a.pdf", title="same")
+    library.rescan()
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    assert reopened.duplicates == library.duplicates
+
+    spy = mocker.spy(srcs.book, "sha1_file")
+    assert reopened.rescan() is False
+    assert spy.call_count == 0
+
+
+def test_db_version_1_is_migrated(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    db["version"] = 1
+    del db["duplicates"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    assert reopened.duplicates == []
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    assert db["version"] == 2 and db["duplicates"] == []
+    assert Path(library.dbfile + ".v1.bak").exists()
+
+
+def test_get_duplicates(library):
+    root = Path(library.dirpath)
+    for path in ["a.pdf", "z/a.pdf", "copy/a.pdf"]:
+        make_pdf(root / path, title="A")
+    make_pdf(root / "b.pdf", title="B")
+    make_pdf(root / "c.pdf", title="C")
+    make_pdf(root / "copy/c.pdf", title="C")
+    library.rescan()
+
+    duplicates = library.get_duplicates()
+    a = library.find_book_by_filename("a.pdf")
+    c = library.find_book_by_filename("c.pdf")
+    assert {sha1: [d.filename for d in files] for sha1, files in duplicates.items()} == \
+        {a.sha1: ["copy/a.pdf", "z/a.pdf"], c.sha1: ["copy/c.pdf"]}

@@ -16,7 +16,10 @@
             <div class="linksbar">
                 <div><a href="{{ url_for('main.index') }}">Bibliothèque</a> |
                     {{ books | length }} livre{{ 's' if books | length > 1 }}
-                    {%- if nb_missing %}, dont {{ nb_missing }} absent{{ 's' if nb_missing > 1 }} du répertoire{% endif %}.
+                    {%- if nb_missing or duplicates %}, dont {% endif %}
+                    {%- if nb_missing %}{{ nb_missing }} absent{{ 's' if nb_missing > 1 }} du répertoire{% endif %}
+                    {%- if nb_missing and duplicates %} et {% endif %}
+                    {%- if duplicates %}<a href="{{ url_for('.duplicates') }}">{{ duplicates | length }} en doublon</a>{% endif %}.
                 </div>
             </div>
         </div>
@@ -38,6 +41,7 @@
                         <td>
                             <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">{{ b.filename }}</a>
                             {% if not b.present %}<span class="badge">absent</span>{% endif %}
+                            {% if b.sha1 in duplicates %}<span class="badge duplicate">doublon</span>{% endif %}
                         </td>
                         <td>{{ b.category or '' }}</td>
                         {% if b.present %}
