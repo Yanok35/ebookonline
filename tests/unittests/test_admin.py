@@ -179,3 +179,45 @@ def test_book_page_shows_copies(app, client, book):
     app.bookdir.rescan()
     html = client.get(f"/bookadmin/{book.sha1}").text
     assert "<dt>Copies</dt>" in html and "copy.pdf" in html
+
+
+def test_duplicates_page(app, client):
+    root = Path(app.config["BOOK_DIR"])
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "b.pdf")
+    app.bookdir.rescan()
+    assert "Aucun doublon" in client.get("/bookadmin/duplicates").text
+    assert "en doublon" not in client.get("/bookadmin/").text
+
+    (root / "z").mkdir()
+    shutil.copy(root / "a.pdf", root / "copy-of-a.pdf")
+    shutil.copy(root / "a.pdf", root / "z" / "a.pdf")
+    app.bookdir.rescan()
+
+    html = client.get("/bookadmin/duplicates").text
+    assert "1 livre en doublon." in html
+    assert "<li>copy-of-a.pdf</li>" in html and "<li>z/a.pdf</li>" in html
+    sha1 = app.bookdir.find_book_by_filename("a.pdf").sha1
+    assert f'/bookadmin/{sha1}"' in html
+
+    # the book list links to the page, and marks the book
+    html = client.get("/bookadmin/").text
+    assert '<a href="/bookadmin/duplicates">1 en doublon</a>' in html
+    assert html.count('class="badge duplicate">doublon<') == 1
+
+
+def test_duplicates_page_requires_login(app):
+    assert app.test_client().get("/bookadmin/duplicates").status_code == 302
+
+
+def test_book_list_summary_with_missing_and_duplicates(app, client):
+    root = Path(app.config["BOOK_DIR"])
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "gone.pdf")
+    app.bookdir.rescan()
+    shutil.copy(root / "a.pdf", root / "copy.pdf")
+    os.remove(root / "gone.pdf")
+    app.bookdir.rescan()
+    html = client.get("/bookadmin/").text
+    assert "2 livres, dont 1 absent du répertoire et" in html
+    assert ">1 en doublon</a>." in html
