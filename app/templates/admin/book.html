@@ -20,6 +20,8 @@
             </div>
         </div>
 
+        {% include "admin/_read_only.html" %}
+
         <h2 class="admin-book-title">{{ book.filename }}
             {% if not book.present %}<span class="badge">absent</span>{% endif %}</h2>
 

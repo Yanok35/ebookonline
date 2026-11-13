@@ -37,6 +37,12 @@ import os
 # conversion from the previous version to _MIGRATIONS.
 DB_VERSION = 2
 
+# Oldest schema version whose code can read a book.db of version DB_VERSION
+# (saved in the file as 'min_reader_version'). Unchanged by a compatible
+# change, e.g. a new key, which older code ignores; set to DB_VERSION by an
+# incompatible one, e.g. a key whose type or meaning changes.
+DB_MIN_READER_VERSION = 1
+
 
 class BookDbVersionError(RuntimeError):
     """ book.db was written by a newer version of ebookonline """
@@ -170,6 +176,12 @@ class BookDir:
         self._scan_lock = threading.Lock()
         self._loaded = False
 
+        # book.db written by a newer version of ebookonline, but readable by
+        # this one: it is never written, changes are kept in memory only.
+        self.read_only = False
+        # Schema version of the book.db file, when read-only
+        self.db_version = None
+
     def open(self, book_dir):
         """
         Set the book directory and load the database file, without scanning
@@ -194,12 +206,22 @@ class BookDir:
             inp = json.load(f)
 
             # Rewriting a newer file would silently drop the data this
-            # version does not know (e.g. after a rollback of the server).
+            # version does not know (e.g. after a rollback of the server):
+            # it is opened read-only, if this version can read it.
             version = inp.get("version", 0)
             if version > DB_VERSION:
-                raise BookDbVersionError(
-                    f"{self.dbfile}: schema version {version} is newer than "
-                    f"the supported version {DB_VERSION}, upgrade ebookonline")
+                # missing: only its own version is known to read it
+                min_reader = inp.get("min_reader_version", version)
+                if min_reader > DB_VERSION:
+                    raise BookDbVersionError(
+                        f"{self.dbfile}: schema version {version} can only "
+                        f"be read by schema version {min_reader} or newer, "
+                        f"this is version {DB_VERSION}: upgrade ebookonline")
+                print(f"*** Warning: {self.dbfile}: schema version {version} "
+                      f"is newer than the supported version {DB_VERSION}: "
+                      f"read-only, changes are kept in memory only")
+                self.read_only = True
+                self.db_version = version
             if version < DB_VERSION:
                 inp = migrate_db(inp)
 
@@ -241,6 +263,7 @@ class BookDir:
     def to_json(self):
         d = {
             'version': DB_VERSION,
+            'min_reader_version': DB_MIN_READER_VERSION,
             'dirpath': self.dirpath,
             'booklist': [ b.to_json() for b in self.booklist ],
             'duplicates': [ d._asdict() for d in self.duplicates ],
@@ -251,7 +274,10 @@ class BookDir:
         """
         Write the database in a temporary file, then replace the previous
         one, so that an interruption can not leave a truncated JSON file.
+        Nothing is written when read-only.
         """
+        if self.read_only:
+            return
         with self.lock:
             s = json.dumps(self.to_json(), default=lambda o: o.__dict__, indent=2)
 

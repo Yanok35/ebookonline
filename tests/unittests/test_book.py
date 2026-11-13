@@ -276,7 +276,8 @@ def test_newer_db_is_refused(library, tmp_bookdir):
     library.rescan()
     with open(library.dbfile) as f:
         db = json.load(f)
-    db["version"] = srcs.book.DB_VERSION + 1
+    # an incompatible change: this version can not read it
+    db["version"] = db["min_reader_version"] = srcs.book.DB_VERSION + 1
     with open(library.dbfile, "w") as f:
         json.dump(db, f)
     content = Path(library.dbfile).read_text()
@@ -426,3 +427,62 @@ def test_get_duplicates(library):
     c = library.find_book_by_filename("c.pdf")
     assert {sha1: [d.filename for d in files] for sha1, files in duplicates.items()} == \
         {a.sha1: ["copy/a.pdf", "z/a.pdf"], c.sha1: ["copy/c.pdf"]}
+
+
+def write_newer_db(library, **keys):
+    """ Rewrite book.db as written by a newer version, with keys updated """
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    db["version"] = srcs.book.DB_VERSION + 1
+    db.update(keys)
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+    return Path(library.dbfile).read_text()
+
+
+def test_db_has_a_min_reader_version(library):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        assert json.load(f)["min_reader_version"] == srcs.book.DB_MIN_READER_VERSION
+
+
+def test_newer_readable_db_is_read_only(library, tmp_bookdir):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    library.rescan()
+    library.find_book_by_filename("a.pdf").tags = "algo"
+    library.save_db()
+    # a compatible change: a new key, ignored by this version
+    content = write_newer_db(library, min_reader_version=srcs.book.DB_VERSION,
+                             new_key={"from": "the future"})
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    assert reopened.read_only and reopened.db_version == srcs.book.DB_VERSION + 1
+    book = reopened.find_book_by_filename("a.pdf")
+    assert book.tags == "algo"
+
+    # changes are kept in memory, the file is never written
+    book.bookmarked = True
+    reopened.save_db()
+    make_pdf(root / "b.pdf")
+    reopened.rescan()
+    assert names(reopened.get_booklist()) == ["a.pdf", "b.pdf"] and book.bookmarked
+    assert Path(library.dbfile).read_text() == content
+    assert not list(Path(library.dbfile).parent.glob("*.bak"))
+
+
+def test_newer_db_without_min_reader_version_is_refused(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    del db["min_reader_version"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+    content = write_newer_db(library)
+
+    with pytest.raises(srcs.book.BookDbVersionError):
+        BookDir(library.dbfile, FakeCache(tmp_bookdir[2])).open(library.dirpath)
+    assert Path(library.dbfile).read_text() == content

@@ -32,11 +32,23 @@ from flask import (
 
 from app.admin.forms import BookForm, ResetThumbnailForm
 from app.auth import login_required
+from srcs.book import DB_VERSION
 
 admin = Blueprint('admin', __name__)
 
 # Two forms on the book page: distinct field names and ids
 RESET_FORM_PREFIX = "reset"
+
+
+@admin.context_processor
+def read_only_context():
+    """ For the banner of the admin pages, when book.db is read-only """
+    d = current_app.bookdir
+    return {
+        "bookdir_read_only": d.read_only,
+        "bookdir_db_version": d.db_version,
+        "bookdir_supported_version": DB_VERSION,
+    }
 
 
 @admin.app_template_filter("datetime")
@@ -93,7 +105,11 @@ def bookadmin(sha1):
         book.year = form.year.data or 0
         book.isbn = form.isbn.data or ""
         d.save_db()
-        flash("Modifications enregistrées.")
+        if d.read_only:
+            flash("Base en lecture seule : modifications conservées en mémoire "
+                  "seulement, elles seront perdues au redémarrage.", "error")
+        else:
+            flash("Modifications enregistrées.")
         return redirect(url_for(".bookadmin", sha1=sha1))
 
     books = d.get_all_books()
