@@ -357,3 +357,22 @@ def test_duplicate_replaces_a_removed_book(library):
     library.rescan()
     assert library.booklist == [book]
     assert book.filename == "copy/a.pdf" and book.present and book.bookmarked
+
+
+def test_duplicates_are_kept_and_not_hashed_again(library, mocker):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="same")
+    make_pdf(root / "copy" / "a.pdf", title="same")
+    make_pdf(root / "b.pdf")
+    library.rescan()
+    assert [(d.filename, d.sha1) for d in library.duplicates] == \
+        [("copy/a.pdf", library.find_book_by_filename("a.pdf").sha1)]
+
+    spy = mocker.spy(srcs.book, "sha1_file")
+    assert library.rescan() is False
+    assert spy.call_count == 0
+
+    # a removed copy is no longer a duplicate
+    os.remove(root / "copy" / "a.pdf")
+    assert library.rescan() is True
+    assert library.duplicates == []
