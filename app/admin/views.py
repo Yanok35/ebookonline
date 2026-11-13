@@ -54,7 +54,21 @@ def book_list():
     return render_template("admin/book_list.html",
                            books=books,
                            nb_missing=sum(not b.present for b in books),
+                           duplicates=current_app.bookdir.get_duplicates(),
                            titre="eBook admin")
+
+
+@admin.route("/bookadmin/duplicates")
+@login_required
+def duplicates():
+    """ The books having duplicates (files with the same content) """
+    d = current_app.bookdir
+    duplicates = d.get_duplicates()
+    books = sorted((b for b in d.get_all_books() if b.sha1 in duplicates),
+                   key=lambda b: b.filename.lower())
+    return render_template("admin/duplicates.html",
+                           duplicate_books=[(b, duplicates[b.sha1]) for b in books],
+                           titre="eBook admin - doublons")
 
 
 @admin.route("/bookadmin/<sha1>", methods=["GET", "POST"])

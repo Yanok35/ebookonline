@@ -307,7 +307,16 @@ body {
     border-left-color: darkred;
 }
 
-.admin ul.copies {
+.badge.duplicate {
+    background-color: #8a6d3b;
+}
+
+.admin-panel .hint {
+    font-size: 0.85em;
+    color: #666;
+}
+
+ul.copies {
     margin: 0;
     padding-left: 1.2em;
 }
