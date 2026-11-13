@@ -110,3 +110,60 @@ def test_missing_book_page(app, client, book):
     html = client.get(f"/bookadmin/{book.sha1}").text
     assert 'class="badge">absent<' in html
     assert "absent du répertoire des livres" in html
+
+
+def reset_csrf_token(client, book):
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    return re.search(r'name="reset-csrf_token" type="hidden" value="([^"]+)"', html).group(1)
+
+
+def test_reset_thumbnail(app, client, book):
+    thumbname = Path(app.cache.get_thumbname(book.sha1))
+    thumbname.write_bytes(b"old thumbnail")
+    app.cache.requests.clear()
+
+    response = client.post(f"/reset-thumbnail/{book.sha1}",
+                           data={"reset-csrf_token": reset_csrf_token(client, book)})
+    assert response.status_code == 302
+    assert response.location == f"/bookadmin/{book.sha1}"
+    assert not thumbname.exists()
+    pdffile = os.path.join(app.config["BOOK_DIR"], book.filename)
+    assert app.cache.requests == [(pdffile, book.sha1)]
+    assert "Miniature en cours de régénération" in client.get(response.location).text
+
+
+def test_reset_missing_thumbnail(app, client, book):
+    # no thumbnail yet: it is generated, this is not an error
+    app.cache.requests.clear()
+    client.post(f"/reset-thumbnail/{book.sha1}",
+                data={"reset-csrf_token": reset_csrf_token(client, book)})
+    assert len(app.cache.requests) == 1
+
+
+def test_reset_thumbnail_requires_csrf_token(app, client, book):
+    thumbname = Path(app.cache.get_thumbname(book.sha1))
+    thumbname.write_bytes(b"old thumbnail")
+    app.cache.requests.clear()
+
+    response = client.post(f"/reset-thumbnail/{book.sha1}")
+    assert response.status_code == 302
+    assert thumbname.exists() and app.cache.requests == []
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
+
+
+def test_reset_thumbnail_of_a_missing_book(app, client, book):
+    token = reset_csrf_token(client, book)
+    os.remove(Path(app.config["BOOK_DIR"]) / book.filename)
+    app.bookdir.rescan()
+    app.cache.requests.clear()
+
+    response = client.post(f"/reset-thumbnail/{book.sha1}", data={"reset-csrf_token": token})
+    assert app.cache.requests == []
+    html = client.get(response.location).text
+    assert "la miniature ne peut pas être régénérée" in html
+    # no reset button for a missing book
+    assert "reset-csrf_token" not in html
+
+
+def test_reset_thumbnail_unknown_sha1(client):
+    assert client.post("/reset-thumbnail/" + "0" * 40).status_code == 404
