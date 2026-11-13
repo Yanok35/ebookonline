@@ -26,6 +26,7 @@ from threading import Thread
 
 from srcs.cache import Cache
 from srcs.cache import sha1_file
+from srcs.search import fuzzy_search
 
 import os
 
@@ -246,6 +247,15 @@ class BookDir:
             if pattern.lower() in name:
                 sublist.append(b)
         return sublist
+
+    def search(self, pattern, books=None):
+        """
+        Typo tolerant search in 'books' (default: all present books), most
+        relevant first. See srcs/search.py.
+        """
+        if books is None:
+            books = self.get_booklist()
+        return fuzzy_search(books, pattern)
 
     def sort_by_date(self):
         return sorted(
