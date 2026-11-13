@@ -316,3 +316,44 @@ def test_migrations_are_applied_in_order(library, tmp_bookdir, monkeypatch):
     assert reopened.find_book_by_filename("a.pdf").tags == "a v1 v2"
     with open(library.dbfile) as f:
         assert json.load(f)["version"] == 2
+
+
+def test_duplicate_does_not_replace_known_book(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "Science" / "book.pdf", title="same")
+    library.rescan()
+    book = library.get_booklist()[0]
+    book.tags = "python"
+
+    # copies, before and after the book in any walk order
+    for path in ["a.pdf", "Art/book.pdf", "Zoo/book.pdf", "Science/zz.pdf"]:
+        make_pdf(root / path, title="same")
+    for _ in range(2):
+        library.rescan()
+        assert library.booklist == [book]
+        assert book.filename == "Science/book.pdf" and book.tags == "python"
+
+
+def test_duplicates_of_a_new_book(library):
+    root = Path(library.dirpath)
+    for path in ["b.pdf", "Art/a.pdf", "a.pdf"]:
+        make_pdf(root / path, title="same")
+    library.rescan()
+
+    # the first file, sorted by path
+    assert names(library.booklist) == ["Art/a.pdf"]
+
+
+def test_duplicate_replaces_a_removed_book(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="same")
+    library.rescan()
+    book = library.get_booklist()[0]
+    book.bookmarked = True
+    make_pdf(root / "copy" / "a.pdf", title="same")
+    library.rescan()
+
+    os.remove(root / "a.pdf")
+    library.rescan()
+    assert library.booklist == [book]
+    assert book.filename == "copy/a.pdf" and book.present and book.bookmarked
