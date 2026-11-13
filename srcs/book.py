@@ -35,7 +35,7 @@ import os
 # Schema version of the book database file (book.db). A file without version
 # is version 0. Increment it when the file format changes, and append the
 # conversion from the previous version to _MIGRATIONS.
-DB_VERSION = 1
+DB_VERSION = 2
 
 
 class BookDbVersionError(RuntimeError):
@@ -47,8 +47,14 @@ def _migrate_v0(db):
     return db
 
 
+def _migrate_v1(db):
+    """ 1 -> 2: the duplicate files are saved """
+    db["duplicates"] = []
+    return db
+
+
 # _MIGRATIONS[n] converts the JSON content of a version n file to version n+1
-_MIGRATIONS = [_migrate_v0]
+_MIGRATIONS = [_migrate_v0, _migrate_v1]
 assert len(_MIGRATIONS) == DB_VERSION
 
 
@@ -217,8 +223,11 @@ class BookDir:
 
                 booklist.append(new)
 
+        duplicates = [PdfFile(**d) for d in inp.get("duplicates", [])]
+
         with self.lock:
             self.booklist = booklist
+            self.duplicates = duplicates
 
         if version < DB_VERSION:
             # Keep the file of the previous version, the first time only
@@ -234,6 +243,7 @@ class BookDir:
             'version': DB_VERSION,
             'dirpath': self.dirpath,
             'booklist': [ b.to_json() for b in self.booklist ],
+            'duplicates': [ d._asdict() for d in self.duplicates ],
         }
         return d
 
