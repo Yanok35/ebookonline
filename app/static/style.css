@@ -224,7 +224,8 @@ body {
 }
 
 .admin .book-details {
-    flex: 1;
+    /* sized by its content: the file actions column stays next to it */
+    flex: 0 1 auto;
     min-width: 20em;
     /* border: 1px solid #00000080; */
     /* background-color: #fff; */
@@ -232,7 +233,15 @@ body {
     padding: 0 1em 1em 1em;
 }
 
-.admin .book-details h2 {
+.admin .file-actions {
+    flex: 1 1 16em;
+    max-width: 24em;
+    margin: 5px;
+    padding: 0 1em 1em 1em;
+}
+
+.admin .book-details h2,
+.admin .file-actions h2 {
     font-variant: small-caps;
 }
 
@@ -326,4 +335,17 @@ ul.copies {
     padding: 0.5em 1em;
     background-color: #fff;
     border-left: 4px solid darkred;
+}
+
+.admin .file-actions form {
+    margin-bottom: 1.2em;
+}
+
+.admin .field select {
+    padding: 0.3em;
+}
+
+button.danger,
+input.danger {
+    color: darkred;
 }
