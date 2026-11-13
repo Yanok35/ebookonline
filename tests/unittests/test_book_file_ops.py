@@ -186,3 +186,33 @@ def test_file_operations_in_read_only_mode(library, book, tmp_bookdir):
     assert reopened.find_book_by_sha1(book.sha1).filename == "Science/renamed.pdf"
     assert (Path(library.dirpath) / "Science" / "renamed.pdf").exists()
     assert Path(library.dbfile).read_text() == content
+
+
+def test_move_book_to_category(library, book):
+    root = Path(library.dirpath)
+    (root / "Art").mkdir()
+    make_pdf(root / "Science" / "sub" / "c.pdf", title="C")
+    library.rescan()
+    c = library.find_book_by_filename("Science/sub/c.pdf")
+
+    assert library.move_book_to_category(book.sha1, "Art") == "Art/a.pdf"
+    assert book.category == "Art" and book.tags == "algo"
+    # the file goes to the category directory itself
+    assert library.move_book_to_category(c.sha1, "Art") == "Art/c.pdf"
+    # '': the root of the book directory
+    assert library.move_book_to_category(book.sha1, "") == "a.pdf"
+    assert book.category == "Generals"
+
+
+@pytest.mark.parametrize("category", ["New", "Trash", "private", "Science/sub", "..", "link"])
+def test_move_book_to_category_refused(library, book, category, tmp_path):
+    root = Path(library.dirpath)
+    (root / "private").mkdir()
+    (root / "private" / ".ebook-ignore-dir").touch()
+    (root / "Science" / "sub").mkdir()
+    (root / "Trash").mkdir()
+    os.symlink(tmp_path, root / "link")
+    with pytest.raises(BookFileError):
+        library.move_book_to_category(book.sha1, category)
+    assert book.filename == "Science/a.pdf"
+    assert not (root / "New").exists()
