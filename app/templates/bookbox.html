@@ -19,7 +19,7 @@
                      title="Cliquer pour épingler le livre"
                      width="20" height="20" />
 
-                <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">
+                <a href="{{ url_for('admin.bookadmin', sha1 = b.sha1) }}">
                     <img src="/static/pencil.svg" width="20" height="20" />
                 </a>
             </div>
