@@ -167,3 +167,15 @@ def test_save_db_is_atomic(library):
                  if p.name.startswith(".book_db_")]
     assert leftovers == []
     assert set(db_entries(library)) == {"a.pdf"}
+
+
+def test_get_all_books_includes_missing(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "b.pdf")
+    library.rescan()
+    os.remove(root / "a.pdf")
+    library.rescan()
+
+    assert names(library.get_all_books()) == ["a.pdf", "b.pdf"]
+    assert names(library.get_booklist()) == ["b.pdf"]
