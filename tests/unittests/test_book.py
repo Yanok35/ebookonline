@@ -410,3 +410,19 @@ def test_db_version_1_is_migrated(library, tmp_bookdir):
         db = json.load(f)
     assert db["version"] == 2 and db["duplicates"] == []
     assert Path(library.dbfile + ".v1.bak").exists()
+
+
+def test_get_duplicates(library):
+    root = Path(library.dirpath)
+    for path in ["a.pdf", "z/a.pdf", "copy/a.pdf"]:
+        make_pdf(root / path, title="A")
+    make_pdf(root / "b.pdf", title="B")
+    make_pdf(root / "c.pdf", title="C")
+    make_pdf(root / "copy/c.pdf", title="C")
+    library.rescan()
+
+    duplicates = library.get_duplicates()
+    a = library.find_book_by_filename("a.pdf")
+    c = library.find_book_by_filename("c.pdf")
+    assert {sha1: [d.filename for d in files] for sha1, files in duplicates.items()} == \
+        {a.sha1: ["copy/a.pdf", "z/a.pdf"], c.sha1: ["copy/c.pdf"]}
