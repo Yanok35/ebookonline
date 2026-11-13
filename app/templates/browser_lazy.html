@@ -93,6 +93,25 @@
                     // booklistSearch(searchPattern, pinnedBookFilter, sortedBookList);
                 }
             });
+            // Typing anywhere in the page goes to the search bar, without
+            // clicking it first: focusing it during keydown makes the browser
+            // insert the typed character in it.
+            $(document).on("keydown", function(event) {
+                var search = document.getElementById('input-search-pattern');
+                // keyboard shortcuts (copy, find, ...) are left to the browser
+                if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing)
+                    return;
+                // printable characters only; space still scrolls the page
+                if (event.key.length !== 1 || event.key === " ")
+                    return;
+                // already typing in a text field
+                if (event.target === search || $(event.target).is("textarea, select, [contenteditable], " +
+                        "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit])"))
+                    return;
+                search.focus();
+                // continue the current pattern
+                search.setSelectionRange(search.value.length, search.value.length);
+            });
         });
         function booklistSearch(pattern, pinned) {
             const Http = new XMLHttpRequest();
