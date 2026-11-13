@@ -1,0 +1,155 @@
+import logging
+import re
+from pathlib import Path
+
+import pytest
+
+from tests.conftest import make_pdf
+
+
+@pytest.fixture
+def book(app):
+    """ Science/O'Reilly.pdf, and a few other files """
+    root = Path(app.config["BOOK_DIR"])
+    make_pdf(root / "Science" / "O'Reilly.pdf", title="A")
+    make_pdf(root / "Art" / "b.pdf", title="B")
+    make_pdf(root / "b.pdf", title="C")
+    app.bookdir.rescan()
+    return app.bookdir.find_book_by_filename("Science/O'Reilly.pdf")
+
+
+def token(client, url, prefix=""):
+    """ The CSRF token of a form of the page at url """
+    name = f"{prefix}-csrf_token" if prefix else "csrf_token"
+    html = client.get(url).text
+    return re.search(rf'name="{name}" (?:type="hidden" )?value="([^"]+)"', html).group(1)
+
+
+def post(client, book, action, prefix, **data):
+    page = f"/bookadmin/{book.sha1}"
+    data = {f"{prefix}-{k}": v for k, v in data.items()}
+    data[f"{prefix}-csrf_token"] = token(client, page, prefix)
+    return client.post(f"{page}/{action}", data=data)
+
+
+def test_book_page_shows_file_actions(app, client, book):
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "Actions sur le fichier" in html
+    assert 'value="O&#39;Reilly.pdf"' in html
+    # categories: the root and the existing directories, current one selected
+    assert re.findall(r'<option (?:selected )?value="([^"]*)"', html) == ["", "Art", "Science"]
+    assert '<option selected value="Science">' in html
+    # confirmation of the trash, the file name escaped for javascript
+    assert "return confirm(" in html and "O\\u0027Reilly.pdf" in html
+
+
+def test_rename(app, client, book, caplog):
+    caplog.set_level(logging.WARNING)
+    root = Path(app.config["BOOK_DIR"])
+    response = post(client, book, "rename", "rename", name="New name")
+    assert response.status_code == 302 and response.location == f"/bookadmin/{book.sha1}"
+    assert (root / "Science" / "New name.pdf").exists()
+    assert book.filename == "Science/New name.pdf"
+    assert "Fichier renommé : Science/New name.pdf" in client.get(response.location).text
+    # logged with the user name
+    assert "test: rename 'Science/O'Reilly.pdf' -> 'Science/New name.pdf'" in caplog.text
+
+
+@pytest.mark.parametrize("name, message", [
+    ("../x", "Opération refusée"),
+    ("", "Nouveau nom : Nom de fichier attendu."),
+])
+def test_rename_refused(app, client, book, name, message):
+    response = post(client, book, "rename", "rename", name=name)
+    assert message in client.get(response.location).text
+    assert book.filename == "Science/O'Reilly.pdf"
+    assert (Path(app.config["BOOK_DIR"]) / "Science" / "O'Reilly.pdf").exists()
+
+
+def test_rename_to_an_existing_file(app, client, book):
+    make_pdf(Path(app.config["BOOK_DIR"]) / "Science" / "taken.pdf", title="taken")
+    response = post(client, book, "rename", "rename", name="taken.pdf")
+    assert "destination already exists" in client.get(response.location).text
+    assert book.filename == "Science/O'Reilly.pdf"
+
+
+def test_move(app, client, book):
+    response = post(client, book, "move", "move", category="Art")
+    assert book.filename == "Art/O'Reilly.pdf" and book.category == "Art"
+    assert "Fichier déplacé : Art/O&#39;Reilly.pdf" in client.get(response.location).text
+    post(client, book, "move", "move", category="")
+    assert book.filename == "O'Reilly.pdf"
+
+
+def test_move_to_an_unknown_category(app, client, book):
+    (Path(app.config["BOOK_DIR"]) / "Trash").mkdir()
+    response = post(client, book, "move", "move", category="Trash")
+    assert "Catégorie : Catégorie inconnue." in client.get(response.location).text
+    assert book.filename == "Science/O'Reilly.pdf"
+
+
+def test_trash(app, client, book):
+    root = Path(app.config["BOOK_DIR"])
+    response = post(client, book, "trash", "trash")
+    assert (root / "Trash" / "Science" / "O'Reilly.pdf").exists()
+    assert not book.present
+    html = client.get(response.location).text
+    assert "Fichier mis à la corbeille : Trash/Science/O&#39;Reilly.pdf" in html
+    # a missing book has no file actions
+    assert "Actions sur le fichier" not in html
+
+
+@pytest.mark.parametrize("action", ["rename", "move", "trash"])
+def test_file_actions_require_csrf_token(app, client, book, action):
+    response = client.post(f"/bookadmin/{book.sha1}/{action}",
+                           data={"rename-name": "x", "move-category": "Art"})
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
+    assert book.filename == "Science/O'Reilly.pdf" and book.present
+
+
+@pytest.mark.parametrize("action", ["rename", "move", "trash"])
+def test_file_actions_unknown_book(client, action):
+    assert client.post(f"/bookadmin/{'0' * 40}/{action}").status_code == 404
+
+
+@pytest.mark.parametrize("url", ["/bookadmin/0/rename", "/bookadmin/0/move",
+                                 "/bookadmin/0/trash", "/bookadmin/duplicates/trash"])
+def test_file_actions_require_login(app, url):
+    response = app.test_client().post(url)
+    assert response.status_code == 302 and response.location.endswith("/login")
+
+
+def test_trash_duplicate(app, client, book):
+    root = Path(app.config["BOOK_DIR"])
+    make_pdf(root / "copy" / "a.pdf", title="A")
+    app.bookdir.rescan()
+    html = client.get("/bookadmin/duplicates").text
+    # (non ASCII characters escaped by tojson)
+    assert 'confirm("Mettre la copie \\u00ab copy/a.pdf \\u00bb' in html
+
+    response = client.post("/bookadmin/duplicates/trash", data={
+        "csrf_token": token(client, "/bookadmin/duplicates"),
+        "filename": "copy/a.pdf",
+    })
+    assert response.location == "/bookadmin/duplicates"
+    assert (root / "Trash" / "copy" / "a.pdf").exists()
+    assert app.bookdir.duplicates == [] and book.present
+    html = client.get(response.location).text
+    assert "Copie mise à la corbeille : Trash/copy/a.pdf" in html
+    assert "Aucun doublon" in html
+
+
+def test_trash_duplicate_refused(app, client, book):
+    make_pdf(Path(app.config["BOOK_DIR"]) / "copy" / "a.pdf", title="A")
+    app.bookdir.rescan()
+    # a book is not a duplicate
+    response = client.post("/bookadmin/duplicates/trash", data={
+        "csrf_token": token(client, "/bookadmin/duplicates"),
+        "filename": book.filename,
+    })
+    assert "Opération refusée" in client.get(response.location).text
+    assert book.present
+    # without CSRF token
+    response = client.post("/bookadmin/duplicates/trash", data={"filename": "copy/a.pdf"})
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
+    assert len(app.bookdir.duplicates) == 1
