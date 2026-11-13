@@ -99,6 +99,9 @@ class Book:
             "category": self.category,
             "filesize": self.filesize,
             "tags": self.tags,
+            "editor": self.editor,
+            "year": self.year,
+            "isbn": self.isbn,
             "bookmarked": self.bookmarked,
         }
         return d
@@ -161,6 +164,10 @@ class BookDir:
 
                 if "bookmarked" in b.keys():
                     new.bookmarked = b["bookmarked"]
+
+                new.editor = b.get("editor", "")
+                new.year = b.get("year", 0)
+                new.isbn = b.get("isbn", "")
 
                 booklist.append(new)
 
