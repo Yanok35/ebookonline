@@ -34,7 +34,25 @@ from app.auth import login_required
 
 admin = Blueprint('admin', __name__)
 
+
+@admin.app_template_filter("datetime")
+def format_datetime(timestamp):
+    """ {{ book.mtime | datetime }} -> '2026-11-13 21:27' """
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+
+
 @admin.route("/bookadmin/")
+@login_required
+def book_list():
+    """ Every book of book.db, including the ones missing from BOOK_DIR """
+    books = sorted(current_app.bookdir.get_all_books(),
+                   key=lambda b: b.filename.lower())
+    return render_template("admin/book_list.html",
+                           books=books,
+                           nb_missing=sum(not b.present for b in books),
+                           titre="eBook admin")
+
+
 @admin.route("/bookadmin/<sha1>", methods=['GET', 'POST'])
 @login_required
 def bookadmin(sha1 = None):
@@ -58,7 +76,6 @@ def bookadmin(sha1 = None):
                             d = d,
                             bsel = bsel,
                             sha1 = sha1,
-                            books = d.get_booklist(),
                             mtimestr = datetime.fromtimestamp(bsel.mtime).strftime('%Y-%m-%d %H:%M:%S'),
                             titre = "eBook admin")
 
