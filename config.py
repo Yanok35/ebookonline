@@ -38,6 +38,10 @@ class Config:
     # werkzeug.security.generate_password_hash() (see README).
     CREDENTIALS = {}
 
+    # Forms (Flask-WTF): the CSRF token is valid as long as the session,
+    # an admin page may stay open for hours before being submitted.
+    WTF_CSRF_TIME_LIMIT = None
+
     BOOK_DIR = os.path.join(basedir, "books")
     CACHE_DIR = os.path.join(basedir, "cache")
 
