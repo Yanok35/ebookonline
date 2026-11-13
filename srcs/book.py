@@ -154,6 +154,8 @@ class BookDir:
         assert isinstance(cache, Cache)
 
         self.booklist = []
+        # Other files having the content of a book ([PdfFile])
+        self.duplicates = []
         self.cache = cache
         self.dbfile = dbfile
         self.dirpath = None
@@ -378,7 +380,9 @@ class BookDir:
         # during the scan is not lost.
         with self.lock:
             remaining = list(self.booklist)
+            known_duplicates = list(self.duplicates)
         refreshed_booklist = []
+        refreshed_duplicates = []
         changed = False
 
         def take(book):
@@ -387,7 +391,7 @@ class BookDir:
 
         # 1. List the PDF files of the directory, with their sha1. Only new
         #    or modified files are hashed.
-        files, hashed = self.__list_pdf_files(book_dir, remaining)
+        files, hashed = self.__list_pdf_files(book_dir, remaining, known_duplicates)
         changed |= hashed
 
         # 2. Group the files by content (sha1). The first file of a group is
@@ -406,6 +410,15 @@ class BookDir:
             self.cache.create_thumbnail(os.path.join(book_dir, f.filename),
                                         book.sha1)
 
+        def add_duplicates(book_file, group):
+            for d in group:
+                if d is book_file:
+                    continue
+                refreshed_duplicates.append(d)
+                if d not in known_duplicates:
+                    print("*** Warning: duplicate PDF file: '%s' (book '%s')"
+                          % (d.filename, book_file.filename))
+
         new_contents = []
         for sha1, group in groups.items():
             book = next((b for b in remaining if b.sha1 == sha1), None)
@@ -421,7 +434,7 @@ class BookDir:
                 changed = True
             update(book, f)
             take(book)
-            self.__warn_duplicates(f, group)
+            add_duplicates(f, group)
 
         for group in new_contents:
             # Same path but new content (file replaced in place): same book
@@ -439,7 +452,10 @@ class BookDir:
             changed = True
             update(book, f)
             take(book)
-            self.__warn_duplicates(f, group)
+            add_duplicates(f, group)
+
+        if set(refreshed_duplicates) != set(known_duplicates):
+            changed = True
 
         # remaining contains all db entries not found in dir, thus removed.
         # let's keep those entry to keep user settings in case they reappears
@@ -452,17 +468,18 @@ class BookDir:
 
         with self.lock:
             self.booklist = refreshed_booklist
+            self.duplicates = refreshed_duplicates
             print("Directory db fully parsed. Save JSON db file...")
             self.save_db()
 
         return changed
 
     @staticmethod
-    def __list_pdf_files(book_dir, books):
+    def __list_pdf_files(book_dir, books, duplicates):
         """
         ([PdfFile], hashed): the PDF files of book_dir, and whether some
         files were hashed. The sha1 of a file which has the path and mtime of
-        a known book is not computed again.
+        a known book or duplicate is not computed again.
         """
         files = []
         hashed = False
@@ -493,7 +510,8 @@ class BookDir:
                 # Book object path are relative to BookDir path
                 relpath = os.path.relpath(abspath, book_dir)
 
-                known = next((b for b in books if b.filename == relpath), None)
+                known = next((b for b in books if b.filename == relpath), None) \
+                    or next((d for d in duplicates if d.filename == relpath), None)
                 if known and known.mtime == mtime:
                     sha1 = known.sha1
                 else:
@@ -509,11 +527,3 @@ class BookDir:
 
                 files.append(PdfFile(relpath, category, mtime, filesize, sha1))
         return files, hashed
-
-    @staticmethod
-    def __warn_duplicates(book_file, group):
-        for f in group:
-            if f is not book_file:
-                print("*** Warning: duplicate PDF files:\n"
-                      "not adding\t%s\n"
-                      "already   \t%s" % (f.filename, book_file.filename))
