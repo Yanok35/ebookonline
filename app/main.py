@@ -20,8 +20,7 @@
 import os
 import sys
 import json
-from flask import abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
-from . import main
+from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from app.auth import login_required
 from srcs.book import BookDir
 from srcs.cache import Cache
@@ -30,6 +29,8 @@ from datetime import datetime
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import io
+
+main = Blueprint('main', __name__)
 
 _DUMMY_PWHASH = generate_password_hash("not-a-real-password")
 
