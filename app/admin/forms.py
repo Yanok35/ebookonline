@@ -78,3 +78,9 @@ class BookForm(FlaskForm):
                    message="ISBN-10 ou ISBN-13 attendu (tirets et espaces acceptés)."),
         ])
     submit = SubmitField("Enregistrer")
+
+
+class ResetThumbnailForm(FlaskForm):
+    """ Delete and regenerate the thumbnail of a book (CSRF protection only) """
+
+    submit = SubmitField("Régénérer la miniature")
