@@ -9,6 +9,7 @@ from srcs.bookfileops import (
     check_relpath,
     ensure_trash,
     is_ignored,
+    list_categories,
     move_no_replace,
     move_to_free_name,
 )
@@ -117,3 +118,12 @@ def test_ensure_trash(tmp_path):
     assert (tmp_path / "Trash" / ".ebook-ignore-dir").exists()
     # again: nothing changes
     ensure_trash(str(tmp_path))
+
+
+def test_list_categories(tmp_path):
+    for name in ["Science", "art", "Trash", ".hidden", "private", "Zoo"]:
+        (tmp_path / name).mkdir()
+    (tmp_path / "private" / ".ebook-ignore-dir").touch()
+    (tmp_path / "a.pdf").touch()
+    os.symlink(tmp_path / "Science", tmp_path / "link")
+    assert list_categories(str(tmp_path)) == ["art", "Science", "Zoo"]
