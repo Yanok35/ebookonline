@@ -306,3 +306,8 @@ body {
     color: inherit;
     border-left-color: darkred;
 }
+
+.admin ul.copies {
+    margin: 0;
+    padding-left: 1.2em;
+}

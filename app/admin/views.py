@@ -90,6 +90,7 @@ def bookadmin(sha1):
         reset_form=ResetThumbnailForm(prefix=RESET_FORM_PREFIX),
         library_tags=sorted({t for b in books for t in b.tags.split()}),
         library_editors=sorted({b.editor for b in books if b.editor}),
+        copies=d.get_duplicates().get(book.sha1, []),
         titre=f"eBook admin - {os.path.basename(book.filename)}")
 
 
