@@ -153,3 +153,78 @@ def test_trash_duplicate_refused(app, client, book):
     response = client.post("/bookadmin/duplicates/trash", data={"filename": "copy/a.pdf"})
     assert "Formulaire expiré ou invalide" in client.get(response.location).text
     assert len(app.bookdir.duplicates) == 1
+
+
+def test_trash_page(app, client, book):
+    assert "La corbeille est vide." in client.get("/bookadmin/trash").text
+    assert "dans la corbeille" not in client.get("/bookadmin/").text
+
+    app.bookdir.trash_book(book.sha1)
+    html = client.get("/bookadmin/").text
+    assert '<a href="/bookadmin/trash">1 dans la corbeille</a>' in html
+    html = client.get("/bookadmin/trash").text
+    assert "1 fichier dans la corbeille." in html
+    assert "<td>Science/O&#39;Reilly.pdf</td>" in html
+    assert 'name="filename" value="Trash/Science/O&#39;Reilly.pdf"' in html
+
+
+def test_book_list_summary_with_everything(app, client, book):
+    root = Path(app.config["BOOK_DIR"])
+    make_pdf(root / "copy.pdf", title="B")
+    make_pdf(root / "gone.pdf", title="gone")
+    app.bookdir.rescan()
+    app.bookdir.trash_book(book.sha1)
+    (root / "gone.pdf").unlink()
+    app.bookdir.rescan()
+    html = client.get("/bookadmin/").text
+    assert "4 livres, dont 2 absents du répertoire, " \
+        '<a href="/bookadmin/duplicates">1 en doublon</a> et ' \
+        '<a href="/bookadmin/trash">1 dans la corbeille</a>.' in html
+
+
+def test_restore(app, client, book, caplog):
+    caplog.set_level(logging.WARNING)
+    root = Path(app.config["BOOK_DIR"])
+    book.tags = "algo"
+    app.bookdir.trash_book(book.sha1)
+
+    response = client.post("/bookadmin/trash/restore", data={
+        "csrf_token": token(client, "/bookadmin/trash"),
+        "filename": "Trash/Science/O'Reilly.pdf",
+    })
+    assert response.location == "/bookadmin/trash"
+    assert (root / "Science" / "O'Reilly.pdf").exists()
+    # the book is back, with its settings
+    assert book.present and book.filename == "Science/O'Reilly.pdf" and book.tags == "algo"
+    html = client.get(response.location).text
+    assert "Fichier restauré : Science/O&#39;Reilly.pdf" in html
+    assert "La corbeille est vide." in html
+    assert "test: restore 'Trash/Science/O'Reilly.pdf' -> 'Science/O'Reilly.pdf'" in caplog.text
+
+
+def test_restore_refused(app, client, book):
+    root = Path(app.config["BOOK_DIR"])
+    app.bookdir.trash_book(book.sha1)
+    make_pdf(root / "Science" / "O'Reilly.pdf", title="another one")
+    tok = token(client, "/bookadmin/trash")
+
+    # the original path is taken
+    response = client.post("/bookadmin/trash/restore",
+                           data={"csrf_token": tok, "filename": "Trash/Science/O'Reilly.pdf"})
+    assert "destination already exists" in client.get(response.location).text
+    # not a file of the trash
+    response = client.post("/bookadmin/trash/restore",
+                           data={"csrf_token": tok, "filename": "b.pdf"})
+    assert "Opération refusée" in client.get(response.location).text
+    # without CSRF token
+    response = client.post("/bookadmin/trash/restore",
+                           data={"filename": "Trash/Science/O'Reilly.pdf"})
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
+    assert (root / "Trash" / "Science" / "O'Reilly.pdf").exists()
+
+
+@pytest.mark.parametrize("method, url", [("get", "/bookadmin/trash"),
+                                         ("post", "/bookadmin/trash/restore")])
+def test_trash_pages_require_login(app, method, url):
+    response = getattr(app.test_client(), method)(url)
+    assert response.status_code == 302 and response.location.endswith("/login")
