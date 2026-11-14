@@ -28,11 +28,14 @@ received for 'delay' seconds, a single incremental rescan of the directory
 is run (BookDir.rescan, which only hashes new or modified files).
 """
 
+import logging
 import os
 import threading
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+
+log = logging.getLogger(__name__)
 
 IGNORE_DIR_MARKER = ".ebook-ignore-dir"
 
@@ -81,8 +84,7 @@ class BookDirWatcher(FileSystemEventHandler):
         self._observer.daemon = True
         self._observer.schedule(self, watched_path, recursive=True)
         self._observer.start()
-        print("Watching %s for changes (delay %.1fs)"
-              % (watched_path, self.delay))
+        log.info("Watching %s for changes (delay %.1fs)", watched_path, self.delay)
 
     def stop(self):
         with self._timer_lock:
@@ -114,6 +116,6 @@ class BookDirWatcher(FileSystemEventHandler):
                 self._timer = None
         try:
             self.bookdir.rescan()
-        except Exception as e:
+        except Exception:
             # Never let an error kill the watcher: next event will retry
-            print("*** Error: book directory rescan failed: %r" % e)
+            log.exception("Book directory rescan failed")

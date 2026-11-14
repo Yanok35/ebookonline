@@ -1,0 +1,40 @@
+# systemd unit for ebookonline, to install as
+# /etc/systemd/system/ebookonline.service, see README.md.
+#
+# Adapt the user, the paths, and the secrets file to the installation.
+
+[Unit]
+Description=eBookOnLine, web access to a PDF library
+After=network.target
+
+[Service]
+Type=simple
+User=ebookonline
+Group=ebookonline
+# book.db and reader_states.json are written in this directory
+WorkingDirectory=/opt/ebookonline
+
+# Secrets (EBOOKONLINE_SECRET_KEY, EBOOKONLINE_CREDENTIALS), in a file
+# readable by root only, see README.md
+EnvironmentFile=/etc/ebookonline/secrets.env
+Environment=EBOOKONLINE_BOOK_DIR=/srv/books
+
+# Only reachable from the reverse proxy: the application trusts the
+# X-Forwarded-For header (BEHIND_REVERSE_PROXY)
+ExecStart=/opt/ebookonline/venv/bin/gunicorn -w 1 --threads 4 -b 127.0.0.1:5000 \
+    --logger-class srcs.gunicorn_logger.GunicornLogger \
+    'ebookonline:create_app("default")'
+
+Restart=on-failure
+RestartSec=5s
+
+# Hardening: the server can only write in the directories below (without
+# write access, it runs read-only, see docs/technote-bookdb.md)
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/ebookonline /srv/books
+
+[Install]
+WantedBy=multi-user.target

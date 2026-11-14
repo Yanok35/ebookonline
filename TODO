@@ -36,6 +36,15 @@ https://openclassrooms.com/courses/creez-vos-applications-web-avec-flask/requete
  - Move the file to another directory (category),
  - Recover some metadata from OCR ? title, edition, author(s), date, isbn,
 
+# Thumbnails (srcs/cache.py)
+ - Ghostscript fallback: the command is run by os.system() with the PDF file
+   name in a shell string: a name with '"' or '$(...)' runs a command (names
+   come from the book directory, and from the admin rename action). Use
+   subprocess.run([...]) without shell.
+ - Ghostscript fallback: when gs fails, the function still returns True;
+   resizing the missing image then raises, and the exception stops this
+   thumbnail process for good.
+
 # User interface:
  - Header links list on main page:
   Bookmark in library (star notation / in pinned book ?)

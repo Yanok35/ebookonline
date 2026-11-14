@@ -25,7 +25,6 @@ from app import create_app
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-print("set recursion limit from %d to 10000" % sys.getrecursionlimit())
 sys.setrecursionlimit(10000)
 
 #

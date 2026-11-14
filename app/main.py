@@ -56,7 +56,12 @@ def login():
         pwhash = creds.get(u, _DUMMY_PWHASH)
         if check_password_hash(pwhash, p) and u in creds:
             session['username'] = u
+            current_app.logger.info("Login from %s: user %r", request.remote_addr, u)
             return redirect(url_for(".index"))
+
+        # For fail2ban: the address first, the user name (chosen by the
+        # client) can not be mistaken for it
+        current_app.logger.warning("Login failed from %s: user %r", request.remote_addr, u)
 
         abort(401)
         return ("<h3>Error</h3>")
@@ -114,9 +119,8 @@ def browser_subset():
     s = d.get_booklist()
     sorted = request.values.get('sorted')
     if sorted:
-        print("sorted = " + str(sorted))
         s = d.sort_by_date()
-        print("sublist(3) size = " + str(len(s)))
+        current_app.logger.debug("Books sorted by date: %d", len(s))
 
     booklist = s
     nbBooks = len(booklist)
@@ -135,18 +139,16 @@ def browser_search():
 
     pinned = request.values.get('pinned')
     if pinned:
-        print("pinned = " + str(pinned))
         s = d.get_subset_if_bookmarked()
-        print("sublist(1) size = " + str(len(s)))
+        current_app.logger.debug("Pinned books: %d", len(s))
     else:
         s = d.get_booklist()
 
     pattern = request.values.get('pat')
     if pattern:
-        print("pattern: " + pattern)
         # typo tolerant, most relevant first
         s = d.search(pattern, s)
-        print("sublist(2) size = " + str(len(s)))
+        current_app.logger.debug("Search %r: %d books", pattern, len(s))
 
     html = ""
     if len(s) < 200:
@@ -234,7 +236,8 @@ def pinbook(sha1 = None):
     bsel = d.find_book_by_sha1(sha1)
 
     bsel.bookmarked = not bsel.bookmarked
-    print("bsel.bookmarked = ", bsel.bookmarked)
+    current_app.logger.info("%s: %s '%s'", session.get("username"),
+                            "pin" if bsel.bookmarked else "unpin", bsel.filename)
 
     d.save_db()
 

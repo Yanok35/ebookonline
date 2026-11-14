@@ -55,6 +55,10 @@ class Config:
     BOOK_DB = "book.db"
     STATE_FILE = "reader_states.json"
 
+    # Logs on stderr (journald under systemd), from this level: DEBUG,
+    # INFO, WARNING, ERROR
+    LOG_LEVEL = "INFO"
+
     # Enable real IP coming before the Reverse proxy (this will allow to
     # identify suspicious scan with fail2ban)
     BEHIND_REVERSE_PROXY = True

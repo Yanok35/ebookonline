@@ -206,7 +206,7 @@ def get_reader_state(document_id):
                 state = load_states().get(document_id)
 
     except (OSError, ValueError, json.JSONDecodeError):
-        api.logger.exception(
+        current_app.logger.exception(
             "Impossible de lire le fichier des états."
         )
 
@@ -263,7 +263,7 @@ def put_reader_state():
             save_states(states)
 
     except (OSError, ValueError, json.JSONDecodeError):
-        api.logger.exception(
+        current_app.logger.exception(
             "Impossible de sauvegarder l'état du lecteur."
         )
 

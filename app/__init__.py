@@ -21,11 +21,12 @@ import os
 
 import click
 from config import Config
-from flask import Flask, current_app
+from flask import Flask, current_app, request, session
 from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from srcs.access import can_write_dir, check_write_access
+from srcs.logs import setup_logging
 from srcs.cache import Cache
 from srcs.book import DB_VERSION, BookDir
 from srcs.watcher import BookDirWatcher
@@ -76,6 +77,22 @@ def _read_only_context():
         "read_only_reasons": current_app.read_only_reasons,
     }
 
+def _log_not_found(e):
+    """
+    For fail2ban: an anonymous client asking for a page which does not exist
+    (typically a scan for vulnerable software) is logged as a warning, the
+    address first (the path is chosen by the client). A logged in user (e.g.
+    a stale link) is only logged as info, with another message.
+    """
+    user = session.get("username")
+    if user is None:
+        current_app.logger.warning("Not found from %s: %s %r",
+                                   request.remote_addr, request.method, request.path)
+    else:
+        current_app.logger.info("Not found from %s for user %r: %s %r", request.remote_addr,
+                                user, request.method, request.path)
+    return e
+
 def create_app(config_name):
     # instance_relative_config: relative paths given to from_pyfile() are
     # resolved from app.instance_path (<project>/instance) and not from the
@@ -86,6 +103,9 @@ def create_app(config_name):
     app.config.from_pyfile('config.py', silent=True)
     # Production: secrets come from the environment, e.g. EBOOKONLINE_SECRET_KEY
     app.config.from_prefixed_env(prefix='EBOOKONLINE')
+
+    # Before anything logs (Flask then adds no handler of its own)
+    setup_logging(app.config['LOG_LEVEL'])
 
     if not app.config.get('SECRET_KEY'):
         raise RuntimeError(
@@ -123,7 +143,7 @@ def create_app(config_name):
             f"d'ebookonline (schéma {app.bookdir.db_version}, ce serveur gère "
             f"le schéma {DB_VERSION})")
     for reason in app.read_only_reasons:
-        print(f"*** Warning: read-only mode: {reason}")
+        app.logger.warning("Read-only mode: %s", reason)
     app.context_processor(_read_only_context)
 
     # Startup scan: refresh book.db and the thumbnail cache, then keep them
@@ -144,5 +164,7 @@ def create_app(config_name):
 
     from .api import api as api_blueprint
     app.register_blueprint(api_blueprint)
+
+    app.register_error_handler(404, _log_not_found)
 
     return app
