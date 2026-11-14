@@ -19,18 +19,21 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import hashlib
+import logging
 import os
-import sys
 import math
 import queue
 import signal
-import traceback
 
 import multiprocessing
 
 from pypdf import PdfReader, PdfWriter
 
 from wand.image import Image
+
+from srcs.logs import setup_logging
+
+log = logging.getLogger(__name__)
 
 def sha1_file(filename):
     with open(filename, 'rb') as fd_in:
@@ -47,16 +50,12 @@ class Cache:
 
     @classmethod
     def get_instance(cls, *args):
-        print("Cache::get_instance()")
         if cls.instance == None:
-            #print(**args)
-            #print(*args)
-            print(args)
+            log.debug("Cache instance: %s", args)
             cls.instance = cls(*args)
         return cls.instance
 
     def __init__(self, cachedir):
-        print("Cache::__init__()")
         if not os.path.exists(cachedir):
             os.mkdir(cachedir)
         self.cachedir = cachedir
@@ -65,10 +64,14 @@ class Cache:
         self.parent_pid = os.getpid()
         self.sha1_queue = multiprocessing.JoinableQueue()
         self.subproc = []
+        # the processes log like this one (when they do not inherit its
+        # logging configuration: not started by fork)
+        log_level = logging.getLogger().getEffectiveLevel()
         for num in range(max(1, os.cpu_count()-1)):
             p = multiprocessing.Process(
                 target=self.__subproc_thumbnail_create,
-                args=(num,),
+                args=(num, log_level),
+                name=f"thumbnail-{num}",
                 daemon=True,
             )
             p.start()
@@ -82,7 +85,8 @@ class Cache:
 
         thumbname = self.get_thumbname(sha1)
         if not os.path.exists(thumbname):
-            print("*** Error: missing thumbnail : %s" % thumbname)
+            # not generated yet (or failed): a placeholder is shown
+            log.debug("Missing thumbnail: %s", thumbname)
             return None
 
         # return the content of the whole jpeg
@@ -108,7 +112,6 @@ class Cache:
         self.sha1_queue.put(msg)
 
     def __del__(self):
-        print(f"Cache::__dtor__()")
         self.shouldRun = False
         # TODO: in python3.14, replace by: [p.interrupt() for p in self.subproc]
         for p in self.subproc:
@@ -131,25 +134,26 @@ class Cache:
         """
         self.get_instance().__del__()
 
-    def __subproc_thumbnail_create(self, subprocId: int):
+    def __subproc_thumbnail_create(self, subprocId: int, log_level=logging.INFO):
 
-        print(f"{subprocId}: waiting for orders")
+        setup_logging(log_level)
+        log.info("Thumbnail process %d: waiting for orders", subprocId)
         while self.shouldRun:
             try:
                 if os.getppid() != self.parent_pid:
-                    print(f"{subprocId}: parent process is gone, exit")
+                    log.info("Thumbnail process %d: parent process is gone, exit", subprocId)
                     break
                 try:
                     (pdffilename, thumbname) = self.sha1_queue.get(timeout=1)
                 except queue.Empty:
                     continue
 
-                print(f"{subprocId}, {os.getpid()}: thumb gen: {pdffilename} -> {thumbname}")
+                log.info("Thumbnail: %s -> %s", pdffilename, thumbname)
                 self.__pdf2jpeg(pdffilename, thumbname)
                 continue
 
             except KeyboardInterrupt:
-                print(f"{subprocId}: exit working loop")
+                log.info("Thumbnail process %d: exit working loop", subprocId)
                 break
 
         return
@@ -212,23 +216,15 @@ class Cache:
         except KeyboardInterrupt:
             raise KeyboardInterrupt
         except:
-            print(u"\u001b[36m")
-            print(">>>")
-            print('Error: thumbnail generation failed')
-            print('pdffilename = %s' % pdffilename)
-            print("Unexpected error:")
-            print(sys.exc_info())
-            print (traceback.print_exc())
-            print ('<<<')
-            print (u"\u001b[0m")
-
+            log.warning("Thumbnail with pypdf and wand failed for %s",
+                        pdffilename, exc_info=True)
             return False
 
 
     def __pdf2jpeg_wand_only(self, pdffilename, thumbname):
 
         try:
-            print("--- trying with wand library ---")
+            log.info("Thumbnail of %s: trying with wand only", pdffilename)
             with Image() as img:
                 img.options['pdf:use-cropbox'] = 'true'
                 img.read(filename=pdffilename+"[0]")
@@ -237,9 +233,8 @@ class Cache:
         except KeyboardInterrupt:
             raise KeyboardInterrupt
         except:
-            print (u"\u001b[36m")
-            print (traceback.print_exc())
-            print (u"\u001b[0m")
+            log.warning("Thumbnail with wand failed for %s", pdffilename,
+                        exc_info=True)
             return False
 
 
@@ -248,16 +243,17 @@ class Cache:
         try:
             resolution = int(150)
             while resolution >= 2:
-                print(f"--- trying with Ghostscript -sDEVICE=jpeg ({resolution} dpi) ---")
+                log.info("Thumbnail of %s: trying with Ghostscript (%d dpi)",
+                         pdffilename, resolution)
                 cmdLine = f'gs -sDEVICE=jpeg -o "{thumbname}" -dFirstPage=1 -dLastPage=1 -dJPEGQ=92 -r{resolution}x{resolution} "{pdffilename}"'
-                print(cmdLine)
+                log.debug("%s", cmdLine)
                 retCode = os.system(cmdLine)
-                print(f"retcode = {retCode}")
+                log.debug("Ghostscript exit status: %d", retCode)
                 if retCode != 0:
                     #raise "Ghostscript failed"
                     break
                 filesize = os.stat(thumbname).st_size
-                print(f"filesize = {filesize} Bytes")
+                log.debug("Thumbnail size: %d bytes", filesize)
                 if filesize < (2048 * 1024): # > 2MB
                     break
 
@@ -266,11 +262,8 @@ class Cache:
         except KeyboardInterrupt:
             raise KeyboardInterrupt
         except:
-            print (u"\u001b[36m")
-            print (traceback.print_exc())
-            print (u"\u001b[0m")
-            print("--- Failed ---")
-            print (u"\u001b[33mNo thumbnail for '%s'\u001b[0m" % pdffilename)
+            log.error("No thumbnail for %s: Ghostscript failed", pdffilename,
+                      exc_info=True)
             return False
 
     def __thumb_resize_small(self, thumbname):
@@ -287,9 +280,8 @@ class Cache:
 
         resized_filesize = float(os.stat(thumbname).st_size)
 
-        print("filesize orig: %.2f KB resize: %.2f KB (ratio = %d %%)"
-              % (orig_filesize / 1024.0,
-                 resized_filesize / 1024.0,
-                 resized_filesize * 100 / orig_filesize) )
+        log.info("Thumbnail resized from %.2f KB to %.2f KB (ratio = %d %%)",
+                 orig_filesize / 1024.0, resized_filesize / 1024.0,
+                 resized_filesize * 100 / orig_filesize)
 
 
