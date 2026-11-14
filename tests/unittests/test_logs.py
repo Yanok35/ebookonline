@@ -1,6 +1,7 @@
 import logging
 import re
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -99,15 +100,30 @@ def test_gunicorn_logger(root_handlers):
     assert not logger.access_log_enabled
 
 
-# The fail2ban filter of the README: prefregex keeps the content of the
-# messages of the application logger, after the journal prefix, then the
-# failregex (<ADDR>: an IP address) are anchored at its beginning.
+# The fail2ban filter of resources/: prefregex keeps the content of the
+# messages of the application logger, after the journal prefix (simplified
+# here), then the failregex of each mode are anchored at its beginning.
+FAIL2BAN_FILTER = Path(__file__).parents[2] / "resources" / "fail2ban-filter.conf.sample"
 PREFREGEX = r"^\S+ \S+\[\d+\]: app: (?P<content>.+)$"
+# <ADDR>: an IP address
 ADDR = r"(?P<addr>[0-9a-fA-F:.]+)"
-FAILREGEX = {
-    "auth": rf"^Login failed from {ADDR}: user",
-    "notfound": rf"^Not found from {ADDR}: [A-Z]+\s",
-}
+
+
+def filter_failregex():
+    """ {mode: failregex} of the fail2ban filter """
+    text = FAIL2BAN_FILTER.read_text()
+    assert re.search(r"^prefregex = \^%\(__prefix_line\)sapp: <F-CONTENT>\.\+</F-CONTENT>\$$",
+                     text, re.MULTILINE)
+    return {mode: regex.replace("<ADDR>", ADDR)
+            for mode, regex in re.findall(r"^mdre-(auth|notfound) = (.+)$", text, re.MULTILINE)}
+
+
+FAILREGEX = filter_failregex()
+
+
+def test_filter_modes():
+    assert set(FAILREGEX) == {"auth", "notfound"}
+    assert all(regex.startswith("^") for regex in FAILREGEX.values())
 
 
 def fail2ban_match(message, mode):
