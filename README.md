@@ -22,7 +22,7 @@ source venv/bin/activate
 ## Install dependencies
 ```bash
 sudo apt install zlib1g-dev libturbojpeg0-dev gcc libpython3.8-dev
-CMAKE_BUILD_PARALLEL_LEVEL=4 pip3 install -r requirements.txt
+CMAKE_BUILD_PARALLEL_LEVEL=4 pip3 install --extra-index-url https://www.piwheels.org/simple -r requirements.txt
 ```
 
 ## Policy tuning (ImageMagik 6 and later)
