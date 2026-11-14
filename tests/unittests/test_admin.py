@@ -284,3 +284,23 @@ def test_duplicates_page_total_size(app, client):
     # between the title and the note
     assert html.index("<h2>Doublons</h2>") < html.index("Taille totale") \
         < html.index("Fichiers au contenu identique")
+
+
+def test_book_list_total_size(app, client):
+    root = Path(app.config["BOOK_DIR"])
+    # hidden without books
+    assert "Taille totale" not in client.get("/bookadmin/").text
+
+    (root / "a.pdf").write_bytes(b"%PDF-" + b"a" * (1024 * 1024 - 5))
+    (root / "b.pdf").write_bytes(b"%PDF-" + b"b" * (512 * 1024 - 5))
+    (root / "gone.pdf").write_bytes(b"%PDF-" + b"c" * (1024 * 1024 - 5))
+    app.bookdir.rescan()
+    os.remove(root / "gone.pdf")
+    app.bookdir.rescan()
+
+    # the missing book is not counted
+    html = client.get("/bookadmin/").text
+    assert "Taille totale : 1.50&nbsp;Mo" in html
+    # between the title and the table
+    assert html.index("<h2>Liste des livres</h2>") < html.index("Taille totale") \
+        < html.index("<table")
