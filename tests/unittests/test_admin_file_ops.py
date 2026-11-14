@@ -228,3 +228,78 @@ def test_restore_refused(app, client, book):
 def test_trash_pages_require_login(app, method, url):
     response = getattr(app.test_client(), method)(url)
     assert response.status_code == 302 and response.location.endswith("/login")
+
+
+def test_trash_page_buttons(app, client, book):
+    html = client.get("/bookadmin/trash").text
+    assert "Vider la corbeille" not in html
+    app.bookdir.trash_book(book.sha1)
+    html = client.get("/bookadmin/trash").text
+    assert "Supprimer" in html and "Vider la corbeille" in html
+    assert 'confirm("Supprimer d\\u00e9finitivement \\u00ab Science/O\\u0027Reilly.pdf \\u00bb ?")' in html
+    assert 'confirm("Vider la corbeille : supprimer d\\u00e9finitivement 1 fichier ?")' in html
+
+
+def test_delete_from_trash(app, client, book, caplog):
+    caplog.set_level(logging.WARNING)
+    root = Path(app.config["BOOK_DIR"])
+    app.bookdir.trash_book(book.sha1)
+
+    response = client.post("/bookadmin/trash/delete", data={
+        "csrf_token": token(client, "/bookadmin/trash"),
+        "filename": "Trash/Science/O'Reilly.pdf",
+    })
+    assert response.location == "/bookadmin/trash"
+    assert not (root / "Trash" / "Science" / "O'Reilly.pdf").exists()
+    html = client.get(response.location).text
+    assert "Fichier supprimé définitivement : Trash/Science/O&#39;Reilly.pdf" in html
+    assert "La corbeille est vide." in html
+    assert "test: delete 'Trash/Science/O'Reilly.pdf' -> 'Trash/Science/O'Reilly.pdf'" in caplog.text
+    # the book stays in the database, missing
+    assert not book.present
+
+
+def test_delete_from_trash_refused(app, client, book):
+    root = Path(app.config["BOOK_DIR"])
+    app.bookdir.trash_book(book.sha1)
+    tok = token(client, "/bookadmin/trash")
+    # a file of the library is never deleted
+    response = client.post("/bookadmin/trash/delete", data={"csrf_token": tok, "filename": "b.pdf"})
+    assert "Opération refusée" in client.get(response.location).text
+    assert (root / "b.pdf").exists()
+    # without CSRF token
+    response = client.post("/bookadmin/trash/delete", data={"filename": "Trash/Science/O'Reilly.pdf"})
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
+    assert (root / "Trash" / "Science" / "O'Reilly.pdf").exists()
+
+
+def test_empty_trash(app, client, book, caplog):
+    caplog.set_level(logging.WARNING)
+    root = Path(app.config["BOOK_DIR"])
+    make_pdf(root / "copy.pdf", title="B")
+    app.bookdir.rescan()
+    app.bookdir.trash_book(book.sha1)
+    app.bookdir.trash_duplicate("copy.pdf")
+
+    response = client.post("/bookadmin/trash/empty", data={"csrf_token": token(client, "/bookadmin/trash")})
+    assert response.location == "/bookadmin/trash"
+    html = client.get(response.location).text
+    assert "Corbeille vidée : 2 fichiers supprimés définitivement." in html
+    assert "La corbeille est vide." in html
+    assert not list((root / "Trash").rglob("*.pdf"))
+    # the library is untouched
+    assert sorted(b.filename for b in app.bookdir.get_booklist()) == ["Art/b.pdf", "b.pdf"]
+    assert "test: empty the trash -> '2'" in caplog.text
+
+
+def test_empty_trash_requires_csrf_token(app, client, book):
+    app.bookdir.trash_book(book.sha1)
+    response = client.post("/bookadmin/trash/empty")
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
+    assert (Path(app.config["BOOK_DIR"]) / "Trash" / "Science" / "O'Reilly.pdf").exists()
+
+
+@pytest.mark.parametrize("url", ["/bookadmin/trash/delete", "/bookadmin/trash/empty"])
+def test_trash_deletion_requires_login(app, url):
+    response = app.test_client().post(url)
+    assert response.status_code == 302 and response.location.endswith("/login")
