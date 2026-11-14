@@ -304,3 +304,16 @@ def test_book_list_total_size(app, client):
     # between the title and the table
     assert html.index("<h2>Liste des livres</h2>") < html.index("Taille totale") \
         < html.index("<table")
+
+
+def test_book_page_cover_links_to_the_reader(app, client, book):
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    reader = f"/pdfjsviewer/{book.sha1}/Python%20Algorithms.pdf"
+    assert f'<a href="{reader}" title="Lire le livre">' in html
+    assert client.get(reader).status_code == 200
+
+    # missing PDF: nothing to read
+    os.remove(Path(app.config["BOOK_DIR"]) / "Python Algorithms.pdf")
+    app.bookdir.rescan()
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "/pdfjsviewer/" not in html and f'src="/images/{book.sha1}"' in html

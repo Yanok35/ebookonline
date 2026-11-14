@@ -16,6 +16,10 @@
  - Ability to sort books per user's current interest (most recent open, to oldest)
  - Add ability to give a score (5x star like  style maybe)
  - Add ability to take some notes on a book
+
+# User admin
+ - Make user dynamics ? add/remove, change passwd ? or keep this using file editions.
+ - i18n to support multiple languages
  
 # Designs changes
  - Move from ajax to websocket design (Flask -> Quart) ?

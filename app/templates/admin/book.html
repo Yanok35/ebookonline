@@ -31,7 +31,13 @@
 
         <div class="book">
             <div class="book-cover">
+                {% if book.present %}
+                <a href="{{ url_for('main.pdfjs_read', sha1 = book.sha1, pdffile = book.filename) }}" title="Lire le livre">
+                    <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
+                </a>
+                {% else %}
                 <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
+                {% endif %}
                 {% if book.present %}
                 <form action="{{ url_for('.reset_thumbnail', sha1 = book.sha1) }}" method="post">
                     {{ reset_form.hidden_tag() }}
