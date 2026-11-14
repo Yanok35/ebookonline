@@ -38,6 +38,9 @@
 
         <div class="admin-panel">
             <h2>Liste des livres</h2>
+            {% if books %}
+            <p class="total">Taille totale : {{ '%.2f' % (total_size / 1024 / 1024) }}&nbsp;Mo</p>
+            {% endif %}
             <table class="admin-table">
                 <thead>
                     <tr>

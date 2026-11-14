@@ -79,6 +79,8 @@ def book_list():
     return render_template("admin/book_list.html",
                            books=books,
                            nb_missing=sum(not b.present for b in books),
+                           # present books only (a missing book has no size)
+                           total_size=sum(b.filesize for b in books if b.present),
                            duplicates=current_app.bookdir.get_duplicates(),
                            nb_trash=len(list_trash(current_app.bookdir.dirpath)),
                            titre="eBook admin")
