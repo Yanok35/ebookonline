@@ -27,7 +27,6 @@ from srcs.cache import Cache
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-import io
 
 main = Blueprint('main', __name__)
 
@@ -176,20 +175,8 @@ def browser_search():
     return json.dumps(j)
 
 
-dummyimg_resp = None
-
-def dummyimg_get_response():
-
-    global dummyimg_resp
-    if not dummyimg_resp:
-        from PIL import Image
-        image = Image.new("RGB", (210,297), "#92C41D")
-        with io.BytesIO() as output:
-            image.save(output, 'BMP')
-            dummyimg_resp = make_response(output.getvalue())
-            dummyimg_resp.mimetype = "image/bmp"
-
-    return dummyimg_resp
+# Shown until the thumbnail of a book is generated
+MISSING_THUMBNAIL = "missing-thumbnail.png"
 
 @main.route('/images/<sha1>')
 @login_required
@@ -202,7 +189,10 @@ def image(sha1):
         response = make_response(mon_image)
         response.mimetype = "image/jpeg"
     else:
-        response = dummyimg_get_response()
+        # Same URL: the browser revalidates it (ETag), and gets the
+        # thumbnail once generated.
+        response = send_from_directory(current_app.static_folder,
+                                       MISSING_THUMBNAIL, mimetype="image/png")
 
     return response
 
