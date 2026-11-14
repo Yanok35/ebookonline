@@ -317,3 +317,72 @@ def test_trash_page_total_size(app, client):
     # between the title and the table
     assert html.index("<h2>Corbeille</h2>") < html.index("Taille totale") \
         < html.index("<table")
+
+
+def cover_image(fmt="jpeg"):
+    import pymupdf
+
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 60, 90), 0)
+    pix.set_rect(pix.irect, (200, 60, 60))
+    return pix.tobytes(fmt)
+
+
+def post_cover(client, book, data, filename="cover.jpg"):
+    from io import BytesIO
+
+    page = f"/bookadmin/{book.sha1}"
+    return client.post(f"{page}/cover", content_type="multipart/form-data", data={
+        "cover-csrf_token": token(client, page, "cover"),
+        "cover-image": (BytesIO(data), filename),
+    })
+
+
+def test_book_page_shows_cover_form(client, book):
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert 'enctype="multipart/form-data"' in html
+    assert 'accept="image/jpeg,image/png"' in html
+    assert 'value="Insérer une page de couverture"' in html
+
+
+@pytest.mark.parametrize("fmt, filename", [("jpeg", "cover.JPG"), ("png", "cover.png")])
+def test_insert_cover(app, client, book, caplog, fmt, filename):
+    caplog.set_level(logging.WARNING)
+    response = post_cover(client, book, cover_image(fmt), filename)
+
+    copy = app.bookdir.find_book_by_filename("Science/O'Reilly (covered).pdf")
+    assert copy is not None and copy.tags == book.tags
+    # to the page of the copy
+    assert response.status_code == 302 and response.location == f"/bookadmin/{copy.sha1}"
+    html = client.get(response.location).text
+    assert "Copie avec une page de couverture créée : Science/O&#39;Reilly (covered).pdf" in html
+    assert "test: insert a cover in 'Science/O'Reilly.pdf' -> 'Science/O'Reilly (covered).pdf'" \
+        in caplog.text
+
+
+@pytest.mark.parametrize("data, filename, message", [
+    (b"not an image", "cover.jpg", "Opération refusée : not a JPEG or PNG image"),
+    (b"GIF89a", "cover.gif", "Image de couverture : Image JPEG ou PNG attendue."),
+])
+def test_insert_cover_refused(app, client, book, data, filename, message):
+    response = post_cover(client, book, data, filename)
+    assert response.location == f"/bookadmin/{book.sha1}"
+    assert message in client.get(response.location).text
+    assert not list(Path(app.config["BOOK_DIR"]).rglob("*covered*"))
+
+
+def test_insert_cover_without_image(app, client, book):
+    page = f"/bookadmin/{book.sha1}"
+    client.post(f"{page}/cover", data={"cover-csrf_token": token(client, page, "cover")})
+    assert "Image de couverture : Image attendue." in client.get(page).text
+
+
+def test_insert_cover_too_large(app, client, book):
+    app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
+    response = post_cover(client, book, b"\xff\xd8" + b"x" * (2 * 1024 * 1024))
+    assert response.status_code == 302 and response.location == f"/bookadmin/{book.sha1}"
+    assert "Fichier trop volumineux : 1 Mo au plus." in client.get(response.location).text
+
+
+def test_insert_cover_requires_login(app, book):
+    response = app.test_client().post(f"/bookadmin/{book.sha1}/cover")
+    assert response.status_code == 302 and "/login" in response.location

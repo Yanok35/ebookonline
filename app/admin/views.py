@@ -27,12 +27,15 @@ from flask import (
     flash,
     redirect,
     render_template,
+    request,
     session,
     url_for,
 )
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.admin.forms import (
     BookForm,
+    CoverForm,
     DeleteFromTrashForm,
     EmptyTrashForm,
     MoveBookForm,
@@ -58,6 +61,7 @@ admin = Blueprint('admin', __name__)
 # Several forms on the book page: distinct field names and ids
 RESET_FORM_PREFIX = "reset"
 RENAME_FORM_PREFIX = "rename"
+COVER_FORM_PREFIX = "cover"
 MOVE_FORM_PREFIX = "move"
 TRASH_FORM_PREFIX = "trash"
 
@@ -137,6 +141,7 @@ def bookadmin(sha1):
         book=book,
         form=form,
         reset_form=ResetThumbnailForm(prefix=RESET_FORM_PREFIX),
+        cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
                                    data={"name": os.path.basename(book.filename)}),
@@ -243,6 +248,36 @@ def rename_book(sha1):
                          lambda: current_app.bookdir.rename_book(sha1, form.name.data)):
         flash(f"Fichier renommé : {book.filename}")
     return redirect(url_for(".bookadmin", sha1=sha1))
+
+
+@admin.route("/bookadmin/<sha1>/cover", methods=["POST"])
+@login_required
+def insert_cover(sha1):
+    """ A copy of the PDF file, with a cover page made of the uploaded image """
+    book = _book_or_404(sha1)
+    form = CoverForm(prefix=COVER_FORM_PREFIX)
+    if not form.validate_on_submit():
+        _flash_form_errors(form)
+        return redirect(url_for(".bookadmin", sha1=sha1))
+
+    image = form.image.data.read()
+    copy = _file_operation(f"insert a cover in '{book.filename}'",
+                           lambda: current_app.bookdir.insert_cover(sha1, image))
+    if not copy:
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    flash(f"Copie avec une page de couverture créée : {copy}")
+    # the page of the copy (unless it is a duplicate of a known file)
+    new_book = current_app.bookdir.find_book_by_filename(copy)
+    return redirect(url_for(".bookadmin", sha1=new_book.sha1 if new_book else sha1))
+
+
+@admin.errorhandler(RequestEntityTooLarge)
+def request_too_large(e):
+    """ An upload over MAX_CONTENT_LENGTH: back to the page, with a message """
+    flash(f"Fichier trop volumineux : {current_app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)} "
+          "Mo au plus.", "error")
+    sha1 = (request.view_args or {}).get("sha1")
+    return redirect(url_for(".bookadmin", sha1=sha1) if sha1 else url_for(".book_list"))
 
 
 @admin.route("/bookadmin/<sha1>/move", methods=["POST"])

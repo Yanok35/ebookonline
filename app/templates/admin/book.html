@@ -43,6 +43,13 @@
                     {{ reset_form.hidden_tag() }}
                     {{ reset_form.submit(disabled=not cache_writable) }}
                 </form>
+                <form class="cover-form" action="{{ url_for('.insert_cover', sha1 = book.sha1) }}"
+                      method="post" enctype="multipart/form-data">
+                    {{ cover_form.hidden_tag() }}
+                    {{ cover_form.image(required=True, disabled=read_only) }}
+                    {{ cover_form.submit(disabled=read_only) }}
+                    <p class="hint">Crée une copie du PDF, « (covered) », avec l'image (JPEG ou PNG) en première page.</p>
+                </form>
                 {% endif %}
             </div>
 

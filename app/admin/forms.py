@@ -20,6 +20,7 @@
 import re
 
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileAllowed, FileField, FileRequired
 from wtforms import HiddenField, IntegerField, SelectField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional, Regexp, ValidationError
 
@@ -87,6 +88,18 @@ class ResetThumbnailForm(FlaskForm):
 
 
 # File operations: the paths are checked by BookDir (srcs/bookfileops.py)
+
+class CoverForm(FlaskForm):
+    """ Insert a cover page, from an image, in a copy of the PDF file """
+
+    image = FileField(
+        "Image de couverture",
+        validators=[FileRequired("Image attendue."),
+                    FileAllowed(["jpg", "jpeg", "png"], "Image JPEG ou PNG attendue.")],
+        render_kw={"accept": "image/jpeg,image/png"},
+    )
+    submit = SubmitField("Insérer une page de couverture")
+
 
 class RenameBookForm(FlaskForm):
     """ Rename the file of a book, in its directory """
