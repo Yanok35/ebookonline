@@ -35,6 +35,26 @@ from srcs.logs import setup_logging
 
 log = logging.getLogger(__name__)
 
+# Signals whose handlers are set by the gunicorn worker (graceful exit on
+# SIGTERM, ...)
+_INHERITED_SIGNALS = ("SIGTERM", "SIGQUIT", "SIGHUP", "SIGUSR1", "SIGUSR2",
+                      "SIGWINCH", "SIGABRT")
+
+
+def _reset_signal_handlers():
+    """
+    In a process forked from the server: the default signal handlers.
+    Otherwise a process forked from a gunicorn worker keeps its handlers:
+    SIGTERM, sent to the daemon processes by multiprocessing when the worker
+    exits, would only ask for a graceful exit which never comes, and the
+    worker would wait for it until killed by gunicorn (graceful timeout).
+    """
+    for name in _INHERITED_SIGNALS:
+        signal.signal(getattr(signal, name), signal.SIG_DFL)
+    # KeyboardInterrupt: stops the loop of the process (see __del__)
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
 def sha1_file(filename):
     with open(filename, 'rb') as fd_in:
         digest = hashlib.file_digest(fd_in, "sha1")
@@ -136,6 +156,7 @@ class Cache:
 
     def __subproc_thumbnail_create(self, subprocId: int, log_level=logging.INFO):
 
+        _reset_signal_handlers()
         setup_logging(log_level)
         log.info("Thumbnail process %d: waiting for orders", subprocId)
         while self.shouldRun:
