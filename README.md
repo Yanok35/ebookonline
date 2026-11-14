@@ -133,65 +133,24 @@ The address is the client one given by the reverse proxy (see
 `BEHIND_REVERSE_PROXY`), always before the user name or the path, which the
 client chooses. fail2ban reads them from the journal.
 
-`/etc/fail2ban/filter.d/ebookonline.conf`:
+Install the filter of `resources/fail2ban-filter.conf.sample` and the jails
+of `resources/fail2ban-jail.local.sample` (one per kind of failure, with its
+own threshold):
 
-```ini
-# Fail2Ban filter for ebookonline: failed logins, and anonymous requests of
-# pages which do not exist (scans for vulnerable software)
-
-[INCLUDES]
-
-before = common.conf
-
-[Definition]
-
-# messages of the application logger ("app: ..."), after the journal prefix
-prefregex = ^%(__prefix_line)sapp: <F-CONTENT>.+</F-CONTENT>$
-
-mdre-auth = ^Login failed from <ADDR>: user
-mdre-notfound = ^Not found from <ADDR>: [A-Z]+\s
-mdre-all = %(mdre-auth)s
-           %(mdre-notfound)s
-
-failregex = <mdre-<mode>>
-
-ignoreregex =
-
-# Parameter "mode": auth (failed logins), notfound (anonymous requests of
-# missing pages), or all (default). Usage example (jail):
-#   filter = ebookonline[mode=auth]
-mode = all
-
-journalmatch = _SYSTEMD_UNIT=ebookonline.service
+```bash
+sudo install -m 644 -o root -g root resources/fail2ban-filter.conf.sample \
+    /etc/fail2ban/filter.d/ebookonline.conf
+sudo install -m 644 -o root -g root resources/fail2ban-jail.local.sample \
+    /etc/fail2ban/jail.d/ebookonline.local
 ```
 
-`/etc/fail2ban/jail.d/ebookonline.local`, one jail per kind of failure, with
-its own threshold:
+The files are copied, not linked: fail2ban runs as root, and a jail can run
+any command as an action. A symbolic link to a file of the project would let
+whoever can write in the project directory (e.g. the user of the server) run
+commands as root. Copy them again after an update of the samples.
 
-```ini
-[ebookonline-auth]
-enabled = true
-backend = systemd
-filter = ebookonline[mode=auth]
-port = http,https
-maxretry = 5
-findtime = 10m
-bantime = 1h
-
-[ebookonline-notfound]
-enabled = true
-backend = systemd
-filter = ebookonline[mode=notfound]
-port = http,https
-# a few missing pages are normal (robots.txt, apple-touch-icon.png, ...),
-# a scan asks for dozens of them
-maxretry = 10
-findtime = 10m
-bantime = 1h
-```
-
-`journalmatch` must name the systemd unit of the server. Check the filter on
-the journal, then the jails:
+`journalmatch` (in the filter) must name the systemd unit of the server.
+Check the filter on the journal, then the jails:
 
 ```bash
 fail2ban-regex systemd-journal 'ebookonline[mode=auth]'

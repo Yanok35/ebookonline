@@ -1,0 +1,24 @@
+# Fail2Ban jails for ebookonline, one per kind of failure, with its own
+# threshold. They use the filter of fail2ban-filter.conf.sample.
+#
+# Install as /etc/fail2ban/jail.d/ebookonline.local, see README.md.
+
+[ebookonline-auth]
+enabled = true
+backend = systemd
+filter = ebookonline[mode=auth]
+port = http,https
+maxretry = 5
+findtime = 10m
+bantime = 1h
+
+[ebookonline-notfound]
+enabled = true
+backend = systemd
+filter = ebookonline[mode=notfound]
+port = http,https
+# a few missing pages are normal (robots.txt, apple-touch-icon.png, ...),
+# a scan asks for dozens of them
+maxretry = 10
+findtime = 10m
+bantime = 1h

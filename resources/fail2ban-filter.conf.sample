@@ -1,0 +1,30 @@
+# Fail2Ban filter for ebookonline: failed logins, and anonymous requests of
+# pages which do not exist (scans for vulnerable software).
+#
+# Install as /etc/fail2ban/filter.d/ebookonline.conf, see README.md.
+
+[INCLUDES]
+
+before = common.conf
+
+[Definition]
+
+# messages of the application logger ("app: ..."), after the journal prefix
+prefregex = ^%(__prefix_line)sapp: <F-CONTENT>.+</F-CONTENT>$
+
+mdre-auth = ^Login failed from <ADDR>: user
+mdre-notfound = ^Not found from <ADDR>: [A-Z]+\s
+mdre-all = %(mdre-auth)s
+           %(mdre-notfound)s
+
+failregex = <mdre-<mode>>
+
+ignoreregex =
+
+# Parameter "mode": auth (failed logins), notfound (anonymous requests of
+# missing pages), or all (default). Usage example (jail):
+#   filter = ebookonline[mode=auth]
+mode = all
+
+# the systemd unit of the server
+journalmatch = _SYSTEMD_UNIT=ebookonline.service
