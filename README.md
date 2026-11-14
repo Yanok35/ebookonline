@@ -115,10 +115,13 @@ it chooses the user and the command of the service.
 ## Start the Flask production server
 
 ```bash
-gunicorn -w 1 -t 4 -b 127.0.0.1:5000 \
+gunicorn -w 1 --threads 4 -b 127.0.0.1:5000 \
     --logger-class srcs.gunicorn_logger.GunicornLogger \
     'ebookonline:create_app("default")'
 ```
+
+`-w 1`: a single process, which holds the book list in memory and writes
+book.db; `--threads 4`: up to 4 requests served at once by this process.
 
 `-b 127.0.0.1:5000`: only the reverse proxy, on the same host, can reach
 the server. The application trusts the `X-Forwarded-For` header of the proxy

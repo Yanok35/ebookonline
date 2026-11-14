@@ -21,7 +21,7 @@ Environment=EBOOKONLINE_BOOK_DIR=/srv/books
 
 # Only reachable from the reverse proxy: the application trusts the
 # X-Forwarded-For header (BEHIND_REVERSE_PROXY)
-ExecStart=/opt/ebookonline/venv/bin/gunicorn -w 1 -t 4 -b 127.0.0.1:5000 \
+ExecStart=/opt/ebookonline/venv/bin/gunicorn -w 1 --threads 4 -b 127.0.0.1:5000 \
     --logger-class srcs.gunicorn_logger.GunicornLogger \
     'ebookonline:create_app("default")'
 
