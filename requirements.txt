@@ -8,7 +8,7 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.4
 pillow==12.3.0
-pypdf==6.21.1
+pypdf==6.21.4
 rapidfuzz==3.14.6
 Wand==0.7.2
 watchdog==6.0.0
