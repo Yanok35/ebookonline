@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import srcs.book
 from srcs.book import BookDir
 from srcs.watcher import BookDirWatcher
 
@@ -132,3 +133,26 @@ def test_stop_cancels_pending_rescan(library):
 
     time.sleep(1.2)
     assert present_names(library) == []
+
+
+def test_file_operations_are_not_undone(watched, mocker):
+    library, rescans = watched
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "b.pdf")
+    assert wait_until(lambda: present_names(library) == ["a.pdf", "b.pdf"])
+    a = library.find_book_by_filename("a.pdf")
+    b = library.find_book_by_filename("b.pdf")
+    time.sleep(DELAY * 3)
+    count = len(rescans)
+    spy = mocker.spy(srcs.book, "sha1_file")
+
+    library.move_book(a.sha1, "Art/a.pdf")
+    library.trash_book(b.sha1)
+
+    # the watcher rescans after the moves, and finds the same state
+    assert wait_until(lambda: len(rescans) > count)
+    time.sleep(DELAY * 3)
+    assert present_names(library) == ["Art/a.pdf"]
+    assert not b.present
+    assert spy.call_count == 0

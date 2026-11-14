@@ -486,3 +486,14 @@ def test_newer_db_without_min_reader_version_is_refused(library, tmp_bookdir):
     with pytest.raises(srcs.book.BookDbVersionError):
         BookDir(library.dbfile, FakeCache(tmp_bookdir[2])).open(library.dirpath)
     assert Path(library.dbfile).read_text() == content
+
+
+def test_ignore_dir_marker_applies_to_subdirectories(library):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "private" / "sub" / "b.pdf")
+    make_pdf(root / "private" / "sub" / "deeper" / "c.pdf")
+    (root / "private" / ".ebook-ignore-dir").touch()
+    library.rescan()
+
+    assert names(library.get_booklist()) == ["a.pdf"]

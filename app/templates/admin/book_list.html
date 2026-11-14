@@ -15,11 +15,21 @@
         <div class="actionbar">
             <div class="linksbar">
                 <div><a href="{{ url_for('main.index') }}">Bibliothèque</a> |
+                    {%- set details = [] %}
+                    {%- if nb_missing %}
+                        {%- set text %}{{ nb_missing }} absent{{ 's' if nb_missing > 1 }} du répertoire{% endset %}
+                        {%- set _ = details.append(text) %}
+                    {%- endif %}
+                    {%- if duplicates %}
+                        {%- set text %}<a href="{{ url_for('.duplicates') }}">{{ duplicates | length }} en doublon</a>{% endset %}
+                        {%- set _ = details.append(text) %}
+                    {%- endif %}
+                    {%- if nb_trash %}
+                        {%- set text %}<a href="{{ url_for('.trash') }}">{{ nb_trash }} dans la corbeille</a>{% endset %}
+                        {%- set _ = details.append(text) %}
+                    {%- endif %}
                     {{ books | length }} livre{{ 's' if books | length > 1 }}
-                    {%- if nb_missing or duplicates %}, dont {% endif %}
-                    {%- if nb_missing %}{{ nb_missing }} absent{{ 's' if nb_missing > 1 }} du répertoire{% endif %}
-                    {%- if nb_missing and duplicates %} et {% endif %}
-                    {%- if duplicates %}<a href="{{ url_for('.duplicates') }}">{{ duplicates | length }} en doublon</a>{% endif %}.
+                    {%- if details %}, dont {{ details[:-1] | join(', ') }}{{ ' et ' if details | length > 1 }}{{ details[-1] }}{% endif %}.
                 </div>
             </div>
         </div>

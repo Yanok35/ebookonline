@@ -26,11 +26,14 @@ import threading
 from collections import namedtuple
 from threading import Thread
 
+from srcs import bookfileops
+from srcs.bookfileops import IGNORE_MARKER, BookFileError
 from srcs.cache import Cache
 from srcs.cache import sha1_file
 from srcs.search import fuzzy_search
 
 import os
+import posixpath
 
 # Schema version of the book database file (book.db). A file without version
 # is version 0. Increment it when the file format changes, and append the
@@ -391,6 +394,132 @@ class BookDir:
                     tags.append(t)
         return tags
 
+    # File operations in the book directory. They hold the scan lock, move
+    # the file, then rescan the directory: the book list follows the same
+    # rules as for a change made outside of the server (e.g. a duplicate
+    # replaces a book moved to the trash). The rescan hashes no file again,
+    # a move keeps the modification time of the file.
+
+    def __present_book(self, sha1):
+        book = self.find_book_by_sha1(sha1)
+        if book is None:
+            raise BookFileError(f"unknown book: {sha1}")
+        if not book.present or not os.path.isfile(os.path.join(self.dirpath, book.filename)):
+            raise BookFileError(f"the file of the book is missing: {book.filename}")
+        return book
+
+    def move_book(self, sha1, relpath):
+        """
+        Move or rename the file of a book to relpath, relative to the book
+        directory, creating the missing directories. The book keeps its user
+        settings. Returns the new path of the book, or raises BookFileError:
+        invalid path, destination which exists, is outside of the book
+        directory or ignored by the scan, missing book file, ...
+        """
+        relpath = bookfileops.check_relpath(relpath)
+        if bookfileops.is_ignored(self.dirpath, relpath):
+            raise BookFileError(f"{relpath!r} is ignored by the scan")
+        dst = bookfileops.check_inside(self.dirpath, relpath)
+
+        with self._scan_lock:
+            book = self.__present_book(sha1)
+            if relpath == book.filename:
+                return relpath
+            bookfileops.move_no_replace(os.path.join(self.dirpath, book.filename), dst)
+            print("Book moved: '%s' -> '%s'" % (book.filename, relpath))
+            # Known at its new path: the rescan does not hash it again
+            with self.lock:
+                book.filename = relpath
+                book.category = bookfileops.category_of(relpath)
+            self.__rescan()
+        return relpath
+
+    def rename_book(self, sha1, name):
+        """
+        Rename the file of a book, in its directory ('.pdf' is appended if
+        missing). Returns the new path of the book, see move_book().
+        """
+        if "/" in name:
+            raise BookFileError(f"invalid file name: {name!r}")
+        if not name.lower().endswith(".pdf"):
+            name += ".pdf"
+        book = self.find_book_by_sha1(sha1)
+        if book is None:
+            raise BookFileError(f"unknown book: {sha1}")
+        return self.move_book(sha1, posixpath.join(posixpath.dirname(book.filename), name))
+
+    def move_book_to_category(self, sha1, category):
+        """
+        Move the file of a book to a category: an existing first level
+        directory (see bookfileops.list_categories()), or the root of the
+        book directory for ''. Returns the new path of the book, see
+        move_book().
+        """
+        if category and category not in bookfileops.list_categories(self.dirpath):
+            raise BookFileError(f"unknown category: {category!r}")
+        book = self.find_book_by_sha1(sha1)
+        if book is None:
+            raise BookFileError(f"unknown book: {sha1}")
+        name = posixpath.basename(book.filename)
+        return self.move_book(sha1, posixpath.join(category, name) if category else name)
+
+    def trash_book(self, sha1):
+        """
+        Move the file of a book to the trash, at the same path in it (e.g.
+        Trash/Science/a.pdf, or 'a (2).pdf' if it exists). The book is kept,
+        missing, and gets its user settings back if the file is moved back
+        to the book directory; a duplicate replaces it if any. Returns the
+        path of the file in the trash, or raises BookFileError.
+        """
+        with self._scan_lock:
+            book = self.__present_book(sha1)
+            trashed = self.__trash(book.filename)
+            print("Book trashed: '%s' -> '%s'" % (book.filename, trashed))
+            self.__rescan()
+        return trashed
+
+    def trash_duplicate(self, relpath):
+        """
+        Move a duplicate file to the trash, see trash_book(). Returns the
+        path of the file in the trash, or raises BookFileError.
+        """
+        with self._scan_lock:
+            if relpath not in (d.filename for d in self.duplicates) \
+                    or not os.path.isfile(os.path.join(self.dirpath, relpath)):
+                raise BookFileError(f"not a duplicate file: {relpath!r}")
+            trashed = self.__trash(relpath)
+            print("Duplicate trashed: '%s' -> '%s'" % (relpath, trashed))
+            self.__rescan()
+        return trashed
+
+    def restore_from_trash(self, relpath):
+        """
+        Move a file of the trash (Trash/...) back to its original path in
+        the book directory (never overwriting a file). A book gets its user
+        settings back. Returns the restored path, or raises BookFileError.
+        """
+        prefix = bookfileops.TRASH_DIR + "/"
+        relpath = bookfileops.check_relpath(relpath)
+        if not relpath.startswith(prefix):
+            raise BookFileError(f"not in the trash: {relpath!r}")
+        original = relpath[len(prefix):]
+        if bookfileops.is_ignored(self.dirpath, original):
+            raise BookFileError(f"{original!r} is ignored by the scan")
+        src = bookfileops.check_inside(self.dirpath, relpath)
+        dst = bookfileops.check_inside(self.dirpath, original)
+
+        with self._scan_lock:
+            bookfileops.move_no_replace(src, dst)
+            print("Restored from the trash: '%s'" % original)
+            self.__rescan()
+        return original
+
+    def __trash(self, relpath):
+        bookfileops.ensure_trash(self.dirpath)
+        dst = bookfileops.check_inside(self.dirpath, posixpath.join(bookfileops.TRASH_DIR, relpath))
+        dst = bookfileops.move_to_free_name(os.path.join(self.dirpath, relpath), dst)
+        return os.path.relpath(dst, self.dirpath).replace(os.sep, "/")
+
     def scan_dir(self, book_dir):
         """
             Refresh the database content by searching for PDF files in
@@ -530,10 +659,12 @@ class BookDir:
         files = []
         hashed = False
         print("Scanning directory %s for PDF files..." % book_dir)
-        for (dir, _, filenames) in os.walk(book_dir):
+        for (dir, subdirs, filenames) in os.walk(book_dir):
 
-            # Allow user to ignore some directories using a marker hidden file
-            if (os.path.exists(dir + "/.ebook-ignore-dir")):
+            # Allow user to ignore some directories using a marker hidden
+            # file, with their subdirectories (e.g. the trash)
+            if os.path.exists(os.path.join(dir, IGNORE_MARKER)):
+                subdirs[:] = []
                 continue
 
             # Book category is first level directory name
