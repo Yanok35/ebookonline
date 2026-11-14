@@ -308,7 +308,7 @@ def test_book_list_total_size(app, client):
 
 def test_book_page_cover_links_to_the_reader(app, client, book):
     html = client.get(f"/bookadmin/{book.sha1}").text
-    reader = f"/pdfjsviewer/{book.sha1}/Python%20Algorithms.pdf"
+    reader = f"/reader/{book.sha1}"
     assert f'<a href="{reader}" title="Lire le livre">' in html
     assert client.get(reader).status_code == 200
 
@@ -316,4 +316,4 @@ def test_book_page_cover_links_to_the_reader(app, client, book):
     os.remove(Path(app.config["BOOK_DIR"]) / "Python Algorithms.pdf")
     app.bookdir.rescan()
     html = client.get(f"/bookadmin/{book.sha1}").text
-    assert "/pdfjsviewer/" not in html and f'src="/images/{book.sha1}"' in html
+    assert "/reader/" not in html and f'src="/images/{book.sha1}"' in html

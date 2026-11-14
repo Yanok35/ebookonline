@@ -162,7 +162,7 @@ def browser_search():
         html += '   <div>\n'
 
         for b in s:
-                html += '    <p><a href="' + url_for('.pdf_read', pdffile = b.filename) + '">'
+                html += '    <p><a href="' + url_for('.book_pdf', sha1 = b.sha1) + '">'
                 html += b.get_name_and_size_as_str()
                 html += "</a></p>\n"
         html += '   </div>\n'

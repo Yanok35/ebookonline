@@ -32,7 +32,7 @@
         <div class="book">
             <div class="book-cover">
                 {% if book.present %}
-                <a href="{{ url_for('main.pdfjs_read', sha1 = book.sha1, pdffile = book.filename) }}" title="Lire le livre">
+                <a href="{{ url_for('main.book_reader', sha1 = book.sha1) }}" title="Lire le livre">
                     <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
                 </a>
                 {% else %}
