@@ -26,6 +26,7 @@ from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from srcs.access import can_write_dir, check_write_access
+from srcs.logs import setup_logging
 from srcs.cache import Cache
 from srcs.book import DB_VERSION, BookDir
 from srcs.watcher import BookDirWatcher
@@ -87,6 +88,9 @@ def create_app(config_name):
     # Production: secrets come from the environment, e.g. EBOOKONLINE_SECRET_KEY
     app.config.from_prefixed_env(prefix='EBOOKONLINE')
 
+    # Before anything logs (Flask then adds no handler of its own)
+    setup_logging(app.config['LOG_LEVEL'])
+
     if not app.config.get('SECRET_KEY'):
         raise RuntimeError(
             "SECRET_KEY is not set: define EBOOKONLINE_SECRET_KEY or set it "
@@ -123,7 +127,7 @@ def create_app(config_name):
             f"d'ebookonline (schéma {app.bookdir.db_version}, ce serveur gère "
             f"le schéma {DB_VERSION})")
     for reason in app.read_only_reasons:
-        print(f"*** Warning: read-only mode: {reason}")
+        app.logger.warning("Read-only mode: %s", reason)
     app.context_processor(_read_only_context)
 
     # Startup scan: refresh book.db and the thumbnail cache, then keep them
