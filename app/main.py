@@ -233,6 +233,9 @@ def book_reader(sha1):
                             pdfurl = url_for('.book_pdf', sha1 = sha1),
                             documentId = sha1,
                             documentName = docName,
+                            # "à relire" badge: metadata not reviewed yet
+                            reviewUrl = None if book.meta_reviewed
+                                else url_for('admin.bookadmin', sha1 = sha1),
                             titre = docName)
 
 

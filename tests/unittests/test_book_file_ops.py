@@ -319,6 +319,7 @@ def test_insert_cover(library, book):
 
     root = Path(library.dirpath)
     book.editor, book.year, book.isbn = "Manning", 2022, "9781617296055"
+    book.title, book.authors, book.meta_reviewed = "R in Action", ["Robert Kabacoff"], True
     mtime = 1_700_000_000.5
     os.utime(root / "Science" / "a.pdf", (mtime, mtime))
     library.rescan()
@@ -339,6 +340,8 @@ def test_insert_cover(library, book):
     assert copy.sha1 != book.sha1 and copy.mtime == mtime
     assert (copy.tags, copy.editor, copy.year, copy.isbn, copy.bookmarked) == \
         ("algo", "Manning", 2022, "9781617296055", True)
+    assert (copy.title, copy.authors, copy.meta_reviewed) == ("R in Action", ["Robert Kabacoff"], True)
+    assert copy.authors is not book.authors
     assert copy.category == "Science"
     # saved, with its thumbnail requested
     assert db_filenames(library)[copy.sha1] == "Science/a (covered).pdf"

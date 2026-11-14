@@ -116,3 +116,18 @@ def test_book_reader_shows_the_name_above_the_status(client, book):
     assert re.search(r'<div id="docText">\s*'
                      r'<span id="docName" title="Élève O&#39;Reilly.pdf">Élève O&#39;Reilly.pdf</span>\s*'
                      r'<span id="status">', html)
+
+
+def test_book_reader_review_badge(client, book):
+    # metadata not reviewed: link to the book page, in a new tab
+    html = client.get(f"/reader/{book.sha1}").text
+    assert re.search(rf'<a\s+id="reviewBadge"\s+href="/bookadmin/{book.sha1}"\s+target="_blank"', html)
+    assert "À relire</span></a>" in html
+
+    book.meta_reviewed = True
+    assert 'id="reviewBadge"' not in client.get(f"/reader/{book.sha1}").text
+
+
+def test_deprecated_reader_has_no_review_badge(client, book):
+    html = client.get(f"/pdfjsviewer/{book.sha1}/{book.filename}").text
+    assert 'id="reviewBadge"' not in html

@@ -29,6 +29,7 @@ from srcs.access import can_write_dir, check_write_access
 from srcs.logs import setup_logging
 from srcs.cache import Cache
 from srcs.book import DB_VERSION, BookDir
+from srcs.metadata.service import MetadataService
 from srcs.watcher import BookDirWatcher
 
 def _serves_requests():
@@ -135,6 +136,12 @@ def create_app(config_name):
 
     app.bookdir = BookDir(app.config['BOOK_DB'], app.cache,
                           read_only=bool(app.read_only_reasons))
+    # Suggestions of metadata, kept in the cache directory like the
+    # thumbnails (also written in read-only mode, when writable)
+    app.metadata = MetadataService(
+        app.config['CACHE_DIR'], workers=app.config['METADATA_WORKERS'],
+        nice=app.config['METADATA_NICE'], writable=app.cache.writable)
+    app.bookdir.metadata = app.metadata
     # Last known book list, available at once (no directory scan)
     app.bookdir.open(app.config['BOOK_DIR'])
     if app.bookdir.db_version is not None:
@@ -148,7 +155,10 @@ def create_app(config_name):
 
     # Startup scan: refresh book.db and the thumbnail cache, then keep them
     # up to date by watching the book directory.
+    # The scan also asks for the analysis of the books (metadata).
     if _serves_requests():
+        if app.config['METADATA_ANALYSIS']:
+            app.metadata.start()
         app.bookdir.scan_dir(app.config['BOOK_DIR'])
         if app.config['BOOK_DIR_WATCH']:
             app.bookdir_watcher = BookDirWatcher(

@@ -48,3 +48,31 @@ def test_cache(tmp_bookdir):
         sha1 = "1a9d880fe7a73558032a29d2a522b4667810cf75"
         name = cache.get_thumbname(sha1)
         assert name == str(tst_cachedir / str(sha1 + ".jpg"))
+
+def _sleep_after_reset():
+    import time
+
+    from srcs.cache import _reset_signal_handlers
+    _reset_signal_handlers()
+    time.sleep(30)
+
+
+def test_thumbnail_process_can_be_terminated():
+    """
+    A process forked from a gunicorn worker inherits its SIGTERM handler
+    (graceful exit): reset, it is terminated at once by SIGTERM, as sent by
+    multiprocessing to the daemon processes at exit.
+    """
+    import multiprocessing
+    import signal
+
+    previous = signal.signal(signal.SIGTERM, lambda signum, frame: None)
+    try:
+        p = multiprocessing.get_context("fork").Process(target=_sleep_after_reset, daemon=True)
+        p.start()
+        time.sleep(0.5)
+        p.terminate()
+        p.join(timeout=5)
+        assert p.exitcode == -signal.SIGTERM
+    finally:
+        signal.signal(signal.SIGTERM, previous)

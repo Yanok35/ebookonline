@@ -447,7 +447,7 @@ def test_db_version_1_is_migrated(library, tmp_bookdir):
     assert reopened.duplicates == []
     with open(library.dbfile) as f:
         db = json.load(f)
-    assert db["version"] == 2 and db["duplicates"] == []
+    assert db["version"] == srcs.book.DB_VERSION and db["duplicates"] == []
     assert Path(library.dbfile + ".v1.bak").exists()
 
 
@@ -535,3 +535,59 @@ def test_ignore_dir_marker_applies_to_subdirectories(library):
     library.rescan()
 
     assert names(library.get_booklist()) == ["a.pdf"]
+
+
+def test_db_version_2_is_migrated(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    db["version"] = 2
+    for b in db["booklist"]:
+        del b["title"], b["authors"], b["meta_reviewed"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    book = reopened.find_book_by_filename("a.pdf")
+    assert (book.title, book.authors, book.meta_reviewed) == ("", [], False)
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    assert db["version"] == srcs.book.DB_VERSION
+    assert db["booklist"][0]["authors"] == [] and db["booklist"][0]["meta_reviewed"] is False
+    assert Path(library.dbfile + ".v2.bak").exists()
+
+
+def test_metadata_fields_are_saved(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    book = library.find_book_by_filename("a.pdf")
+    book.title, book.authors, book.meta_reviewed = "Les Misérables", ["Victor Hugo"], True
+    library.save_db()
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    book = reopened.find_book_by_filename("a.pdf")
+    assert (book.title, book.authors, book.meta_reviewed) == ("Les Misérables", ["Victor Hugo"], True)
+
+
+class FakeMetadata:
+    """ Records the analysis requests of the scans """
+
+    def __init__(self):
+        self.requests = []
+
+    def request(self, sha1, pdf_path, urgent=False, force=False):
+        self.requests.append((sha1, pdf_path))
+
+
+def test_scan_requests_the_metadata_analysis(library):
+    library.metadata = FakeMetadata()
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "Science" / "b.pdf")
+    library.rescan()
+
+    assert sorted(library.metadata.requests) == sorted(
+        (b.sha1, os.path.join(library.dirpath, b.filename)) for b in library.get_booklist())

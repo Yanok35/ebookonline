@@ -21,7 +21,7 @@ file is missing. It is managed by `BookDir` in `srcs/book.py`.
   - when a book is edited in the admin pages (`/bookadmin/<sha1>`);
   - after a migration from an older schema version (see below).
 
-## Schema (version 2)
+## Schema (version 3)
 
 ### Top-level object
 
@@ -40,19 +40,27 @@ the books whose file is missing.
 
 | Key          | Type    | Description |
 |--------------|---------|-------------|
-| `sha1`       | string  | SHA-1 of the file content (40 hexadecimal characters). Identifies the book: a moved or renamed file keeps its entry. Also the name of its thumbnail in the cache (`<sha1>.jpg`). |
+| `sha1`       | string  | SHA-1 of the file content (40 hexadecimal characters). Identifies the book: a moved or renamed file keeps its entry. Also the name of its thumbnail (`<sha1>.jpg`) and of its metadata analysis (`<sha1>.meta.json.gz`) in the cache. |
 | `filename`   | string  | Path of the file, relative to `BOOK_DIR`, with `/` separators. |
 | `category`   | string  | First level directory of the file, `Generals` for a file at the root of `BOOK_DIR`. |
 | `mtime`      | number  | Modification time of the file (seconds since the epoch, float). `-1` when the file is missing. Recomputed from the file when loaded, see [Known limitations](#known-limitations). |
 | `filesize`   | integer | Size of the file in bytes. `0` when the file is missing. Recomputed from the file when loaded. |
 | `tags`       | string  | Tags, separated by spaces. `""` when none. |
-| `editor`     | string  | Editor. `""` when unknown. |
+| `title`      | string  | Title. `""` when unknown. |
+| `authors`    | array   | Authors, strings (`"Victor Hugo"`). `[]` when unknown. |
+| `editor`     | string  | Editor (publisher). `""` when unknown. |
 | `year`       | integer | Publication year. `0` when unknown. |
 | `isbn`       | string  | ISBN-10 or ISBN-13, digits (and final `X`) only. `""` when unknown. |
+| `meta_reviewed` | boolean | The user has reviewed (validated) the metadata of the book. |
 | `bookmarked` | boolean | Pinned book. |
 
 Required when loading: `sha1`, `filename`, `category`. The other keys take
 the default value above when missing.
+
+`title`, `authors`, `editor`, `year` and `isbn` are only set by the user:
+the suggestions found in the PDF files (see
+[technote-metadata-extract-&-analysis.md](technote-metadata-extract-&-analysis.md))
+prefill the forms, they are never written in `book.db` without the user.
 
 A book whose file is missing is kept, so that its settings are restored if
 the file comes back (anywhere in the book directory, with the same content).
@@ -77,7 +85,7 @@ their sha1 is not computed again by each scan.
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "min_reader_version": 1,
   "dirpath": "/srv/ebookonline/books",
   "booklist": [
@@ -88,9 +96,12 @@ their sha1 is not computed again by each scan.
       "category": "Generals",
       "filesize": 6418234,
       "tags": "r statistics",
+      "title": "R in Action",
+      "authors": ["Robert I. Kabacoff"],
       "editor": "Manning",
       "year": 2022,
       "isbn": "9781617296055",
+      "meta_reviewed": true,
       "bookmarked": false
     }
   ],
@@ -113,6 +124,7 @@ their sha1 is not computed again by each scan.
 | 0 | No `version` key. Books with `sha1`, `mtime`, `filename`, `category`, `filesize`, `tags`, `bookmarked`; `editor`, `year` and `isbn` in the most recent files. | — |
 | 1 | `version` key added. | — (not written) |
 | 2 | `duplicates` added. `min_reader_version` written since then. | 1 |
+| 3 | `title`, `authors` and `meta_reviewed` added to the books. | 1 |
 
 ## Versioning
 
@@ -129,7 +141,8 @@ numbers, or of the ext4 "read-only compatible" features:
 
 - a **compatible** change keeps it unchanged: older code ignores what it
   does not know and still reads the file correctly, e.g. a new key
-  (`duplicates` in version 2);
+  (`duplicates` in version 2, `title`, `authors` and `meta_reviewed` in
+  version 3);
 - an **incompatible** change sets it to the new version: older code would
   misread the file, e.g. a key whose type or meaning changes (`tags` becoming
   a list), or a restructuring of the file.
@@ -178,10 +191,11 @@ The server runs read-only, the reasons being listed in
     written to a temporary file of their directory, then renamed;
   - the thumbnail cache directory (`CACHE_DIR`), which must also be
     readable: when it can not be written, no thumbnail is generated
-    (`Cache.writable`) and "Régénérer la miniature" is disabled.
+    (`Cache.writable`) and "Régénérer la miniature" is disabled, and the
+    metadata analysis does not run.
 
-Then nothing is written on the disk, except the thumbnail cache (when it is
-writable):
+Then nothing is written on the disk, except the cache directory (thumbnails
+and metadata analysis, when it is writable):
 
 - the file is loaded as usual, the keys unknown to this version are ignored;
 - `BookDir.read_only` is set, and `BookDir.save_db()` writes nothing. No

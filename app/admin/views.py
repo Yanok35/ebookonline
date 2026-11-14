@@ -25,6 +25,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -33,7 +34,9 @@ from flask import (
 )
 from werkzeug.exceptions import RequestEntityTooLarge
 
+from app.admin import metadata
 from app.admin.forms import (
+    AnalyseForm,
     BookForm,
     CoverForm,
     DeleteFromTrashForm,
@@ -60,6 +63,7 @@ admin = Blueprint('admin', __name__)
 
 # Several forms on the book page: distinct field names and ids
 RESET_FORM_PREFIX = "reset"
+ANALYSE_FORM_PREFIX = "analyse"
 RENAME_FORM_PREFIX = "rename"
 COVER_FORM_PREFIX = "cover"
 MOVE_FORM_PREFIX = "move"
@@ -115,31 +119,55 @@ def bookadmin(sha1):
     if book is None:
         abort(404)
 
-    # Without POST data, the form shows the current values (0: no year)
-    form = BookForm(data={
+    books = d.get_all_books()
+    analysis = metadata.AnalysisState(current_app.metadata, book)
+    suggestions = metadata.suggestions(analysis.entry, book, books)
+
+    # Without POST data, the form shows the current values (0: no year),
+    # and the suggestions in the empty fields: nothing is saved until the
+    # user submits the form
+    form = BookForm(data=metadata.prefill({
+        "title": book.title,
+        "authors": list(book.authors),
         "tags": book.tags,
         "editor": book.editor,
         "year": book.year or None,
         "isbn": book.isbn,
-    })
+    }, suggestions))
     if form.validate_on_submit():
+        book.title = form.title.data
+        book.authors = form.authors.data or []
         book.tags = form.tags.data
         book.editor = form.editor.data
         book.year = form.year.data or 0
         book.isbn = form.isbn.data or ""
+        if form.review.data:
+            book.meta_reviewed = True
+        elif form.unreview.data:
+            book.meta_reviewed = False
         d.save_db()
         if d.read_only:
             flash("Base en lecture seule : modifications conservées en mémoire "
                   "seulement, elles seront perdues au redémarrage.", "error")
+        elif form.review.data:
+            flash("Modifications enregistrées, métadonnées marquées comme relues.")
+        elif form.unreview.data:
+            flash("Modifications enregistrées, métadonnées remises à relire.")
         else:
             flash("Modifications enregistrées.")
         return redirect(url_for(".bookadmin", sha1=sha1))
+    if form.is_submitted():
+        # the user input is shown: nothing is prefilled
+        for s in suggestions.values():
+            s.prefilled = False
 
-    books = d.get_all_books()
     return render_template(
         "admin/book.html",
         book=book,
         form=form,
+        suggestions=suggestions,
+        analysis=analysis,
+        analyse_form=AnalyseForm(prefix=ANALYSE_FORM_PREFIX),
         reset_form=ResetThumbnailForm(prefix=RESET_FORM_PREFIX),
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
@@ -151,6 +179,35 @@ def bookadmin(sha1):
         library_editors=sorted({b.editor for b in books if b.editor}),
         copies=d.get_duplicates().get(book.sha1, []),
         titre=f"eBook admin - {os.path.basename(book.filename)}")
+
+
+@admin.route("/bookadmin/<sha1>/analyse", methods=["POST"])
+@login_required
+def analyse(sha1):
+    """ Analyse the PDF file of a book again, before the other books """
+    book = _book_or_404(sha1)
+    form = AnalyseForm(prefix=ANALYSE_FORM_PREFIX)
+    if not form.validate_on_submit():
+        flash(CSRF_ERROR, "error")
+    elif not book.present:
+        flash("Le PDF est absent du répertoire des livres : "
+              "il ne peut pas être analysé.", "error")
+    elif not current_app.metadata.running:
+        flash("L'analyse des PDF est désactivée, ou le répertoire du cache "
+              "n'est pas accessible en écriture.", "error")
+    else:
+        current_app.metadata.request(sha1, os.path.join(book.book_dir, book.filename),
+                                     urgent=True, force=True)
+        flash("Analyse demandée : les suggestions sont mises à jour dans quelques secondes.")
+    return redirect(url_for(".bookadmin", sha1=sha1))
+
+
+@admin.route("/bookadmin/<sha1>/analysis")
+@login_required
+def analysis_state(sha1):
+    """ JSON: whether the analysis of a book is pending (book page) """
+    _book_or_404(sha1)
+    return jsonify(pending=current_app.metadata.is_pending(sha1))
 
 
 @admin.route("/reset-thumbnail/<sha1>", methods=["POST"])

@@ -51,6 +51,15 @@ class Config:
     BOOK_DIR_WATCH = True
     BOOK_DIR_WATCH_DELAY = 2.0
 
+    # Analyse the PDF files in background processes, to suggest their
+    # metadata (title, authors, editor, year, ISBN) in the admin pages: the
+    # results are kept in CACHE_DIR (<sha1>.meta.json.gz). METADATA_WORKERS
+    # processes, at the nice level METADATA_NICE (0: same priority as the
+    # server).
+    METADATA_ANALYSIS = True
+    METADATA_WORKERS = 1
+    METADATA_NICE = 10
+
     # Following are in current directory
     BOOK_DB = "book.db"
     STATE_FILE = "reader_states.json"
