@@ -109,3 +109,10 @@ def test_deprecated_readpdf_stays_in_the_book_directory(app, client, book):
     assert client.get("/readpdf/..%2Fbook.db").status_code == 404
     # (the double slash is redirected to a path in the book directory)
     assert client.get("/readpdf/%2Fetc%2Fpasswd", follow_redirects=True).status_code == 404
+
+
+def test_book_reader_shows_the_name_above_the_status(client, book):
+    html = client.get(f"/reader/{book.sha1}").text
+    assert re.search(r'<div id="docText">\s*'
+                     r'<span id="docName" title="Élève O&#39;Reilly.pdf">Élève O&#39;Reilly.pdf</span>\s*'
+                     r'<span id="status">', html)

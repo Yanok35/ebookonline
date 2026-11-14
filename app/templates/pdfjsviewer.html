@@ -122,9 +122,53 @@
             white-space: nowrap;
         }
 
+        /* Name of the document above the status (page position), the two
+           lines as high as the download button next to them */
+        /* shrinks when the line is full: a long name is cut (full name in
+           its tooltip) */
+        #docInfo {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            flex: 0 1 auto;
+            min-width: 50px;
+            max-width: 100%;
+        }
+
+        /* wide screen: the toolbar on a single line, the name gets the
+           space left */
+        @media (min-width: 1100px) {
+            #toolbar {
+                flex-wrap: nowrap;
+            }
+
+            #toolbar > *:not(#docInfo) {
+                flex-shrink: 0;
+                white-space: nowrap;
+            }
+        }
+
+        #docInfo a {
+            flex-shrink: 0;
+        }
+
+        #docText {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-end;
+            min-width: 0;
+        }
+
+        #docName,
         #status {
             font-size: 12px;
+            line-height: 1.2;
             color: #ddd;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         /* =====================================
@@ -490,7 +534,7 @@
                 justify-content: flex-start;
             }
 
-            #status {
+            #docText {
                 display: none;
             }
         }
@@ -594,13 +638,18 @@
 
         <div id="filler"></div>
 
-        <span id="status">Initialisation...</span>
+        <div id="docInfo">
+            <div id="docText">
+                <span id="docName" title="{{ documentName }}">{{ documentName }}</span>
+                <span id="status">Initialisation...</span>
+            </div>
 
-        <a href="{{ pdfurl }}">
-            <button id="downloadPdf" type="button" disabled title="Télécharger le PDF">
-                💾
-            </button>
-        </a>
+            <a href="{{ pdfurl }}">
+                <button id="downloadPdf" type="button" disabled title="Télécharger le PDF">
+                    💾
+                </button>
+            </a>
+        </div>
     </div>
 
 
