@@ -82,6 +82,7 @@ def book_list():
                            books=books,
                            nb_missing=sum(not b.present for b in books),
                            duplicates=current_app.bookdir.get_duplicates(),
+                           nb_trash=len(list_trash(current_app.bookdir.dirpath)),
                            titre="eBook admin")
 
 
