@@ -383,6 +383,51 @@ def _similar(field, k1, k2):
     return difflib.SequenceMatcher(None, k1, k2).ratio() >= (0.9 if field == "authors" else 0.88)
 
 
+# What follows a title in a longer form of it, when it is an addition: an
+# edition, a subtitle, a volume (', 2nd Edition', ': Mastering ...')
+RE_TITLE_ADDITION = re.compile(r"\s*(?:[,:;(\[/.]|[-–—]\s)")
+
+
+def _is_title_addition(short, long):
+    """
+    True when long is short followed by an addition to remove: after a
+    punctuation, or long enough (short is at least half of long). Not for a
+    title cut short ('Python' of 'Python In A Nutshell', its title page in
+    two font sizes).
+    """
+    if not norm_key(long).startswith(norm_key(short)):
+        return False
+    if long.casefold().startswith(short.casefold()) \
+            and RE_TITLE_ADDITION.match(long[len(short):]):
+        return True
+    return len(norm_key(short)) >= len(norm_key(long)) / 2
+
+
+def shortest_title(values):
+    """
+    The title of a group of similar candidates ([(value, weight)]), among
+    the best sources (80% of the best weight): the shortest one, unless it
+    is a title cut short of a longer one of these sources (then the longer
+    one: e.g. the title page in two font sizes), and a shorter form only
+    when what it removes is an addition (see _is_title_addition()). The
+    weaker sources (file name) are not used to lengthen a title: they
+    often add a subtitle, an author, a publisher.
+    """
+    top_weight = max(w for _, w in values)
+    top = sorted({v for v, w in values if w >= top_weight * 0.8}, key=len)
+    best_weight = sorted((v for v, w in values if w == top_weight), key=len)
+    best = best_weight[0]
+    # 'Python' of 'Python In A Nutshell': the full title
+    cut = [v for v in top if len(v) > len(best)
+           and norm_key(v).startswith(norm_key(best)) and not _is_title_addition(best, v)]
+    if cut:
+        best = cut[-1]
+    for value in top:
+        if value == best or _is_title_addition(value, best):
+            return value
+    return best
+
+
 def consolidate(field, field_candidates, referential=None):
     """
     {'value', 'score', 'sources', 'alternatives'} of a field, or None
@@ -407,11 +452,10 @@ def consolidate(field, field_candidates, referential=None):
     scored = sorted(((min(100, sum(g[1].values())), g) for g in groups), key=lambda x: -x[0])
 
     def best_value(g):
+        # best weight first, the longest one on a tie
         values = sorted(g[2], key=lambda x: (-x[1], -len(str(x[0]))))
         if field == "title":
-            # the shortest form among the best sources
-            top = values[0][1]
-            values = sorted([v for v in values if v[1] >= top * 0.8], key=lambda x: len(x[0]))
+            return shortest_title(values)
         return values[0][0]
 
     def sources(g):

@@ -113,10 +113,24 @@ For each field (`analyse.consolidate()`):
    spelling, same canonical name for the publishers);
 2. a group **scores the sum of the best weight of each of its sources**, up
    to 100: several independent sources which agree make a reliable value;
-3. the best group gives the suggestion, its best value (the shortest form
-   among the best ones for a title);
+3. the best group gives the suggestion, its best value (for a title, see
+   below);
 4. **conflict**: when the second group scores at least 80% of the first
    one, the score is lowered by 30%.
+
+For a title, among the values of the best sources (80% of the best weight)
+of the group (`shortest_title()`):
+
+- a shorter form is kept when what it removes is an addition: after a
+  punctuation (`Python Cookbook, 2nd Edition` -> `Python Cookbook`,
+  `Python Algorithms: Mastering ...` -> `Python Algorithms`), or when it
+  keeps at least half of the title (`YouTube Channels For Dummies` ->
+  `YouTube Channels`);
+- a title cut short is not kept: `Python` of `Python In A Nutshell`, when
+  the title page has the title in two font sizes;
+- similar spellings of the same weight: the shortest one;
+- the weaker sources (the file name) never lengthen a title: they often
+  add a subtitle, an author or a publisher.
 
 For the authors, every name scoring at least 75% of the first one (and 30)
 is kept, 4 at most.

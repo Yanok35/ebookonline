@@ -281,3 +281,25 @@ def test_filename_candidates():
     assert analyse.filename_candidates("python_data_science_9781491912058.pdf") == {
         "title": [["python data science", "filename", 15]],
     }
+
+
+@pytest.mark.parametrize("candidates, expected", [
+    # the title page in two font sizes: not cut short
+    ([["Python In A Nutshell", "xmp", 50], ["Python", "title-page", 50]], "Python In A Nutshell"),
+    # an edition, a subtitle after a punctuation: removed
+    ([["Python Cookbook, 2nd Edition", "xmp", 50], ["Python Cookbook", "title-page", 50]],
+     "Python Cookbook"),
+    ([["Python Algorithms: Mastering Basic Algorithms", "xmp", 50],
+      ["Python Algorithms", "title-page", 50]], "Python Algorithms"),
+    # most of the title: the rest is an addition
+    ([["YouTube Channels For Dummies", "xmp", 50], ["YouTube Channels", "title-page", 50]],
+     "YouTube Channels"),
+    # a weaker source does not lengthen the title
+    ([["Python 3", "large-font", 30], ["Python 3 for Absolute Beginners", "filename", 15]],
+     "Python 3"),
+    # similar spellings, the same weight: the shortest
+    ([["Flutter & Dart Cookbook", "xmp", 50], ["Flutter and Dart Cookbook", "title-page", 50]],
+     "Flutter & Dart Cookbook"),
+])
+def test_consolidate_title_forms(candidates, expected):
+    assert analyse.consolidate("title", candidates)["value"] == expected
