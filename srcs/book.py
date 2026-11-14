@@ -40,7 +40,7 @@ import posixpath
 # Schema version of the book database file (book.db). A file without version
 # is version 0. Increment it when the file format changes, and append the
 # conversion from the previous version to _MIGRATIONS.
-DB_VERSION = 2
+DB_VERSION = 3
 
 # Oldest schema version whose code can read a book.db of version DB_VERSION
 # (saved in the file as 'min_reader_version'). Unchanged by a compatible
@@ -64,8 +64,17 @@ def _migrate_v1(db):
     return db
 
 
+def _migrate_v2(db):
+    """ 2 -> 3: title, authors and meta_reviewed are added to the books """
+    for b in db["booklist"]:
+        b.setdefault("title", "")
+        b.setdefault("authors", [])
+        b.setdefault("meta_reviewed", False)
+    return db
+
+
 # _MIGRATIONS[n] converts the JSON content of a version n file to version n+1
-_MIGRATIONS = [_migrate_v0, _migrate_v1]
+_MIGRATIONS = [_migrate_v0, _migrate_v1, _migrate_v2]
 assert len(_MIGRATIONS) == DB_VERSION
 
 
@@ -96,11 +105,16 @@ class Book:
         # - prefilled at book insertion (parent dirname)
         self.category = None
 
-        # - empty after scan_dir
+        # - empty after scan_dir; never set from the suggestions of
+        #   srcs/metadata without the user
+        self.title = ""
+        self.authors = []
         self.year = 0
         self.editor = ""
         self.isbn = ""
         self.tags = ""
+        # the user has reviewed (and validated) the metadata
+        self.meta_reviewed = False
 
         # - those one should be user related/preferences
         self.score = 0 # between 0..5
@@ -150,9 +164,12 @@ class Book:
             "category": self.category,
             "filesize": self.filesize,
             "tags": self.tags,
+            "title": self.title,
+            "authors": self.authors,
             "editor": self.editor,
             "year": self.year,
             "isbn": self.isbn,
+            "meta_reviewed": self.meta_reviewed,
             "bookmarked": self.bookmarked,
         }
         return d
@@ -246,6 +263,9 @@ class BookDir:
                 if "bookmarked" in b.keys():
                     new.bookmarked = b["bookmarked"]
 
+                new.title = b.get("title", "")
+                new.authors = list(b.get("authors", []))
+                new.meta_reviewed = b.get("meta_reviewed", False)
                 new.editor = b.get("editor", "")
                 new.year = b.get("year", 0)
                 new.isbn = b.get("isbn", "")
@@ -569,6 +589,8 @@ class BookDir:
                 with self.lock:
                     copy.tags, copy.editor = book.tags, book.editor
                     copy.year, copy.isbn = book.year, book.isbn
+                    copy.title, copy.authors = book.title, list(book.authors)
+                    copy.meta_reviewed = book.meta_reviewed
                     copy.bookmarked = book.bookmarked
                 self.save_db()
         return relpath
