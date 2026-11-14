@@ -492,6 +492,28 @@ class BookDir:
             self.__rescan()
         return trashed
 
+    def restore_from_trash(self, relpath):
+        """
+        Move a file of the trash (Trash/...) back to its original path in
+        the book directory (never overwriting a file). A book gets its user
+        settings back. Returns the restored path, or raises BookFileError.
+        """
+        prefix = bookfileops.TRASH_DIR + "/"
+        relpath = bookfileops.check_relpath(relpath)
+        if not relpath.startswith(prefix):
+            raise BookFileError(f"not in the trash: {relpath!r}")
+        original = relpath[len(prefix):]
+        if bookfileops.is_ignored(self.dirpath, original):
+            raise BookFileError(f"{original!r} is ignored by the scan")
+        src = bookfileops.check_inside(self.dirpath, relpath)
+        dst = bookfileops.check_inside(self.dirpath, original)
+
+        with self._scan_lock:
+            bookfileops.move_no_replace(src, dst)
+            print("Restored from the trash: '%s'" % original)
+            self.__rescan()
+        return original
+
     def __trash(self, relpath):
         bookfileops.ensure_trash(self.dirpath)
         dst = bookfileops.check_inside(self.dirpath, posixpath.join(bookfileops.TRASH_DIR, relpath))
