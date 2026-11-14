@@ -194,3 +194,11 @@ def test_thumbnail_reset_refused(cache_read_only_app):
     response = client.post(f"/reset-thumbnail/{book.sha1}", data={"reset-csrf_token": token})
     assert "pas accessible en écriture" in client.get(response.location).text
     assert app.cache.requests == []
+
+
+def test_cover_form_is_disabled(book_dir_read_only_app):
+    app = book_dir_read_only_app
+    book = app.bookdir.find_book_by_filename("Science/a.pdf")
+    html = logged_in(app).get(f"/bookadmin/{book.sha1}").text
+    assert re.search(r'<input accept="image/jpeg,image/png" disabled id="cover-image"', html)
+    assert re.search(r'<input disabled id="cover-submit"', html)
