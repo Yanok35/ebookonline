@@ -123,9 +123,8 @@ def test_trash_duplicate(app, client, book):
     root = Path(app.config["BOOK_DIR"])
     make_pdf(root / "copy" / "a.pdf", title="A")
     app.bookdir.rescan()
-    html = client.get("/bookadmin/duplicates").text
-    # (non ASCII characters escaped by tojson)
-    assert 'confirm("Mettre la copie \\u00ab copy/a.pdf \\u00bb' in html
+    # no confirmation dialog for a copy
+    assert "confirm(" not in client.get("/bookadmin/duplicates").text
 
     response = client.post("/bookadmin/duplicates/trash", data={
         "csrf_token": token(client, "/bookadmin/duplicates"),
