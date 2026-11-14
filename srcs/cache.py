@@ -41,6 +41,9 @@ class Cache:
 
     instance = None
     file_list = []
+    # False when the cache directory can not be written (see srcs.access):
+    # no thumbnail is generated.
+    writable = True
 
     @classmethod
     def get_instance(cls, *args):
@@ -88,12 +91,18 @@ class Cache:
 
     def create_thumbnail(self, pdffilename, sha1):
 
+        if not self.writable:
+            return
+
         thumbname = self.get_thumbname(sha1)
 
         # Uncomment to avoid re-generation
         if os.path.exists(thumbname):
             return
 
+        self._queue_thumbnail(pdffilename, thumbname)
+
+    def _queue_thumbnail(self, pdffilename, thumbname):
         # Push thumbnail generation request to the process pool
         msg = (pdffilename, thumbname)
         self.sha1_queue.put(msg)

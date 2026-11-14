@@ -1,3 +1,4 @@
+import os
 import time
 
 import pytest
@@ -19,7 +20,8 @@ class FakeCache(Cache):
         self.subproc = []
         self.requests = []
 
-    def create_thumbnail(self, pdffilename, sha1):
+    def _queue_thumbnail(self, pdffilename, thumbname):
+        sha1 = os.path.splitext(os.path.basename(thumbname))[0]
         self.requests.append((pdffilename, sha1))
 
     def __del__(self):
