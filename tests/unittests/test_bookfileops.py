@@ -7,6 +7,8 @@ from srcs.bookfileops import (
     category_of,
     check_inside,
     check_relpath,
+    delete_from_trash,
+    empty_trash,
     ensure_trash,
     is_ignored,
     list_categories,
@@ -140,3 +142,64 @@ def test_list_trash(tmp_path):
     assert [(f.filename, f.original) for f in files] == \
         [("Trash/b.pdf", "b.pdf"), ("Trash/Science/a.pdf", "Science/a.pdf")]
     assert files[0].filesize == 10
+
+
+def trash_files(tmp_path, *names):
+    ensure_trash(str(tmp_path))
+    for name in names:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(name)
+
+
+def test_delete_from_trash(tmp_path):
+    trash_files(tmp_path, "Trash/Science/sub/a.pdf", "Trash/Science/b.pdf")
+    assert delete_from_trash(str(tmp_path), "Trash/Science/sub/a.pdf") == "Trash/Science/sub/a.pdf"
+    assert not (tmp_path / "Trash/Science/sub").exists()   # left empty: removed
+    assert (tmp_path / "Trash/Science/b.pdf").exists()
+    delete_from_trash(str(tmp_path), "Trash/Science/b.pdf")
+    assert not (tmp_path / "Trash/Science").exists()
+    # the trash itself, and its marker, are kept
+    assert (tmp_path / "Trash/.ebook-ignore-dir").exists()
+
+
+@pytest.mark.parametrize("relpath", [
+    "a.pdf",                    # not in the trash
+    "Science/a.pdf",
+    "Trash/missing.pdf",
+    "Trash/../a.pdf",
+    "Trash/.ebook-ignore-dir",
+    "Trash",
+])
+def test_delete_from_trash_refused(tmp_path, relpath):
+    trash_files(tmp_path, "Trash/a.pdf")
+    (tmp_path / "a.pdf").write_text("A")
+    (tmp_path / "Science").mkdir()
+    (tmp_path / "Science/a.pdf").write_text("A")
+    with pytest.raises(BookFileError):
+        delete_from_trash(str(tmp_path), relpath)
+    assert (tmp_path / "a.pdf").exists() and (tmp_path / "Science/a.pdf").exists()
+    assert (tmp_path / "Trash/a.pdf").exists()
+
+
+def test_delete_from_trash_through_a_symlink_outside(tmp_path):
+    book_dir = tmp_path / "books"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "a.pdf").write_text("A")
+    book_dir.mkdir()
+    ensure_trash(str(book_dir))
+    os.symlink(outside, book_dir / "Trash" / "link")
+    with pytest.raises(BookFileError):
+        delete_from_trash(str(book_dir), "Trash/link/a.pdf")
+    assert (outside / "a.pdf").exists()
+
+
+def test_empty_trash(tmp_path):
+    assert empty_trash(str(tmp_path)) == 0
+    trash_files(tmp_path, "Trash/a.pdf", "Trash/Science/b.pdf", "Trash/notes.txt")
+    (tmp_path / "c.pdf").write_text("C")
+    assert empty_trash(str(tmp_path)) == 2
+    assert list_trash(str(tmp_path)) == []
+    assert not (tmp_path / "Trash/Science").exists()
+    # only the PDF files of the trash are deleted
+    assert (tmp_path / "Trash/notes.txt").exists() and (tmp_path / "c.pdf").exists()
