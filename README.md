@@ -88,8 +88,11 @@ TODO
 
 The proxy must forward the request path percent-encoded, as sent by the
 browser: gunicorn (27 and newer) rejects with a 400 error a path with raw
-non-ASCII characters, such as the name of a PDF file with an accent. To check
-it through the proxy (a redirection to the login page is expected, not 400):
+non-ASCII characters. The pages and the reader use the sha1 of the books
+(`/reader/<sha1>`, `/pdf/<sha1>`), but the deprecated routes, kept for old
+links, have the name of the PDF file in their path (`/readpdf/<file>`,
+`/pdfjsviewer/<sha1>/<file>`), possibly with an accent. To check it through
+the proxy (a redirection to the login page is expected, not 400):
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" "https://<server>/readpdf/%C3%A9l%C3%A8ve.pdf"
