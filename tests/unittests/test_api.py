@@ -32,3 +32,12 @@ def test_invalid_reader_state(client, tmp_bookdir):
     response = client.put("/api/reader/state", json=dict(STATE, pageNumber=0))
     assert response.status_code == 400
     assert not (tmp_bookdir[0] / "reader_states.json").exists()
+
+
+def test_unreadable_state_file_is_logged(app, client, tmp_bookdir, caplog):
+    # a directory instead of the file
+    (tmp_bookdir[0] / "reader_states.json").mkdir()
+    response = client.get("/api/reader/state/doc-1")
+    assert response.status_code == 500
+    assert response.json["error"] == "Impossible de lire les états enregistrés."
+    assert "Impossible de lire le fichier des états." in caplog.text
