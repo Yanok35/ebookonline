@@ -205,20 +205,26 @@ a damaged file is not opened at each start.
 - the server process keeps the queue of the books, in a dispatcher thread;
   a request marked urgent ("Relancer l'analyse" on the book page) goes
   first;
-- `METADATA_WORKERS` worker processes (1 by default), at the nice level
-  `METADATA_NICE` (10 by default), make the cache files up to date
-  (`store.update()`). A worker only gets a sha1 and a path and writes one
-  file: several of them can run;
+- a pool of `METADATA_WORKERS` worker processes (1 by default, 0 for half
+  of the processors), at the nice level `METADATA_NICE` (10 by default),
+  make the cache files up to date (`store.update()`). A worker only gets a
+  sha1 and a path and writes one file, so the workers share nothing but the
+  queue: the dispatcher feeds a queue bounded to one task per worker, so
+  that an urgent request waits for one task per worker at most;
 - a book taking more than 5 minutes is stopped, and saved as failed;
-- a worker which dies (e.g. a crash of MuPDF on a malformed file) is
-  restarted, and its book saved as failed;
+- a worker which dies on a book (e.g. a crash of MuPDF on a malformed
+  file) is restarted at once, and its book saved as failed;
+- a worker which dies without processing a book (e.g. at its start, by an
+  error of configuration) is restarted after 1, 2, 4, ... seconds, 60 at
+  most, not in a loop; the delays start again from 1 s once it has
+  processed a book;
 - the workers are started by `forkserver` (not forked from the server,
   which has threads), and exit with the server.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `METADATA_ANALYSIS` | `True` | Run the background analysis |
-| `METADATA_WORKERS` | `1` | Number of worker processes |
+| `METADATA_WORKERS` | `1` | Number of worker processes, 0 for half of the processors |
 | `METADATA_NICE` | `10` | Nice level of the workers (0: same priority as the server) |
 
 When the cache directory can not be written (`Cache.writable`, see the
@@ -226,8 +232,21 @@ read-only mode in `technote-bookdb.md`), nothing runs; the existing cache
 files are still read. In the other read-only cases, the cache files are
 written, like the thumbnails: they do not depend on `book.db`.
 
-Order of magnitude: about 0.15 s per book on a desktop computer, one
-process.
+Order of magnitude, on a desktop computer (8 processors), 106 technical
+books:
+
+| Workers | Time | Per book |
+|---------|------|----------|
+| 1 | 9.1 s | 0.09 s |
+| 2 | 5.0 s | 0.05 s |
+| 4 | 3.0 s | 0.03 s |
+| 7 | 3.0 s | 0.03 s |
+
+Only the first start of a server on a large library analyses every book;
+then only the new ones. Each worker reads one PDF file at a time, at most
+21 pages, and only their text (the images of the pages are not loaded):
+about 80 MB of private memory per worker at most on this library (300 MB
+when the images of the title pages were loaded).
 
 ## Book page (`/bookadmin/<sha1>`)
 

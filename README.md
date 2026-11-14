@@ -84,7 +84,7 @@ overridden, e.g. `EBOOKONLINE_BOOK_DIR=/srv/books`.
 
 ### Metadata analysis
 
-The PDF files are analysed in a background process, at a low priority, to
+The PDF files are analysed in background processes, at a low priority, to
 suggest the title, authors, editor, year and ISBN of the books in the admin
 pages (nothing is written in `book.db` without the user). The results are
 kept in `CACHE_DIR`, next to the thumbnails. See `METADATA_ANALYSIS`,
