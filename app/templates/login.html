@@ -16,6 +16,13 @@
                 <input name="password" type="password" id="inputPassword" class="form-control" placeholder="Password" required >
                 <button class="btn btn-lg btn-primary btn-block" type="submit">Sign up</button>
             </form>
+            {% if read_only %}
+            <p class="read-only-note">
+                &#9888; Site en lecture seule : les modifications faites pendant
+                cette session (épingles, positions de lecture, administration) ne
+                seront pas enregistrées.
+            </p>
+            {% endif %}
         </div>
     </body>
 </html>
