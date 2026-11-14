@@ -34,6 +34,7 @@ from flask import (
 from app.admin.forms import (
     BookForm,
     DeleteFromTrashForm,
+    EmptyTrashForm,
     MoveBookForm,
     RenameBookForm,
     ResetThumbnailForm,
@@ -47,6 +48,7 @@ from srcs.bookfileops import (
     ROOT_CATEGORY,
     BookFileError,
     delete_from_trash,
+    empty_trash,
     list_categories,
     list_trash,
 )
@@ -292,6 +294,7 @@ def trash():
                            files=list_trash(current_app.bookdir.dirpath),
                            restore_form=RestoreForm(),
                            delete_form=DeleteFromTrashForm(),
+                           empty_form=EmptyTrashForm(),
                            titre="eBook admin - corbeille")
 
 
@@ -323,4 +326,20 @@ def delete():
             lambda: delete_from_trash(current_app.bookdir.dirpath, filename))
         if deleted:
             flash(f"Fichier supprimé définitivement : {deleted}")
+    return redirect(url_for(".trash"))
+
+
+@admin.route("/bookadmin/trash/empty", methods=["POST"])
+@login_required
+def empty():
+    form = EmptyTrashForm()
+    if not form.validate_on_submit():
+        _flash_form_errors(form)
+    else:
+        count = _file_operation(
+            "empty the trash",
+            lambda: empty_trash(current_app.bookdir.dirpath))
+        if count is not None:
+            flash(f"Corbeille vidée : {count} fichier{'s' if count > 1 else ''} "
+                  f"supprimé{'s' if count > 1 else ''} définitivement.")
     return redirect(url_for(".trash"))

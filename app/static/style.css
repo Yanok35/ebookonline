@@ -375,3 +375,10 @@ form.inline-action button {
     display: inline-block;
     margin-right: 0.3em;
 }
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1em;
+}

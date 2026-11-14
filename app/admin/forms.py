@@ -139,3 +139,9 @@ class DeleteFromTrashForm(FlaskForm):
 
     filename = HiddenField(validators=[DataRequired()])
     submit = SubmitField("Supprimer")
+
+
+class EmptyTrashForm(FlaskForm):
+    """ Delete for good all the files of the trash (CSRF protection only) """
+
+    submit = SubmitField("Vider la corbeille")
