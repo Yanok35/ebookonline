@@ -42,6 +42,32 @@ def make_pdf(path, title=None):
     return path
 
 
+def make_book_pdf(path, pages, metadata=None, xmp=None):
+    """
+    Write a PDF file with text (PyMuPDF), for the metadata analysis: pages
+    is a list of pages, each one a list of (font size, line of text).
+    metadata: Info dictionary, e.g. {"title": ..., "author": ...}; xmp: XMP
+    metadata (XML string).
+    """
+    import pymupdf
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = pymupdf.open()
+    for lines in pages:
+        page = doc.new_page(width=420, height=595)
+        y = 60
+        for size, text in lines:
+            page.insert_text((30, y), text, fontsize=size)
+            y += size + 8
+    if metadata:
+        doc.set_metadata(metadata)
+    if xmp:
+        doc.set_xml_metadata(xmp)
+    doc.save(path)
+    doc.close()
+    return path
+
+
 def wait_until(predicate, timeout=5.0, interval=0.05):
     """ Poll predicate() until it is true, or fail after timeout seconds """
     deadline = time.monotonic() + timeout
