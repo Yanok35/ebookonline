@@ -171,6 +171,26 @@
             white-space: nowrap;
         }
 
+        /* Metadata of the book not reviewed yet: link to its admin page */
+        #reviewBadge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 9px;
+            border-radius: 12px;
+            background: #b7791f;
+            color: white;
+            font-size: 12px;
+            text-decoration: none;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        #reviewBadge:hover,
+        #reviewBadge:focus-visible {
+            background: #d69e2e;
+        }
+
         /* =====================================
            RECHERCHE
            ===================================== */
@@ -537,6 +557,10 @@
             #docText {
                 display: none;
             }
+
+            #reviewBadge .label {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -637,6 +661,16 @@
         </button>
 
         <div id="filler"></div>
+
+        {% if reviewUrl %}
+        <a
+            id="reviewBadge"
+            href="{{ reviewUrl }}"
+            target="_blank"
+            rel="noopener"
+            title="Métadonnées du livre à relire : ouvrir sa fiche (nouvel onglet)"
+        >📝<span class="label">À relire</span></a>
+        {% endif %}
 
         <div id="docInfo">
             <div id="docText">

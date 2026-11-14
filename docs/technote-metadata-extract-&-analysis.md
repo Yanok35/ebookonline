@@ -247,6 +247,13 @@ form.
   field, with its source and weight, and the text extracted from the key
   pages: to understand a wrong suggestion.
 
+## Reader (`/reader/<sha1>`)
+
+While the metadata of a book is not reviewed (`meta_reviewed` false), the
+toolbar of the reader shows a badge "À relire" (only its icon on a narrow
+screen), a link to the book page, opened in a new tab so that the reading
+goes on. It is not shown by the deprecated route `/pdfjsviewer/...`.
+
 ## Known limitations
 
 - No OCR: a scan without text layer only has its file name and its
