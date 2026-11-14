@@ -11,6 +11,7 @@ After=network.target
 Type=simple
 User=ebookonline
 Group=ebookonline
+SyslogIdentifier=ebookonline
 # book.db and reader_states.json are written in this directory
 WorkingDirectory=/opt/ebookonline
 
