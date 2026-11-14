@@ -423,3 +423,13 @@ input:disabled {
     margin: 0 0 0.5em 0;
     font-weight: bold;
 }
+
+.admin .book-cover form.cover-form {
+    max-width: 300px;
+}
+
+.admin .book-cover form.cover-form input[type=file] {
+    display: block;
+    max-width: 100%;
+    margin: 0 auto 0.4em auto;
+}

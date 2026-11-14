@@ -55,6 +55,10 @@ class Config:
     BOOK_DB = "book.db"
     STATE_FILE = "reader_states.json"
 
+    # Largest request body, in bytes: the image of a cover page (20 MiB at
+    # most, see srcs/pdfcover.py), with the other fields of its form
+    MAX_CONTENT_LENGTH = 21 * 1024 * 1024
+
     # Logs on stderr (journald under systemd), from this level: DEBUG,
     # INFO, WARNING, ERROR
     LOG_LEVEL = "INFO"
