@@ -305,3 +305,65 @@ def test_file_operations_keep_the_modification_time(library, book):
     # and the book.db entry
     assert book.mtime == mtime
 
+
+def cover_image():
+    import pymupdf
+
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 60, 90), 0)
+    pix.set_rect(pix.irect, (200, 60, 60))
+    return pix.tobytes("jpeg")
+
+
+def test_insert_cover(library, book):
+    import pymupdf
+
+    root = Path(library.dirpath)
+    book.editor, book.year, book.isbn = "Manning", 2022, "9781617296055"
+    mtime = 1_700_000_000.5
+    os.utime(root / "Science" / "a.pdf", (mtime, mtime))
+    library.rescan()
+    original = (root / "Science" / "a.pdf").read_bytes()
+    library.cache.requests.clear()
+
+    assert library.insert_cover(book.sha1, cover_image()) == "Science/a (covered).pdf"
+
+    # the original is not changed
+    assert (root / "Science" / "a.pdf").read_bytes() == original
+    assert book.filename == "Science/a.pdf" and book.present
+    # the copy: one more page, same modification time
+    copy_path = root / "Science" / "a (covered).pdf"
+    assert pymupdf.open(copy_path).page_count == 2
+    assert os.stat(copy_path).st_mtime == mtime
+    # a new book, with the user settings of the original one
+    copy = library.find_book_by_filename("Science/a (covered).pdf")
+    assert copy.sha1 != book.sha1 and copy.mtime == mtime
+    assert (copy.tags, copy.editor, copy.year, copy.isbn, copy.bookmarked) == \
+        ("algo", "Manning", 2022, "9781617296055", True)
+    assert copy.category == "Science"
+    # saved, with its thumbnail requested
+    assert db_filenames(library)[copy.sha1] == "Science/a (covered).pdf"
+    assert copy.sha1 in [sha1 for _, sha1 in library.cache.requests]
+    # no temporary file left
+    assert sorted(p.name for p in (root / "Science").iterdir()) == ["a (covered).pdf", "a.pdf"]
+
+    # again: another name
+    assert library.insert_cover(book.sha1, cover_image()) == "Science/a (covered) (2).pdf"
+
+
+def test_insert_cover_refused(library, book, tmp_bookdir):
+    root = Path(library.dirpath)
+    with pytest.raises(BookFileError, match="not a JPEG or PNG image"):
+        library.insert_cover(book.sha1, b"not an image")
+    with pytest.raises(BookFileError, match="unknown book"):
+        library.insert_cover("0" * 40, cover_image())
+    (root / "bad.pdf").write_bytes(b"not a PDF file")
+    library.rescan()
+    with pytest.raises(BookFileError, match="can not read the PDF file"):
+        library.insert_cover(library.find_book_by_filename("bad.pdf").sha1, cover_image())
+    # nothing written
+    assert sorted(p.name for p in root.rglob("*")) == ["Science", "a.pdf", "b.pdf", "bad.pdf"]
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]), read_only=True)
+    reopened.open(library.dirpath)
+    with pytest.raises(BookFileError, match="read-only"):
+        reopened.insert_cover(book.sha1, cover_image())
