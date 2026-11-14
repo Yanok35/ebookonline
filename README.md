@@ -202,8 +202,7 @@ pytest -s -v tests/
 
 ## Start the Flask server
 ```bash
-# ./ebookonline.py
-FLASK_ENV=debug FLASK_APP=ebookonline.py flask run --host=0.0.0.0
+FLASK_APP=ebookonline.py flask run --host=0.0.0.0 --reload --debug
 ./ebookonline.py runserver --host=0.0.0.0
 ```
 
