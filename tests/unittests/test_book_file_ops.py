@@ -216,3 +216,48 @@ def test_move_book_to_category_refused(library, book, category, tmp_path):
         library.move_book_to_category(book.sha1, category)
     assert book.filename == "Science/a.pdf"
     assert not (root / "New").exists()
+
+
+def test_restore_from_trash(library, book):
+    root = Path(library.dirpath)
+    trashed = library.trash_book(book.sha1)
+    os.rmdir(root / "Science")  # the category was removed in the meantime
+
+    assert library.restore_from_trash(trashed) == "Science/a.pdf"
+    assert (root / "Science" / "a.pdf").exists()
+    assert not (root / "Trash" / "Science" / "a.pdf").exists()
+    # the book is back, with its settings
+    assert book.present and book.filename == "Science/a.pdf"
+    assert book.tags == "algo" and book.bookmarked
+
+
+def test_restore_a_duplicate_from_trash(library, book):
+    make_pdf(Path(library.dirpath) / "copy" / "a.pdf", title="A")
+    library.rescan()
+    trashed = library.trash_duplicate("copy/a.pdf")
+    assert library.duplicates == []
+    library.restore_from_trash(trashed)
+    assert [d.filename for d in library.duplicates] == ["copy/a.pdf"]
+    assert book.filename == "Science/a.pdf"
+
+
+def test_restore_from_trash_never_overwrites(library, book):
+    root = Path(library.dirpath)
+    trashed = library.trash_book(book.sha1)
+    make_pdf(root / "Science" / "a.pdf", title="another one")
+    with pytest.raises(BookFileError, match="already exists"):
+        library.restore_from_trash(trashed)
+    assert (root / trashed).exists()
+
+
+@pytest.mark.parametrize("relpath", [
+    "Science/a.pdf",            # not in the trash
+    "Trash/missing.pdf",
+    "Trash/../b.pdf",
+    "Trash",
+])
+def test_restore_from_trash_refused(library, book, relpath):
+    library.trash_book(book.sha1)
+    with pytest.raises(BookFileError):
+        library.restore_from_trash(relpath)
+    assert (Path(library.dirpath) / "Trash" / "Science" / "a.pdf").exists()
