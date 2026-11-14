@@ -21,7 +21,7 @@ import os
 
 import click
 from config import Config
-from flask import Flask, current_app
+from flask import Flask, current_app, request, session
 from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -76,6 +76,22 @@ def _read_only_context():
         "read_only": bool(current_app.read_only_reasons),
         "read_only_reasons": current_app.read_only_reasons,
     }
+
+def _log_not_found(e):
+    """
+    For fail2ban: an anonymous client asking for a page which does not exist
+    (typically a scan for vulnerable software) is logged as a warning, the
+    address first (the path is chosen by the client). A logged in user (e.g.
+    a stale link) is only logged as info, with another message.
+    """
+    user = session.get("username")
+    if user is None:
+        current_app.logger.warning("Not found from %s: %s %r",
+                                   request.remote_addr, request.method, request.path)
+    else:
+        current_app.logger.info("Not found from %s for user %r: %s %r", request.remote_addr,
+                                user, request.method, request.path)
+    return e
 
 def create_app(config_name):
     # instance_relative_config: relative paths given to from_pyfile() are
@@ -148,5 +164,7 @@ def create_app(config_name):
 
     from .api import api as api_blueprint
     app.register_blueprint(api_blueprint)
+
+    app.register_error_handler(404, _log_not_found)
 
     return app
