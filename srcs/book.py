@@ -19,8 +19,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
+import logging
 import shutil
-import sys
 import tempfile
 import threading
 from collections import namedtuple
@@ -31,6 +31,8 @@ from srcs.bookfileops import IGNORE_MARKER, BookFileError
 from srcs.cache import Cache
 from srcs.cache import sha1_file
 from srcs.search import fuzzy_search
+
+log = logging.getLogger(__name__)
 
 import os
 import posixpath
@@ -203,7 +205,7 @@ class BookDir:
 
         # When dbfile is empty, json parser trig an exception.
         if not os.stat(self.dbfile).st_size:
-            print("Warning: dbfile is empty")
+            log.warning("%s is empty", self.dbfile)
             return
 
         booklist = []
@@ -222,9 +224,9 @@ class BookDir:
                         f"{self.dbfile}: schema version {version} can only "
                         f"be read by schema version {min_reader} or newer, "
                         f"this is version {DB_VERSION}: upgrade ebookonline")
-                print(f"*** Warning: {self.dbfile}: schema version {version} "
-                      f"is newer than the supported version {DB_VERSION}: "
-                      f"read-only, changes are kept in memory only")
+                log.warning("%s: schema version %d is newer than the supported "
+                            "version %d: read-only, changes are kept in memory only",
+                            self.dbfile, version, DB_VERSION)
                 self.read_only = True
                 self.db_version = version
             if version < DB_VERSION:
@@ -257,15 +259,15 @@ class BookDir:
             self.duplicates = duplicates
 
         if version < DB_VERSION and self.read_only:
-            print(f"*** Warning: {self.dbfile}: schema version {version} is "
-                  f"migrated to {DB_VERSION} in memory only (read-only)")
+            log.warning("%s: schema version %d is migrated to %d in memory "
+                        "only (read-only)", self.dbfile, version, DB_VERSION)
         elif version < DB_VERSION:
             # Keep the file of the previous version, the first time only
             backup = f"{self.dbfile}.v{version}.bak"
             if not os.path.exists(backup):
                 shutil.copy2(self.dbfile, backup)
-            print(f"Migrate {self.dbfile} from schema version {version} to "
-                  f"{DB_VERSION} (backup: {backup})")
+            log.info("Migrate %s from schema version %d to %d (backup: %s)",
+                     self.dbfile, version, DB_VERSION, backup)
             self.save_db()
 
     def to_json(self):
@@ -436,7 +438,7 @@ class BookDir:
             if relpath == book.filename:
                 return relpath
             bookfileops.move_no_replace(os.path.join(self.dirpath, book.filename), dst)
-            print("Book moved: '%s' -> '%s'" % (book.filename, relpath))
+            log.info("Book moved: '%s' -> '%s'", book.filename, relpath)
             # Known at its new path: the rescan does not hash it again
             with self.lock:
                 book.filename = relpath
@@ -484,7 +486,7 @@ class BookDir:
         with self._scan_lock:
             book = self.__present_book(sha1)
             trashed = self.__trash(book.filename)
-            print("Book trashed: '%s' -> '%s'" % (book.filename, trashed))
+            log.info("Book trashed: '%s' -> '%s'", book.filename, trashed)
             self.__rescan()
         return trashed
 
@@ -499,7 +501,7 @@ class BookDir:
                     or not os.path.isfile(os.path.join(self.dirpath, relpath)):
                 raise BookFileError(f"not a duplicate file: {relpath!r}")
             trashed = self.__trash(relpath)
-            print("Duplicate trashed: '%s' -> '%s'" % (relpath, trashed))
+            log.info("Duplicate trashed: '%s' -> '%s'", relpath, trashed)
             self.__rescan()
         return trashed
 
@@ -522,7 +524,7 @@ class BookDir:
 
         with self._scan_lock:
             bookfileops.move_no_replace(src, dst)
-            print("Restored from the trash: '%s'" % original)
+            log.info("Restored from the trash: '%s'", original)
             self.__rescan()
         return original
 
@@ -603,8 +605,8 @@ class BookDir:
                     continue
                 refreshed_duplicates.append(d)
                 if d not in known_duplicates:
-                    print("*** Warning: duplicate PDF file: '%s' (book '%s')"
-                          % (d.filename, book_file.filename))
+                    log.info("Duplicate PDF file: '%s' (book '%s')",
+                             d.filename, book_file.filename)
 
         new_contents = []
         for sha1, group in groups.items():
@@ -617,7 +619,7 @@ class BookDir:
             # reappeared): its user settings are kept.
             f = next((f for f in group if f.filename == book.filename), group[0])
             if f.filename != book.filename:
-                print("Book moved: '%s' -> '%s'" % (book.filename, f.filename))
+                log.info("Book moved: '%s' -> '%s'", book.filename, f.filename)
                 changed = True
             update(book, f)
             take(book)
@@ -629,10 +631,10 @@ class BookDir:
             book, f = next(((b, f) for f in group for b in remaining
                             if b.filename == f.filename), (None, group[0]))
             if book:
-                print("Book modified: '%s'" % f.filename)
+                log.info("Book modified: '%s'", f.filename)
                 book.sha1 = f.sha1
             else:
-                print("New book: '%s'" % f.filename)
+                log.info("New book: '%s'", f.filename)
                 book = Book(book_dir)
                 book.set_sha1(f.sha1)
                 remaining.append(book)
@@ -648,7 +650,7 @@ class BookDir:
         # let's keep those entry to keep user settings in case they reappears
         for b in remaining:
             if b.present:
-                print("Book missing: '%s'" % b.filename)
+                log.info("Book missing: '%s'", b.filename)
                 changed = True
             b.mark_missing()
             refreshed_booklist.append(b)
@@ -656,7 +658,7 @@ class BookDir:
         with self.lock:
             self.booklist = refreshed_booklist
             self.duplicates = refreshed_duplicates
-            print("Directory db fully parsed. Save JSON db file...")
+            log.info("Directory scanned, save '%s'", self.dbfile)
             self.save_db()
 
         return changed
@@ -670,7 +672,7 @@ class BookDir:
         """
         files = []
         hashed = False
-        print("Scanning directory %s for PDF files..." % book_dir)
+        log.info("Scanning directory '%s' for PDF files", book_dir)
         for (dir, subdirs, filenames) in os.walk(book_dir):
 
             # Allow user to ignore some directories using a marker hidden
@@ -704,14 +706,12 @@ class BookDir:
                 if known and known.mtime == mtime:
                     sha1 = known.sha1
                 else:
-                    print("Compute sha1 for %s..." % name, end="")
-                    sys.stdout.flush()
+                    log.debug("Compute sha1 of %s", relpath)
                     try:
                         sha1 = sha1_file(abspath)
                     except OSError as e:
-                        print("failed: %s" % e)
+                        log.warning("Can not compute sha1 of %s: %s", relpath, e)
                         continue
-                    print("done")
                     hashed = True
 
                 files.append(PdfFile(relpath, category, mtime, filesize, sha1))
