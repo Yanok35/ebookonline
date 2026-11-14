@@ -35,6 +35,7 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.admin import metadata
+from srcs import naming
 from app.admin.forms import (
     AnalyseForm,
     BookForm,
@@ -173,6 +174,7 @@ def bookadmin(sha1):
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
                                    data={"name": os.path.basename(book.filename)}),
+        pattern_name=_pattern_name(book),
         move_form=_move_form(data={"category": _category_dir(book)}),
         trash_form=TrashBookForm(prefix=TRASH_FORM_PREFIX),
         library_tags=sorted({t for b in books for t in b.tags.split()}),
@@ -280,6 +282,26 @@ def _file_operation(description, operation):
         return None
     current_app.logger.warning("%s: %s -> '%s'", user, description, result)
     return result
+
+
+def _pattern_name(book):
+    """
+    {'pattern', 'name' or 'error', 'taken', 'conform'}: the name after
+    FILENAME_PATTERN, with a suffix ' (2)', ... when another file of the
+    directory has it ('taken': this name)
+    """
+    pattern = current_app.config["FILENAME_PATTERN"]
+    current = os.path.basename(book.filename)
+    try:
+        wanted = naming.file_name(pattern, book)
+        name = naming.free_name(os.path.join(current_app.bookdir.dirpath,
+                                             os.path.dirname(book.filename)),
+                                wanted, own=current)
+    except naming.NamingError as e:
+        return {"pattern": pattern, "name": None, "error": str(e), "taken": None,
+                "conform": False}
+    return {"pattern": pattern, "name": name, "error": None,
+            "taken": wanted if name != wanted else None, "conform": name == current}
 
 
 def _category_dir(book):

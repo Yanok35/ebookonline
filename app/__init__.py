@@ -30,6 +30,7 @@ from srcs.logs import setup_logging
 from srcs.cache import Cache
 from srcs.book import DB_VERSION, BookDir
 from srcs.metadata.service import MetadataService
+from srcs.naming import NamingError, check_pattern
 from srcs.watcher import BookDirWatcher
 
 def _serves_requests():
@@ -113,6 +114,11 @@ def create_app(config_name):
             "SECRET_KEY is not set: define EBOOKONLINE_SECRET_KEY or set it "
             f"in {os.path.join(app.instance_path, 'config.py')}"
         )
+
+    try:
+        check_pattern(app.config['FILENAME_PATTERN'])
+    except NamingError as e:
+        raise RuntimeError(f"FILENAME_PATTERN: {e}") from None
 
     if app.config['BEHIND_REVERSE_PROXY']:
         # Single reverse proxy to trust

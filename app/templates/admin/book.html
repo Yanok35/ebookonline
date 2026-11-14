@@ -161,6 +161,19 @@
                         {{ rename_form.name.label }}
                         {{ rename_form.name() }}
                         <p class="hint">{{ rename_form.name.description }}</p>
+                        <p class="hint pattern-name" title="Modèle : {{ pattern_name.pattern }}">
+                        {% if pattern_name.conform %}
+                            Nom conforme au modèle{% if pattern_name.taken %}
+                            (« {{ pattern_name.taken }} » est pris par un autre fichier){% endif %}.
+                        {% elif pattern_name.name %}
+                            Selon le modèle : <q>{{ pattern_name.name }}</q>
+                            {% if pattern_name.taken %}(« {{ pattern_name.taken }} » existe déjà){% endif %}
+                            <button type="button" class="use-suggestion" data-field="{{ rename_form.name.id }}"
+                                    data-value="{{ pattern_name.name }}">Utiliser</button>
+                        {% else %}
+                            Pas de nom selon le modèle : {{ pattern_name.error }}.
+                        {% endif %}
+                        </p>
                     </div>
                     {{ rename_form.submit(disabled=read_only) }}
                 </form>

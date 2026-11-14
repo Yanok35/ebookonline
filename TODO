@@ -50,8 +50,6 @@
    filter, metadata coverage rate
  - Library (browser_lazy): authors and year in the tooltip of the books
  - Search views on the new criteria: author, editor, year, ...
- - File naming pattern, e.g. "{author_sort} - {title} ({year})": preview in
-   bookadmin, rename with rename_book (keeps the mtime)
  - Book directory reorganization from the metadata: simulated plan, then
    moves with move_book, with an undo journal
  - OCR of the key pages of PDF without text (PyMuPDF get_textpage_ocr,

@@ -317,3 +317,43 @@ def test_book_page_cover_links_to_the_reader(app, client, book):
     app.bookdir.rescan()
     html = client.get(f"/bookadmin/{book.sha1}").text
     assert "/reader/" not in html and f'src="/images/{book.sha1}"' in html
+
+
+def test_book_page_name_after_the_pattern(app, client, book):
+    url = f"/bookadmin/{book.sha1}"
+    assert "Pas de nom selon le modèle : titre manquant." in client.get(url).text
+
+    book.title, book.authors, book.year = "Python Algorithms", ["Magnus Lie Hetland"], 2010
+    html = client.get(url).text
+    assert "Selon le modèle : <q>Python Algorithms - Hetland, Magnus Lie, 2010.pdf</q>" in html
+    assert re.search(r'data-field="rename-name"\s+data-value="Python Algorithms - '
+                     r'Hetland, Magnus Lie, 2010.pdf"', html)
+
+    # renamed with it: conform, same modification time
+    root = Path(app.config["BOOK_DIR"])
+    mtime = os.stat(root / book.filename).st_mtime
+    token = re.search(r'name="rename-csrf_token" type="hidden" value="([^"]+)"', html).group(1)
+    client.post(f"/bookadmin/{book.sha1}/rename", data={
+        "rename-csrf_token": token, "rename-name": "Python Algorithms - Hetland, Magnus Lie, 2010.pdf"})
+    assert book.filename == "Python Algorithms - Hetland, Magnus Lie, 2010.pdf"
+    assert os.stat(root / book.filename).st_mtime == mtime
+    assert "Nom conforme au modèle." in client.get(url).text
+
+
+def test_book_page_name_after_the_pattern_taken(app, client, book):
+    """ The name after the pattern is the one of another file: suffix (2) """
+    root = Path(app.config["BOOK_DIR"])
+    book.title, book.authors, book.year = "Python Algorithms", ["Magnus Lie Hetland"], 2010
+    make_pdf(root / "Python Algorithms - Hetland, Magnus Lie, 2010.pdf", title="other")
+    app.bookdir.rescan()
+    url = f"/bookadmin/{book.sha1}"
+    html = client.get(url).text
+    assert "Selon le modèle : <q>Python Algorithms - Hetland, Magnus Lie, 2010 (2).pdf</q>" in html
+    assert "(« Python Algorithms - Hetland, Magnus Lie, 2010.pdf » existe déjà)" in html
+
+    token = re.search(r'name="rename-csrf_token" type="hidden" value="([^"]+)"', html).group(1)
+    client.post(f"/bookadmin/{book.sha1}/rename", data={
+        "rename-csrf_token": token, "rename-name": "Python Algorithms - Hetland, Magnus Lie, 2010 (2).pdf"})
+    assert book.filename == "Python Algorithms - Hetland, Magnus Lie, 2010 (2).pdf"
+    html = client.get(url).text
+    assert "Nom conforme au modèle" in html and "est pris par un autre fichier" in html
