@@ -28,6 +28,7 @@ separators, as the file names of the book database.
 import errno
 import os
 import posixpath
+from collections import namedtuple
 
 # A directory containing this file is ignored by the scan, with its
 # subdirectories
@@ -42,6 +43,11 @@ ROOT_CATEGORY = "Generals"
 
 class BookFileError(Exception):
     """ A file operation in the book directory was refused, or failed """
+
+
+# A PDF file of the trash: its path (Trash/...), the path it is restored to,
+# its modification time and size
+TrashFile = namedtuple("TrashFile", "filename original mtime filesize")
 
 
 def category_of(relpath):
@@ -177,3 +183,23 @@ def ensure_trash(book_dir):
         with open(marker, "w"):
             pass
     return trash
+
+
+def list_trash(book_dir):
+    """ The PDF files of the trash ([TrashFile]), sorted by original path """
+    trash = os.path.join(book_dir, TRASH_DIR)
+    files = []
+    for (dir, subdirs, filenames) in os.walk(trash):
+        subdirs[:] = [d for d in subdirs if not d.startswith(".")]
+        for name in filenames:
+            if name.startswith(".") or not name.lower().endswith(".pdf"):
+                continue
+            abspath = os.path.join(dir, name)
+            try:
+                st = os.stat(abspath)
+            except OSError:
+                continue
+            relpath = os.path.relpath(abspath, book_dir).replace(os.sep, "/")
+            original = relpath[len(TRASH_DIR) + 1:]
+            files.append(TrashFile(relpath, original, st.st_mtime, st.st_size))
+    return sorted(files, key=lambda f: f.original.lower())
