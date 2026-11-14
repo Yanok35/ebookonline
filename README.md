@@ -115,10 +115,15 @@ it chooses the user and the command of the service.
 ## Start the Flask production server
 
 ```bash
-gunicorn -w 1 -t 4 -b 0.0.0.0:5000 \
+gunicorn -w 1 -t 4 -b 127.0.0.1:5000 \
     --logger-class srcs.gunicorn_logger.GunicornLogger \
     'ebookonline:create_app("default")'
 ```
+
+`-b 127.0.0.1:5000`: only the reverse proxy, on the same host, can reach
+the server. The application trusts the `X-Forwarded-For` header of the proxy
+(`BEHIND_REVERSE_PROXY`): a client reaching gunicorn directly could choose
+the address which is logged, thus banned by fail2ban.
 
 `--logger-class` gives the messages of gunicorn itself the format of the
 application (see [Logs](#logs)); their level is set by the gunicorn
