@@ -418,3 +418,8 @@ input:disabled {
     font-size: 1em;
     cursor: help;
 }
+
+.admin-panel .total {
+    margin: 0 0 0.5em 0;
+    font-weight: bold;
+}

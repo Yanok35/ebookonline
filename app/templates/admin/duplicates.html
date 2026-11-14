@@ -29,6 +29,9 @@
 
         <div class="admin-panel">
             <h2>Doublons</h2>
+            {% if duplicate_books %}
+            <p class="total">Taille totale des copies : {{ '%.2f' % (copies_size / 1024 / 1024) }}&nbsp;Mo</p>
+            {% endif %}
             <p class="hint">Fichiers au contenu identique (même SHA1). Seul le livre est affiché dans la bibliothèque.</p>
             {% if duplicate_books %}
             <table class="admin-table">

@@ -94,6 +94,8 @@ def duplicates():
                    key=lambda b: b.filename.lower())
     return render_template("admin/duplicates.html",
                            duplicate_books=[(b, duplicates[b.sha1]) for b in books],
+                           # space taken by the copies, freed by trashing them
+                           copies_size=sum(f.filesize for b in books for f in duplicates[b.sha1]),
                            trash_form=TrashDuplicateForm(),
                            titre="eBook admin - doublons")
 
