@@ -97,7 +97,52 @@ curl -s -o /dev/null -w "%{http_code}\n" "https://<server>/readpdf/%C3%A9l%C3%A8
 ## Start the Flask production server
 
 ```bash
-gunicorn -w 1 -t 4 -b 0.0.0.0:5000 'ebookonline:create_app("default")'
+gunicorn -w 1 -t 4 -b 0.0.0.0:5000 \
+    --logger-class srcs.gunicorn_logger.GunicornLogger \
+    'ebookonline:create_app("default")'
+```
+
+`--logger-class` gives the messages of gunicorn itself the format of the
+application (see [Logs](#logs)); their level is set by the gunicorn
+`--log-level` option (`info` by default).
+
+## Logs
+
+Everything is logged on stderr, from the `LOG_LEVEL` setting (`INFO` by
+default; e.g. `EBOOKONLINE_LOG_LEVEL=DEBUG`). Under systemd, journald
+collects it, with the priority of each message:
+
+```bash
+journalctl -u ebookonline -f            # follow
+journalctl -u ebookonline -p warning    # warnings and errors only
+```
+
+Outside of systemd (terminal), each line starts with the date and the level.
+
+## fail2ban
+
+Each failed login is logged as `Login failed from <address>: user '<name>'`
+(the client address given by the reverse proxy, see `BEHIND_REVERSE_PROXY`).
+
+`/etc/fail2ban/filter.d/ebookonline.conf`:
+
+```ini
+[Definition]
+failregex = ^.*?Login failed from <HOST>: user
+journalmatch = _SYSTEMD_UNIT=ebookonline.service
+```
+
+`/etc/fail2ban/jail.d/ebookonline.conf`:
+
+```ini
+[ebookonline]
+enabled = true
+backend = systemd
+filter = ebookonline
+maxretry = 5
+findtime = 10m
+bantime = 1h
+port = http,https
 ```
 
 # Development environement
