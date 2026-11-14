@@ -121,28 +121,83 @@ Outside of systemd (terminal), each line starts with the date and the level.
 
 ## fail2ban
 
-Each failed login is logged as `Login failed from <address>: user '<name>'`
-(the client address given by the reverse proxy, see `BEHIND_REVERSE_PROXY`).
+The application logs, as warnings of its `app` logger:
+
+- each failed login: `Login failed from <address>: user '<name>'`;
+- each request of a page which does not exist (404) by a client which is not
+  logged in, typically a scan for vulnerable software:
+  `Not found from <address>: GET '<path>'`. A logged in user (e.g. a stale
+  link) is only logged as info, with another message, and is never banned.
+
+The address is the client one given by the reverse proxy (see
+`BEHIND_REVERSE_PROXY`), always before the user name or the path, which the
+client chooses. fail2ban reads them from the journal.
 
 `/etc/fail2ban/filter.d/ebookonline.conf`:
 
 ```ini
+# Fail2Ban filter for ebookonline: failed logins, and anonymous requests of
+# pages which do not exist (scans for vulnerable software)
+
+[INCLUDES]
+
+before = common.conf
+
 [Definition]
-failregex = ^.*?Login failed from <HOST>: user
+
+# messages of the application logger ("app: ..."), after the journal prefix
+prefregex = ^%(__prefix_line)sapp: <F-CONTENT>.+</F-CONTENT>$
+
+mdre-auth = ^Login failed from <ADDR>: user
+mdre-notfound = ^Not found from <ADDR>: [A-Z]+\s
+mdre-all = %(mdre-auth)s
+           %(mdre-notfound)s
+
+failregex = <mdre-<mode>>
+
+ignoreregex =
+
+# Parameter "mode": auth (failed logins), notfound (anonymous requests of
+# missing pages), or all (default). Usage example (jail):
+#   filter = ebookonline[mode=auth]
+mode = all
+
 journalmatch = _SYSTEMD_UNIT=ebookonline.service
 ```
 
-`/etc/fail2ban/jail.d/ebookonline.conf`:
+`/etc/fail2ban/jail.d/ebookonline.local`, one jail per kind of failure, with
+its own threshold:
 
 ```ini
-[ebookonline]
+[ebookonline-auth]
 enabled = true
 backend = systemd
-filter = ebookonline
+filter = ebookonline[mode=auth]
+port = http,https
 maxretry = 5
 findtime = 10m
 bantime = 1h
+
+[ebookonline-notfound]
+enabled = true
+backend = systemd
+filter = ebookonline[mode=notfound]
 port = http,https
+# a few missing pages are normal (robots.txt, apple-touch-icon.png, ...),
+# a scan asks for dozens of them
+maxretry = 10
+findtime = 10m
+bantime = 1h
+```
+
+`journalmatch` must name the systemd unit of the server. Check the filter on
+the journal, then the jails:
+
+```bash
+fail2ban-regex systemd-journal 'ebookonline[mode=auth]'
+fail2ban-regex systemd-journal 'ebookonline[mode=notfound]'
+fail2ban-client reload
+fail2ban-client status ebookonline-notfound
 ```
 
 # Development environement
