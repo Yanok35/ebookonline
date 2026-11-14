@@ -18,8 +18,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-Write access checks, done at startup: the server runs read-only when it can
-not write where it needs to.
+Access checks, done at startup: the server runs read-only when it can not
+write where it needs to.
 """
 
 import os
@@ -47,16 +47,22 @@ def can_write_dir(dirpath):
     return True
 
 
+def can_read_dir(dirpath):
+    """ True when the files of the directory dirpath can be listed and read """
+    return os.path.isdir(dirpath) and os.access(dirpath, os.R_OK | os.X_OK)
+
+
 def file_dir(path):
     """ The directory of a file path ('book.db': the current directory) """
     return os.path.dirname(os.path.abspath(path))
 
 
-def check_write_access(book_dir, book_db, state_file):
+def check_write_access(book_dir, book_db, state_file, cache_dir):
     """
     Check that the server can write in the book directory (file operations
-    of the admin pages), and in the directories of the book database and of
-    the reader states (both are written to a temporary file, then renamed).
+    of the admin pages), in the directories of the book database and of
+    the reader states (both are written to a temporary file, then renamed),
+    and can read and write the thumbnail cache directory.
 
     Returns the list of the problems found, as messages; empty when every
     write is possible.
@@ -71,4 +77,8 @@ def check_write_access(book_dir, book_db, state_file):
     ]:
         if not can_write_dir(dirpath):
             problems.append(f"Écriture impossible dans {description} : {dirpath}")
+    if not can_read_dir(cache_dir):
+        problems.append(f"Lecture impossible dans le répertoire des miniatures : {cache_dir}")
+    if not can_write_dir(cache_dir):
+        problems.append(f"Écriture impossible dans le répertoire des miniatures : {cache_dir}")
     return problems

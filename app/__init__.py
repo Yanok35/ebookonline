@@ -25,7 +25,7 @@ from flask import Flask, current_app
 from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from srcs.access import check_write_access
+from srcs.access import can_write_dir, check_write_access
 from srcs.cache import Cache
 from srcs.book import DB_VERSION, BookDir
 from srcs.watcher import BookDirWatcher
@@ -102,12 +102,17 @@ def create_app(config_name):
             x_host=1
         )
 
+    # (creates the cache directory if missing)
+    app.cache = Cache.get_instance(app.config['CACHE_DIR'])
+
     # Read-only when the server can not write where it needs to, or when
     # book.db was written by a newer version: the reasons, as messages.
     app.read_only_reasons = check_write_access(
-        app.config['BOOK_DIR'], app.config['BOOK_DB'], app.config['STATE_FILE'])
+        app.config['BOOK_DIR'], app.config['BOOK_DB'], app.config['STATE_FILE'],
+        app.config['CACHE_DIR'])
+    # No thumbnail generation which would fail
+    app.cache.writable = can_write_dir(app.config['CACHE_DIR'])
 
-    app.cache = Cache.get_instance(app.config['CACHE_DIR'])
     app.bookdir = BookDir(app.config['BOOK_DB'], app.cache,
                           read_only=bool(app.read_only_reasons))
     # Last known book list, available at once (no directory scan)
