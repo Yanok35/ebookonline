@@ -54,8 +54,9 @@ class Config:
     # Analyse the PDF files in background processes, to suggest their
     # metadata (title, authors, editor, year, ISBN) in the admin pages: the
     # results are kept in CACHE_DIR (<sha1>.meta.json.gz). METADATA_WORKERS
-    # processes, at the nice level METADATA_NICE (0: same priority as the
-    # server).
+    # processes (0: half of the processors), at the nice level METADATA_NICE
+    # (0: same priority as the server). More processes analyse a large
+    # library sooner, at the first start, but take more memory.
     METADATA_ANALYSIS = True
     METADATA_WORKERS = 1
     METADATA_NICE = 10

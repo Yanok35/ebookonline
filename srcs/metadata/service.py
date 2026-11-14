@@ -41,6 +41,7 @@ import os
 import queue
 import signal
 import threading
+import time
 from collections import OrderedDict
 
 from srcs.logs import setup_logging
@@ -51,6 +52,17 @@ log = logging.getLogger(__name__)
 # Largest time to process a book, in seconds: a longer one is stopped, and
 # saved as failed
 TASK_TIMEOUT = 300
+
+# A worker which dies without processing a book (e.g. at its start) is
+# restarted after 1, 2, 4, ... seconds, MAX_RESTART_DELAY at most, instead
+# of in a loop; a worker which dies on a book (e.g. a crash of MuPDF on a
+# malformed file) is restarted at once.
+MAX_RESTART_DELAY = 60
+
+
+def default_workers():
+    """ Number of workers for METADATA_WORKERS = 0: half of the processors """
+    return max(1, (os.cpu_count() or 2) // 2)
 
 
 class _Timeout(Exception):
@@ -106,12 +118,14 @@ class MetadataService:
 
     def __init__(self, cache_dir, workers=1, nice=10, writable=True):
         """
+        workers: number of worker processes, 0 for default_workers().
         writable: false when the cache directory can not be written, then
         nothing runs and the requests are ignored (the cache files are still
         read, see store.read()).
         """
         self.cache_dir = cache_dir
-        self.nb_workers = max(1, int(workers))
+        workers = int(workers)
+        self.nb_workers = default_workers() if workers == 0 else max(1, workers)
         self.nice = nice
         self.writable = writable
 
@@ -125,7 +139,10 @@ class MetadataService:
         # {worker number: sha1 being processed}
         self._busy = {}
         self._running = False
+        # {worker number: process}, None while waiting for its restart
         self._processes = {}
+        # {worker number: (deaths without processing a book, restart time)}
+        self._restarts = {}
         self._tasks = None
         self._results = None
         self._threads = []
@@ -222,11 +239,14 @@ class MetadataService:
             except queue.Full:
                 break
         for p in self._processes.values():
+            if p is None:
+                continue
             p.join(timeout)
             if p.is_alive():
                 p.terminate()
                 p.join(timeout)
         self._processes.clear()
+        self._restarts.clear()
         self._threads.clear()
         atexit.unregister(self.stop)
 
@@ -272,29 +292,52 @@ class MetadataService:
                 return
             _, num, sha1, status = msg
             self._busy.pop(num, None)
+            # it works: a next death is restarted at once
+            self._restarts.pop(num, None)
             self._sent.discard(sha1)
             # MISSING: moved meanwhile, requested again by the next scan
             if status != store.MISSING:
                 self._done.add(sha1)
 
     def _check_workers(self):
+        now = time.monotonic()
         for num, p in list(self._processes.items()):
-            if p.is_alive() or not self._running:
+            if not self._running:
+                return
+            if p is None:
+                # waiting for its restart
+                if now >= self._restarts[num][1] and not self._restart(num):
+                    return
+                continue
+            if p.is_alive():
                 continue
             with self._cond:
                 sha1 = self._busy.pop(num, None)
                 if sha1:
                     self._sent.discard(sha1)
                     self._done.add(sha1)
-            log.error("Metadata process %d died (exit code %s)%s, restarted", num,
-                      p.exitcode, f" while processing {sha1}" if sha1 else "")
             if sha1:
                 store.write_error(self.cache_dir, sha1,
                                   f"the PDF reader stopped (exit code {p.exitcode})")
-            try:
-                self._spawn(num)
-            except (OSError, ValueError):
-                # the server is exiting (queues closed)
-                if self._running:
-                    log.exception("Metadata process %d can not be restarted", num)
+                deaths, delay = 0, 0
+            else:
+                deaths = self._restarts.get(num, (0, 0))[0] + 1
+                delay = min(MAX_RESTART_DELAY, 2 ** (deaths - 1))
+            log.error("Metadata process %d died (exit code %s)%s, restarted%s", num,
+                      p.exitcode, f" while processing {sha1}" if sha1 else "",
+                      f" in {delay} s" if delay else "")
+            self._restarts[num] = (deaths, now + delay)
+            self._processes[num] = None
+            if not delay and not self._restart(num):
                 return
+
+    def _restart(self, num):
+        """ Start worker num again; False when the server is exiting """
+        try:
+            self._spawn(num)
+        except (OSError, ValueError):
+            # the server is exiting (queues closed)
+            if self._running:
+                log.exception("Metadata process %d can not be restarted", num)
+            return False
+        return True

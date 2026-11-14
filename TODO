@@ -60,7 +60,6 @@
    ISBN
  - Write the validated metadata in the PDF (XMP): changes the sha1, so in a
    copy, as for the cover page
- - Process pool for the metadata extraction (one low priority process first)
  - Local file of publishers (e.g. in instance/, set by a config key), which
    extends srcs/metadata/publishers.json without changing the repository
  - Command line interface, e.g. "flask --app ebookonline metadata
