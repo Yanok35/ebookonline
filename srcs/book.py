@@ -405,7 +405,12 @@ class BookDir:
     # replaces a book moved to the trash). The rescan hashes no file again,
     # a move keeps the modification time of the file.
 
+    def __check_writable(self):
+        if self.read_only:
+            raise BookFileError("read-only mode: the book directory is not modified")
+
     def __present_book(self, sha1):
+        self.__check_writable()
         book = self.find_book_by_sha1(sha1)
         if book is None:
             raise BookFileError(f"unknown book: {sha1}")
@@ -488,6 +493,7 @@ class BookDir:
         Move a duplicate file to the trash, see trash_book(). Returns the
         path of the file in the trash, or raises BookFileError.
         """
+        self.__check_writable()
         with self._scan_lock:
             if relpath not in (d.filename for d in self.duplicates) \
                     or not os.path.isfile(os.path.join(self.dirpath, relpath)):
@@ -503,6 +509,7 @@ class BookDir:
         the book directory (never overwriting a file). A book gets its user
         settings back. Returns the restored path, or raises BookFileError.
         """
+        self.__check_writable()
         prefix = bookfileops.TRASH_DIR + "/"
         relpath = bookfileops.check_relpath(relpath)
         if not relpath.startswith(prefix):

@@ -181,11 +181,32 @@ def test_file_operations_in_read_only_mode(library, book, tmp_bookdir):
     reopened.open(library.dirpath)
     assert reopened.read_only
 
-    # the files are moved, book.db is left untouched
-    reopened.rename_book(book.sha1, "renamed")
-    assert reopened.find_book_by_sha1(book.sha1).filename == "Science/renamed.pdf"
-    assert (Path(library.dirpath) / "Science" / "renamed.pdf").exists()
+    # nothing is written: neither the files, nor book.db
+    root = Path(library.dirpath)
+    (root / "Trash").mkdir()
+    make_pdf(root / "Trash" / "c.pdf", title="C")
+    make_pdf(root / "copy" / "a.pdf", title="A")
+    reopened.rescan()
+    bookfiles = sorted(root.rglob("*"))
+    for operation in [lambda: reopened.rename_book(book.sha1, "renamed"),
+                      lambda: reopened.move_book(book.sha1, "a.pdf"),
+                      lambda: reopened.move_book_to_category(book.sha1, ""),
+                      lambda: reopened.trash_book(book.sha1),
+                      lambda: reopened.trash_duplicate("copy/a.pdf"),
+                      lambda: reopened.restore_from_trash("Trash/c.pdf")]:
+        with pytest.raises(BookFileError, match="read-only"):
+            operation()
+    assert reopened.find_book_by_sha1(book.sha1).filename == "Science/a.pdf"
+    assert sorted(root.rglob("*")) == bookfiles
     assert Path(library.dbfile).read_text() == content
+
+
+def test_file_operations_when_opened_read_only(library, book, tmp_bookdir):
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]), read_only=True)
+    reopened.open(library.dirpath)
+    with pytest.raises(BookFileError, match="read-only"):
+        reopened.rename_book(book.sha1, "renamed")
+    assert (Path(library.dirpath) / "Science" / "a.pdf").exists()
 
 
 def test_move_book_to_category(library, book):
