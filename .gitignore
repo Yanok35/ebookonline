@@ -1,6 +1,8 @@
 *.pyc
 cache*/
 books*/
+book.db*
+reader_states.json
 venv/
 instance/*
 !instance/*.example
