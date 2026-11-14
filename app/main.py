@@ -198,6 +198,41 @@ def image(sha1):
 
     return response
 
+def _present_book_or_404(sha1):
+    """ The book of this sha1, if its PDF file is in the book directory """
+    book = current_app.bookdir.find_book_by_sha1(sha1)
+    if book is None or not book.present:
+        abort(404)
+    return book
+
+@main.route('/pdf/<string:sha1>')
+@login_required
+def book_pdf(sha1):
+    """ The PDF file of a book, from its sha1 (no file name in the URL) """
+    book = _present_book_or_404(sha1)
+    response = send_from_directory(
+        current_app.bookdir.dirpath, book.filename,
+        mimetype="application/pdf",
+        # its name, when saved by the browser
+        download_name=os.path.basename(book.filename),
+        conditional=True,
+    )
+    # Allow Range HTTP request to get file by chunk (pdfjs uses chunks of 64KB)
+    response.headers["Accept-Ranges"] = "bytes"
+    return response
+
+@main.route('/reader/<string:sha1>')
+@login_required
+def book_reader(sha1):
+    """ The PDF reader (pdf.js) on a book, from its sha1 """
+    book = _present_book_or_404(sha1)
+    docName = os.path.basename(book.filename)
+    return render_template("pdfjsviewer.html",
+                            pdfurl = url_for('.book_pdf', sha1 = sha1),
+                            documentId = sha1,
+                            documentName = docName,
+                            titre = docName)
+
 @main.route('/readpdf/<path:pdffile>')
 @login_required
 def pdf_read(pdffile):
