@@ -95,6 +95,9 @@
             {% if book.present %}
             <div class="file-actions">
                 <h2>Actions sur le fichier</h2>
+                {% if read_only %}
+                <p class="hint">Indisponibles : le site est en lecture seule.</p>
+                {% endif %}
                 <form action="{{ url_for('.rename_book', sha1 = book.sha1) }}" method="post" novalidate>
                     {{ rename_form.hidden_tag() }}
                     <div class="field">
@@ -102,7 +105,7 @@
                         {{ rename_form.name() }}
                         <p class="hint">{{ rename_form.name.description }}</p>
                     </div>
-                    {{ rename_form.submit() }}
+                    {{ rename_form.submit(disabled=read_only) }}
                 </form>
 
                 <form action="{{ url_for('.move_book', sha1 = book.sha1) }}" method="post">
@@ -111,13 +114,13 @@
                         {{ move_form.category.label }}
                         {{ move_form.category() }}
                     </div>
-                    {{ move_form.submit() }}
+                    {{ move_form.submit(disabled=read_only) }}
                 </form>
 
                 <form action="{{ url_for('.trash_book', sha1 = book.sha1) }}" method="post"
                       onsubmit='return confirm({{ ("Mettre « " ~ book.filename ~ " » à la corbeille ?") | tojson }})'>
                     {{ trash_form.hidden_tag() }}
-                    {{ trash_form.submit(class_="danger") }}
+                    {{ trash_form.submit(class_="danger", disabled=read_only) }}
                     <p class="hint">Le fichier est déplacé dans le répertoire Trash, d'où il peut être restauré.</p>
                 </form>
             </div>

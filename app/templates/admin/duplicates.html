@@ -50,7 +50,7 @@
                                     <form class="inline" action="{{ url_for('.trash_duplicate') }}" method="post">
                                         <input type="hidden" name="csrf_token" value="{{ trash_form.csrf_token.current_token }}">
                                         <input type="hidden" name="filename" value="{{ copy.filename }}">
-                                        <button type="submit" class="danger" title="Mettre cette copie à la corbeille">Corbeille</button>
+                                        <button type="submit" class="danger"{% if read_only %} disabled{% endif %} title="Mettre cette copie à la corbeille">Corbeille</button>
                                     </form>
                                 </li>
                             {% endfor %}

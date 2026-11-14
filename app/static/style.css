@@ -382,3 +382,19 @@ form.inline-action button {
     align-items: center;
     gap: 1em;
 }
+
+button:disabled,
+input:disabled {
+    color: #999;
+    cursor: not-allowed;
+}
+
+.read-only-banner p {
+    margin: 0;
+}
+
+.read-only-banner ul {
+    margin: 0.3em 0 0 0;
+    padding-left: 1.2em;
+    font-size: 0.9em;
+}
