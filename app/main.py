@@ -201,9 +201,9 @@ def image(sha1):
 @main.route('/readpdf/<path:pdffile>')
 @login_required
 def pdf_read(pdffile):
-    abspath = os.path.join(current_app.bookdir.dirpath, pdffile)
-    response = send_file(
-        abspath,
+    # send_from_directory: a path out of the book directory is refused (404)
+    response = send_from_directory(
+        current_app.bookdir.dirpath, pdffile,
         conditional=True
     )
     # Allow Range HTTP request to get file by chunk (pdfjs uses chunks of 64KB)
