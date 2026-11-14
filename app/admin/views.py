@@ -290,8 +290,10 @@ def trash_duplicate():
 @login_required
 def trash():
     """ The PDF files of the trash, which can be restored """
+    files = list_trash(current_app.bookdir.dirpath)
     return render_template("admin/trash.html",
-                           files=list_trash(current_app.bookdir.dirpath),
+                           files=files,
+                           total_size=sum(f.filesize for f in files),
                            restore_form=RestoreForm(),
                            delete_form=DeleteFromTrashForm(),
                            empty_form=EmptyTrashForm(),

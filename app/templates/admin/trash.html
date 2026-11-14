@@ -38,6 +38,9 @@
                 </form>
                 {% endif %}
             </div>
+            {% if files %}
+            <p class="total">Taille totale : {{ '%.2f' % (total_size / 1024 / 1024) }}&nbsp;Mo</p>
+            {% endif %}
             <p class="hint">Fichiers mis à la corbeille (répertoire Trash). Restaurer remet le fichier à son emplacement d'origine ; un livre retrouve ses réglages.</p>
             {% if files %}
             <table class="admin-table">
