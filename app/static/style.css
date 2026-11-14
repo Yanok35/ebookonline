@@ -490,3 +490,7 @@ input:disabled {
     padding: 0.5em;
     color: #333;
 }
+
+.admin q {
+    quotes: "« " " »";
+}
