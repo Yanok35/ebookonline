@@ -67,7 +67,8 @@ cp instance/config.py.example instance/config.py
 
 ### Production: environment variables
 
-For instance in a systemd unit (or an `EnvironmentFile=` readable by root only):
+For instance in a systemd unit (or an `EnvironmentFile=` readable by root
+only, as in `resources/ebookonline.service.sample`):
 
 ```ini
 [Service]
@@ -93,6 +94,23 @@ it through the proxy (a redirection to the login page is expected, not 400):
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" "https://<server>/readpdf/%C3%A9l%C3%A8ve.pdf"
 ```
+
+## systemd service
+
+`resources/ebookonline.service.sample` is an example of unit: gunicorn, run by
+a dedicated user, only reachable from the reverse proxy, restarted on
+failure, and only allowed to write in the project and book directories.
+Adapt the user, the paths and the secrets file, then:
+
+```bash
+sudo install -m 644 -o root -g root resources/ebookonline.service.sample \
+    /etc/systemd/system/ebookonline.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now ebookonline
+```
+
+As for fail2ban, the unit is copied rather than linked (`systemctl link`):
+it chooses the user and the command of the service.
 
 ## Start the Flask production server
 
