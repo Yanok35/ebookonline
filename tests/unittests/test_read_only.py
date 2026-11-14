@@ -155,3 +155,42 @@ def test_trash_buttons_are_disabled(book_dir_read_only_app):
     make_pdf(root / "Trash" / "b.pdf", title="B")
     html = logged_in(app).get("/bookadmin/trash").text
     assert html.count(" disabled") == 3
+
+
+@pytest.fixture
+def cache_read_only_app(app):
+    """ The application, restarted on a thumbnail cache it can not write """
+    from app import create_app
+
+    make_pdf(Path(app.config["BOOK_DIR"]) / "a.pdf", title="A")
+    app.bookdir.rescan()
+    cache = Path(app.config["CACHE_DIR"])
+    cache.chmod(0o555)
+    yield create_app("default")
+    cache.chmod(0o755)
+
+
+def test_thumbnail_cache_not_writable(cache_read_only_app):
+    app = cache_read_only_app
+    assert app.bookdir.read_only and not app.cache.writable
+    assert app.read_only_reasons == [
+        f"Écriture impossible dans le répertoire des miniatures : {app.config['CACHE_DIR']}"]
+
+    # no thumbnail is requested for a new book
+    make_pdf(Path(app.config["BOOK_DIR"]) / "b.pdf", title="B")
+    app.bookdir.rescan()
+    assert app.cache.requests == []
+
+
+def test_thumbnail_reset_refused(cache_read_only_app):
+    app = cache_read_only_app
+    client = logged_in(app)
+    book = app.bookdir.find_book_by_filename("a.pdf")
+    page = f"/bookadmin/{book.sha1}"
+
+    html = client.get(page).text
+    assert re.search(r'<input disabled id="reset-submit"', html)
+    token = re.search(r'name="reset-csrf_token" type="hidden" value="([^"]+)"', html).group(1)
+    response = client.post(f"/reset-thumbnail/{book.sha1}", data={"reset-csrf_token": token})
+    assert "pas accessible en écriture" in client.get(response.location).text
+    assert app.cache.requests == []
