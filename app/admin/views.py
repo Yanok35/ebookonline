@@ -36,12 +36,13 @@ from app.admin.forms import (
     MoveBookForm,
     RenameBookForm,
     ResetThumbnailForm,
+    RestoreForm,
     TrashBookForm,
     TrashDuplicateForm,
 )
 from app.auth import login_required
 from srcs.book import DB_VERSION
-from srcs.bookfileops import ROOT_CATEGORY, BookFileError, list_categories
+from srcs.bookfileops import ROOT_CATEGORY, BookFileError, list_categories, list_trash
 
 admin = Blueprint('admin', __name__)
 
@@ -273,3 +274,28 @@ def trash_duplicate():
         if trashed:
             flash(f"Copie mise à la corbeille : {trashed}")
     return redirect(url_for(".duplicates"))
+
+
+@admin.route("/bookadmin/trash")
+@login_required
+def trash():
+    """ The PDF files of the trash, which can be restored """
+    return render_template("admin/trash.html",
+                           files=list_trash(current_app.bookdir.dirpath),
+                           restore_form=RestoreForm(),
+                           titre="eBook admin - corbeille")
+
+
+@admin.route("/bookadmin/trash/restore", methods=["POST"])
+@login_required
+def restore():
+    form = RestoreForm()
+    if not form.validate_on_submit():
+        _flash_form_errors(form)
+    else:
+        filename = form.filename.data
+        restored = _file_operation(f"restore '{filename}'",
+                                   lambda: current_app.bookdir.restore_from_trash(filename))
+        if restored:
+            flash(f"Fichier restauré : {restored}")
+    return redirect(url_for(".trash"))

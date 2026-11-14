@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{{ titre }}</title>
+        <link rel="icon" href="{{ url_for('main.favicon') }}" />
+        <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css" media="screen" />
+    </head>
+
+    <body class="admin">
+        <div class="titlebar">
+            <h1><a href="{{ url_for('.book_list') }}">Administration</a></h1>
+        </div>
+
+        <div class="actionbar">
+            <div class="linksbar">
+                <div><a href="{{ url_for('.book_list') }}">Liste des livres</a> |
+                    <a href="{{ url_for('main.index') }}">Bibliothèque</a> |
+                    {{ files | length }} fichier{{ 's' if files | length > 1 }} dans la corbeille.
+                </div>
+            </div>
+        </div>
+
+        {% include "admin/_read_only.html" %}
+
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="flash {{ category }}">{{ message }}</p>
+        {% endfor %}
+
+        <div class="admin-panel">
+            <h2>Corbeille</h2>
+            <p class="hint">Fichiers mis à la corbeille (répertoire Trash). Restaurer remet le fichier à son emplacement d'origine ; un livre retrouve ses réglages.</p>
+            {% if files %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Fichier</th>
+                        <th>Action</th>
+                        <th>Taille</th>
+                        <th>Modifié le</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for f in files %}
+                    <tr>
+                        <td>{{ f.original }}</td>
+                        <td>
+                            <form class="inline-action" action="{{ url_for('.restore') }}" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ restore_form.csrf_token.current_token }}">
+                                <input type="hidden" name="filename" value="{{ f.filename }}">
+                                <button type="submit" title="Remettre à {{ f.original }}">Restaurer</button>
+                            </form>
+                        </td>
+                        <td class="size">{{ '%.2f' % (f.filesize / 1024 / 1024) }}&nbsp;Mo</td>
+                        <td class="date">{{ f.mtime | datetime }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>La corbeille est vide.</p>
+            {% endif %}
+        </div>
+    </body>
+</html>

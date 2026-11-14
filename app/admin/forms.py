@@ -125,3 +125,10 @@ class TrashDuplicateForm(FlaskForm):
 
     filename = HiddenField(validators=[DataRequired()])
     submit = SubmitField("Corbeille")
+
+
+class RestoreForm(FlaskForm):
+    """ Restore a file of the trash """
+
+    filename = HiddenField(validators=[DataRequired()])
+    submit = SubmitField("Restaurer")

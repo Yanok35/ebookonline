@@ -358,3 +358,11 @@ form.inline {
 form.inline button {
     font-size: 0.8em;
 }
+
+form.inline-action {
+    margin: 0;
+}
+
+form.inline-action button {
+    font-size: 0.8em;
+}
