@@ -105,7 +105,7 @@ def _worker_main(num, cache_dir, tasks, results, log_level, nice):
             status = store.FAILED
         except Exception as e:
             log.exception("Metadata of %s: analysis failed", pdf_path)
-            store.write_error(cache_dir, sha1, f"analysis failed: {type(e).__name__}: {e}")
+            store.write_error(cache_dir, sha1, f"{store.INTERNAL_ERROR}{type(e).__name__}: {e}")
             status = store.FAILED
         finally:
             signal.alarm(0)

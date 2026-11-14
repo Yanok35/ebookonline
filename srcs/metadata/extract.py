@@ -56,6 +56,11 @@ MIN_TEXT_CHARS = 200
 XMP_TAGS = ("dc:creator", "dc:publisher", "dc:title", "dc:date", "dc:language",
             "dc:identifier", "xmp:Identifier", "prism:isbn", "pdf:Keywords")
 
+# Errors of MuPDF on a malformed PDF file: PyMuPDF raises RuntimeError (or a
+# subclass), its low level layer FzErrorBase subclasses (FzErrorFormat:
+# "object is not a stream", ...), which are not RuntimeError
+MUPDF_ERRORS = (RuntimeError, pymupdf.mupdf.FzErrorBase)
+
 # MuPDF messages (e.g. on a malformed PDF file) are not printed
 pymupdf.TOOLS.mupdf_display_errors(False)
 pymupdf.TOOLS.mupdf_display_warnings(False)
@@ -123,33 +128,41 @@ def extract(path):
     - fonts: [[page index, [[font size, line]]]] of the first pages
     - has_text: false when the key pages have (almost) no text
 
-    Raises ExtractError when the file can not be read.
+    Raises ExtractError when the file can not be read. A damaged part
+    (metadata, XMP, a page) is skipped: the other ones are still used.
     """
     try:
         doc = pymupdf.open(path, filetype="pdf")
-    except (pymupdf.FileDataError, RuntimeError, OSError) as e:
+    except (*MUPDF_ERRORS, OSError) as e:
         raise ExtractError(f"can not open the PDF file: {e}") from None
     try:
         if doc.needs_pass and not doc.authenticate(""):
             raise ExtractError("encrypted PDF file, with a password")
         count = doc.page_count
-        meta = {k.lower(): clean_spaces(str(v)) for k, v in (doc.metadata or {}).items() if v}
+        try:
+            meta = {k.lower(): clean_spaces(str(v))
+                    for k, v in (doc.metadata or {}).items() if v}
+        except MUPDF_ERRORS:
+            meta = {}
         try:
             xmp = doc.get_xml_metadata() or ""
-        except RuntimeError:
+        except MUPDF_ERRORS:
+            # e.g. "object is not a stream": a damaged XMP metadata
             xmp = ""
         texts = {}
         for i in key_pages(count):
             try:
                 texts[str(i)] = doc[i].get_text("text")
-            except RuntimeError:
+            except MUPDF_ERRORS:
                 texts[str(i)] = ""
         fonts = []
         for i in range(min(FONT_PAGES, count)):
             try:
                 fonts.append([i, _font_lines(doc[i])])
-            except RuntimeError:
+            except MUPDF_ERRORS:
                 pass
+    except MUPDF_ERRORS as e:
+        raise ExtractError(f"can not read the PDF file: {e}") from None
     finally:
         doc.close()
 

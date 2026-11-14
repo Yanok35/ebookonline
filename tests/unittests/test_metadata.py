@@ -303,3 +303,35 @@ def test_filename_candidates():
 ])
 def test_consolidate_title_forms(candidates, expected):
     assert analyse.consolidate("title", candidates)["value"] == expected
+
+
+def test_extract_with_damaged_xmp(tmp_path):
+    """
+    A low level error of MuPDF (FzErrorFormat "object is not a stream", not
+    a RuntimeError) on the XMP metadata: the rest is read
+    """
+    import pymupdf
+
+    path = make_book_pdf(tmp_path / "book.pdf", [[(24, "Le Petit Prince")]] + [FILLER],
+                         metadata={"title": "Le Petit Prince"})
+    doc = pymupdf.open(path)
+    doc.xref_set_key(doc.pdf_catalog(), "Metadata", "<< /Type /Metadata >>")
+    doc.save(tmp_path / "damaged.pdf")
+    doc.close()
+    with pytest.raises(pymupdf.mupdf.FzErrorBase):
+        pymupdf.open(tmp_path / "damaged.pdf").get_xml_metadata()
+
+    raw = extract.extract(tmp_path / "damaged.pdf")
+    assert raw["xmp"] == {} and raw["meta"]["title"] == "Le Petit Prince"
+    assert "Le Petit Prince" in raw["texts"]["0"]
+
+
+def test_extract_mupdf_low_level_error(tmp_path, mocker):
+    """ Any other low level error of MuPDF: a failed extraction, no exception """
+    import pymupdf
+
+    path = make_book_pdf(tmp_path / "book.pdf", [FILLER])
+    mocker.patch.object(pymupdf.Document, "page_count", new_callable=mocker.PropertyMock,
+                        side_effect=pymupdf.mupdf.FzErrorFormat("object is not a stream"))
+    with pytest.raises(extract.ExtractError, match="can not read the PDF file"):
+        extract.extract(path)
