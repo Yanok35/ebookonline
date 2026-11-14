@@ -56,7 +56,12 @@ def login():
         pwhash = creds.get(u, _DUMMY_PWHASH)
         if check_password_hash(pwhash, p) and u in creds:
             session['username'] = u
+            current_app.logger.info("Login from %s: user %r", request.remote_addr, u)
             return redirect(url_for(".index"))
+
+        # For fail2ban: the address first, the user name (chosen by the
+        # client) can not be mistaken for it
+        current_app.logger.warning("Login failed from %s: user %r", request.remote_addr, u)
 
         abort(401)
         return ("<h3>Error</h3>")
