@@ -6,9 +6,6 @@
  - Pdf Js Viewer : search history fixup
  - Screen display : check tablet/phone dimension.
 
-# Endpoints
- - Make the URI to view PDF a shorter link, and hide the PDF filename from it.
-
 # Users history
  - Per user, count number of time a book was open, per day
    History of book read

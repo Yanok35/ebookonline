@@ -17,9 +17,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import calendar
 import os
 import sys
 import json
+from functools import wraps
 from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from app.auth import login_required
 from srcs.book import BookDir
@@ -160,7 +162,7 @@ def browser_search():
         html += '   <div>\n'
 
         for b in s:
-                html += '    <p><a href="' + url_for('.pdf_read', pdffile = b.filename) + '">'
+                html += '    <p><a href="' + url_for('.book_pdf', sha1 = b.sha1) + '">'
                 html += b.get_name_and_size_as_str()
                 html += "</a></p>\n"
         html += '   </div>\n'
@@ -198,12 +200,73 @@ def image(sha1):
 
     return response
 
+def _present_book_or_404(sha1):
+    """ The book of this sha1, if its PDF file is in the book directory """
+    book = current_app.bookdir.find_book_by_sha1(sha1)
+    if book is None or not book.present:
+        abort(404)
+    return book
+
+@main.route('/pdf/<string:sha1>')
+@login_required
+def book_pdf(sha1):
+    """ The PDF file of a book, from its sha1 (no file name in the URL) """
+    book = _present_book_or_404(sha1)
+    response = send_from_directory(
+        current_app.bookdir.dirpath, book.filename,
+        mimetype="application/pdf",
+        # its name, when saved by the browser
+        download_name=os.path.basename(book.filename),
+        conditional=True,
+    )
+    # Allow Range HTTP request to get file by chunk (pdfjs uses chunks of 64KB)
+    response.headers["Accept-Ranges"] = "bytes"
+    return response
+
+@main.route('/reader/<string:sha1>')
+@login_required
+def book_reader(sha1):
+    """ The PDF reader (pdf.js) on a book, from its sha1 """
+    book = _present_book_or_404(sha1)
+    docName = os.path.basename(book.filename)
+    return render_template("pdfjsviewer.html",
+                            pdfurl = url_for('.book_pdf', sha1 = sha1),
+                            documentId = sha1,
+                            documentName = docName,
+                            titre = docName)
+
+
+# Deprecated routes, with the file name in the URL: kept for the links and
+# bookmarks made before the routes above. Do not use them in new code.
+
+# Date of the deprecation (RFC 9745 Deprecation header: '@' + epoch seconds)
+_DEPRECATED_SINCE = "@" + str(calendar.timegm((2026, 11, 14, 0, 0, 0)))
+
+def deprecated_route(replacement):
+    """
+    Mark a deprecated view: each use is logged, and its responses get the
+    'Deprecation' header (RFC 9745). replacement: the endpoint to use instead.
+    """
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            current_app.logger.info("Deprecated route %s, use the %s endpoint",
+                                    request.path, replacement)
+            response = make_response(view(*args, **kwargs))
+            response.headers["Deprecation"] = _DEPRECATED_SINCE
+            return response
+        wrapped.deprecated_by = replacement
+        return wrapped
+    return decorator
+
 @main.route('/readpdf/<path:pdffile>')
 @login_required
+@deprecated_route("main.book_pdf")
 def pdf_read(pdffile):
-    abspath = os.path.join(current_app.bookdir.dirpath, pdffile)
-    response = send_file(
-        abspath,
+    """ DEPRECATED: use book_pdf (/pdf/<sha1>) """
+    # send_from_directory: a path out of the book directory is refused (404)
+    response = send_from_directory(
+        current_app.bookdir.dirpath, pdffile,
         conditional=True
     )
     # Allow Range HTTP request to get file by chunk (pdfjs uses chunks of 64KB)
@@ -212,11 +275,11 @@ def pdf_read(pdffile):
 
 @main.route('/pdfjsviewer/<string:sha1>/<path:pdffile>')
 @login_required
+@deprecated_route("main.book_reader")
 def pdfjs_read(sha1, pdffile):
+    """ DEPRECATED: use book_reader (/reader/<sha1>) """
     docId = sha1
     docName = os.path.basename(pdffile)
-    # TODO: Check RFC-3986 & reserved char when present in 'pdffile' filename.
-    #  https://metacpan.org/pod/URI::Escape
     return render_template("pdfjsviewer.html",
                             pdfurl = url_for('.pdf_read', pdffile = pdffile).replace("'", "%27"),
                             documentId = docId,
