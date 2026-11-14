@@ -27,6 +27,7 @@ docs/technote-metadata-extract-&-analysis.md.
 - analyse: candidate values found in the raw data, and their consolidation
   into suggestions, with a score
 - store: the cache file of a book (CACHE_DIR/<sha1>.meta.json.gz)
+- service: background processes which keep the cache files up to date
 - isbn, names, publishers, text: the rules used by the analysis
 
 Nothing is written in book.db: the suggestions only prefill the forms.

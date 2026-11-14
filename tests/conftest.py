@@ -102,7 +102,7 @@ def library(tmp_bookdir):
 def app(tmp_bookdir, monkeypatch):
     """
     The Flask application on an empty temporary book directory, with a
-    FakeCache and without the watcher.
+    FakeCache, without the watcher and the metadata analysis.
     """
     from app import create_app
 
@@ -114,6 +114,7 @@ def app(tmp_bookdir, monkeypatch):
         "STATE_FILE": str(tmp_path / "reader_states.json"),
         "CACHE_DIR": str(cachedir),
         "BOOK_DIR_WATCH": "false",
+        "METADATA_ANALYSIS": "false",
     }.items():
         monkeypatch.setenv("EBOOKONLINE_" + name, value)
     monkeypatch.setattr(Cache, "get_instance",

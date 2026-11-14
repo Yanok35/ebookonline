@@ -40,7 +40,7 @@ the books whose file is missing.
 
 | Key          | Type    | Description |
 |--------------|---------|-------------|
-| `sha1`       | string  | SHA-1 of the file content (40 hexadecimal characters). Identifies the book: a moved or renamed file keeps its entry. Also the name of its thumbnail in the cache (`<sha1>.jpg`). |
+| `sha1`       | string  | SHA-1 of the file content (40 hexadecimal characters). Identifies the book: a moved or renamed file keeps its entry. Also the name of its thumbnail (`<sha1>.jpg`) and of its metadata analysis (`<sha1>.meta.json.gz`) in the cache. |
 | `filename`   | string  | Path of the file, relative to `BOOK_DIR`, with `/` separators. |
 | `category`   | string  | First level directory of the file, `Generals` for a file at the root of `BOOK_DIR`. |
 | `mtime`      | number  | Modification time of the file (seconds since the epoch, float). `-1` when the file is missing. Recomputed from the file when loaded, see [Known limitations](#known-limitations). |
@@ -56,6 +56,11 @@ the books whose file is missing.
 
 Required when loading: `sha1`, `filename`, `category`. The other keys take
 the default value above when missing.
+
+`title`, `authors`, `editor`, `year` and `isbn` are only set by the user:
+the suggestions found in the PDF files (see
+[technote-metadata-extract-&-analysis.md](technote-metadata-extract-&-analysis.md))
+prefill the forms, they are never written in `book.db` without the user.
 
 A book whose file is missing is kept, so that its settings are restored if
 the file comes back (anywhere in the book directory, with the same content).
@@ -186,10 +191,11 @@ The server runs read-only, the reasons being listed in
     written to a temporary file of their directory, then renamed;
   - the thumbnail cache directory (`CACHE_DIR`), which must also be
     readable: when it can not be written, no thumbnail is generated
-    (`Cache.writable`) and "Régénérer la miniature" is disabled.
+    (`Cache.writable`) and "Régénérer la miniature" is disabled, and the
+    metadata analysis does not run.
 
-Then nothing is written on the disk, except the thumbnail cache (when it is
-writable):
+Then nothing is written on the disk, except the cache directory (thumbnails
+and metadata analysis, when it is writable):
 
 - the file is loaded as usual, the keys unknown to this version are ignored;
 - `BookDir.read_only` is set, and `BookDir.save_db()` writes nothing. No

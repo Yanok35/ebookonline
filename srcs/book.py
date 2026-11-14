@@ -191,6 +191,9 @@ class BookDir:
         # Other files having the content of a book ([PdfFile])
         self.duplicates = []
         self.cache = cache
+        # srcs.metadata.service.MetadataService, or None: asked to analyse
+        # the books found by the scans
+        self.metadata = None
         self.dbfile = dbfile
         self.dirpath = None
 
@@ -665,6 +668,9 @@ class BookDir:
             # Create the thumbnail, in case it is missing for any reason
             self.cache.create_thumbnail(os.path.join(book_dir, f.filename),
                                         book.sha1)
+            # Same for its metadata cache file (nothing done when up to date)
+            if self.metadata is not None:
+                self.metadata.request(book.sha1, os.path.join(book_dir, f.filename))
 
         def add_duplicates(book_file, group):
             for d in group:

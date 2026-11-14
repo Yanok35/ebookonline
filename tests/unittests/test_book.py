@@ -571,3 +571,23 @@ def test_metadata_fields_are_saved(library, tmp_bookdir):
     book = reopened.find_book_by_filename("a.pdf")
     assert (book.title, book.authors, book.meta_reviewed) == ("Les Misérables", ["Victor Hugo"], True)
 
+
+class FakeMetadata:
+    """ Records the analysis requests of the scans """
+
+    def __init__(self):
+        self.requests = []
+
+    def request(self, sha1, pdf_path, urgent=False, force=False):
+        self.requests.append((sha1, pdf_path))
+
+
+def test_scan_requests_the_metadata_analysis(library):
+    library.metadata = FakeMetadata()
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "Science" / "b.pdf")
+    library.rescan()
+
+    assert sorted(library.metadata.requests) == sorted(
+        (b.sha1, os.path.join(library.dirpath, b.filename)) for b in library.get_booklist())

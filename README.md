@@ -82,6 +82,15 @@ By default the server will search for PDF files in a subdirectory "books" as
 referenced by the `BOOK_DIR` variable. Like any other setting it can be
 overridden, e.g. `EBOOKONLINE_BOOK_DIR=/srv/books`.
 
+### Metadata analysis
+
+The PDF files are analysed in a background process, at a low priority, to
+suggest the title, authors, editor, year and ISBN of the books in the admin
+pages (nothing is written in `book.db` without the user). The results are
+kept in `CACHE_DIR`, next to the thumbnails. See `METADATA_ANALYSIS`,
+`METADATA_WORKERS` and `METADATA_NICE` in `config.py`, and
+`docs/technote-metadata-extract-&-analysis.md`.
+
 ## Configure Apache as an Https proxy
 
 TODO
