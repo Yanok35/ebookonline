@@ -102,7 +102,8 @@ def xmp_fields(xmp):
 def _font_lines(page):
     """ [[font size, text]] of the lines of a page """
     lines = []
-    for block in page.get_text("dict").get("blocks", []):
+    # text only: the images of the page (their bytes) are not loaded
+    for block in page.get_text("dict", flags=pymupdf.TEXTFLAGS_TEXT).get("blocks", []):
         for line in block.get("lines", []):
             spans = line.get("spans", [])
             text = clean_spaces("".join(s.get("text", "") for s in spans))
