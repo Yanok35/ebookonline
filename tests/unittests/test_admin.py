@@ -241,7 +241,7 @@ def read_only_app(app, book):
 
 def test_read_only_banner(app, client, book):
     for url in ["/bookadmin/", "/bookadmin/duplicates", f"/bookadmin/{book.sha1}"]:
-        assert "Base en lecture seule" not in client.get(url).text
+        assert "Site en lecture seule" not in client.get(url).text
 
 
 def test_read_only_book_page(read_only_app):
@@ -252,7 +252,9 @@ def test_read_only_book_page(read_only_app):
     db_content = Path(read_only_app.config["BOOK_DB"]).read_text()
 
     for url in ["/bookadmin/", "/bookadmin/duplicates", f"/bookadmin/{book.sha1}"]:
-        assert "Base en lecture seule" in client.get(url).text
+        html = client.get(url).text
+        assert "Site en lecture seule" in html
+        assert "version plus récente d&#39;ebookonline" in html
 
     url = f"/bookadmin/{book.sha1}"
     client.post(url, data={"csrf_token": csrf_token(client, url), "tags": "algo"})

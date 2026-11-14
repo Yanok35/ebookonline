@@ -148,6 +148,7 @@ of version V (`BookDir.load_db()`, at startup):
 | V = N | Normal operation. The file is not rewritten by the loading. |
 | V < N | Migration: the file is kept as `book.db.v<V>.bak` (only if this backup does not exist yet), converted to version N, then saved at once. Normal operation. |
 | V > N, and `min_reader_version` ≤ N | **Read-only** operation, see below. The file is never written. |
+| Server without write access (any V ≤ N) | **Read-only** operation, see below. A V < N file is migrated in memory only: no backup, no save. |
 | V > N, and `min_reader_version` > N or missing | **Startup refused**: `BookDbVersionError` (the server must be upgraded). The file is left untouched. |
 
 ### Migration
@@ -163,24 +164,45 @@ migration from version V; an existing backup is never overwritten.
 
 ### Read-only operation
 
-When the file was written by a newer, compatible, version of the server
-(typically a rollback of the server, after its new version migrated the
-file):
+The server runs read-only, the reasons being listed in
+`app.read_only_reasons` (`create_app()`), when:
+
+- the file was written by a newer, compatible, version of the server
+  (typically a rollback of the server, after its new version migrated the
+  file): a rewrite would drop the data of the newer version;
+- the server can not write where it needs to (`srcs/access.py`, checked at
+  startup, before loading the file, by creating and removing a file
+  `.ebookonline-write-test-*` in each directory):
+  - the book directory (`BOOK_DIR`): file operations of the admin pages;
+  - the directory of `BOOK_DB`, and the one of `STATE_FILE`: both files are
+    written to a temporary file of their directory, then renamed;
+  - the thumbnail cache directory (`CACHE_DIR`), which must also be
+    readable: when it can not be written, no thumbnail is generated
+    (`Cache.writable`) and "Régénérer la miniature" is disabled.
+
+Then nothing is written on the disk, except the thumbnail cache (when it is
+writable):
 
 - the file is loaded as usual, the keys unknown to this version are ignored;
-- `BookDir.read_only` is set, and `BookDir.save_db()` writes nothing: the
-  file keeps the data of the newer version, which would be dropped by a
-  rewrite. No migration and no backup either;
+- `BookDir.read_only` is set, and `BookDir.save_db()` writes nothing. No
+  migration on disk and no backup either;
 - the directory scan and the watcher still work, in memory: new books are
   shown, their thumbnails generated (the thumbnail cache does not depend on
   the schema);
-- pins and book edits are applied in memory only, and lost at the next
+- pins, book edits and reader states (`PUT /api/reader/state`, answered with
+  `"readOnly": true`) are applied in memory only, and lost at the next
   restart;
-- a warning is printed at startup, the admin pages show a banner, and the
-  book page tells that a change is kept in memory only.
+- the file operations of the admin pages (rename, move, trash, restore,
+  delete, empty the trash) are refused, and their buttons disabled;
+- a warning per reason is printed at startup; the login page shows a note
+  (without the reasons, which give server paths), the library
+  (`browser_lazy`) a "lecture seule" badge whose tooltip lists the reasons,
+  the admin pages a banner with the reasons, and the book page tells that a
+  change is kept in memory only.
 
-Deploying a server of the file version (or newer) restores the normal
-operation.
+Deploying a server of the file version (or newer), or giving the missing
+write access, then restarting the server, restores the normal operation:
+the access is only checked at startup.
 
 ## Changing the schema
 
@@ -210,3 +232,6 @@ operation.
   (e.g. gunicorn `-w 1`).
 - **Reader states** (`reader_states.json`, `STATE_FILE`) are a separate file,
   which is not versioned.
+- **Write access of the subdirectories.** Only the book directory itself is
+  checked: a file operation in a subdirectory which can not be written is
+  refused when it is done.

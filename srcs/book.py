@@ -165,7 +165,7 @@ class BookDir:
     self._scan_lock (startup scan and rescans requested by the watcher).
     """
 
-    def __init__(self, dbfile : str, cache : Cache):
+    def __init__(self, dbfile : str, cache : Cache, read_only=False):
         assert isinstance(cache, Cache)
 
         self.booklist = []
@@ -179,10 +179,12 @@ class BookDir:
         self._scan_lock = threading.Lock()
         self._loaded = False
 
-        # book.db written by a newer version of ebookonline, but readable by
-        # this one: it is never written, changes are kept in memory only.
-        self.read_only = False
-        # Schema version of the book.db file, when read-only
+        # Nothing is written, neither book.db nor the files of the book
+        # directory: changes are kept in memory only. Given when the server
+        # can not write (see srcs.access), or set by load_db() for a book.db
+        # written by a newer version of ebookonline, but readable by this one.
+        self.read_only = read_only
+        # Schema version of the book.db file, when newer than DB_VERSION
         self.db_version = None
 
     def open(self, book_dir):
@@ -254,7 +256,10 @@ class BookDir:
             self.booklist = booklist
             self.duplicates = duplicates
 
-        if version < DB_VERSION:
+        if version < DB_VERSION and self.read_only:
+            print(f"*** Warning: {self.dbfile}: schema version {version} is "
+                  f"migrated to {DB_VERSION} in memory only (read-only)")
+        elif version < DB_VERSION:
             # Keep the file of the previous version, the first time only
             backup = f"{self.dbfile}.v{version}.bak"
             if not os.path.exists(backup):
@@ -400,7 +405,12 @@ class BookDir:
     # replaces a book moved to the trash). The rescan hashes no file again,
     # a move keeps the modification time of the file.
 
+    def __check_writable(self):
+        if self.read_only:
+            raise BookFileError("read-only mode: the book directory is not modified")
+
     def __present_book(self, sha1):
+        self.__check_writable()
         book = self.find_book_by_sha1(sha1)
         if book is None:
             raise BookFileError(f"unknown book: {sha1}")
@@ -483,6 +493,7 @@ class BookDir:
         Move a duplicate file to the trash, see trash_book(). Returns the
         path of the file in the trash, or raises BookFileError.
         """
+        self.__check_writable()
         with self._scan_lock:
             if relpath not in (d.filename for d in self.duplicates) \
                     or not os.path.isfile(os.path.join(self.dirpath, relpath)):
@@ -498,6 +509,7 @@ class BookDir:
         the book directory (never overwriting a file). A book gets its user
         settings back. Returns the restored path, or raises BookFileError.
         """
+        self.__check_writable()
         prefix = bookfileops.TRASH_DIR + "/"
         relpath = bookfileops.check_relpath(relpath)
         if not relpath.startswith(prefix):

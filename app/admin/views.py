@@ -42,8 +42,8 @@ from app.admin.forms import (
     TrashBookForm,
     TrashDuplicateForm,
 )
+from app import is_read_only
 from app.auth import login_required
-from srcs.book import DB_VERSION
 from srcs.bookfileops import (
     ROOT_CATEGORY,
     BookFileError,
@@ -62,17 +62,6 @@ MOVE_FORM_PREFIX = "move"
 TRASH_FORM_PREFIX = "trash"
 
 CSRF_ERROR = "Formulaire expiré ou invalide, merci de réessayer."
-
-
-@admin.context_processor
-def read_only_context():
-    """ For the banner of the admin pages, when book.db is read-only """
-    d = current_app.bookdir
-    return {
-        "bookdir_read_only": d.read_only,
-        "bookdir_db_version": d.db_version,
-        "bookdir_supported_version": DB_VERSION,
-    }
 
 
 @admin.app_template_filter("datetime")
@@ -144,6 +133,7 @@ def bookadmin(sha1):
         book=book,
         form=form,
         reset_form=ResetThumbnailForm(prefix=RESET_FORM_PREFIX),
+        cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
                                    data={"name": os.path.basename(book.filename)}),
         move_form=_move_form(data={"category": _category_dir(book)}),
@@ -168,6 +158,9 @@ def reset_thumbnail(sha1):
         flash("Formulaire expiré ou invalide, merci de réessayer.", "error")
     elif not book.present:
         flash("Le PDF est absent du répertoire des livres : "
+              "la miniature ne peut pas être régénérée.", "error")
+    elif not current_app.cache.writable:
+        flash("Le répertoire des miniatures n'est pas accessible en écriture : "
               "la miniature ne peut pas être régénérée.", "error")
     else:
         thumbname = current_app.cache.get_thumbname(sha1)
@@ -208,6 +201,11 @@ def _file_operation(description, operation):
     Returns the result of the operation, None when it was refused.
     """
     user = session.get("username")
+    if is_read_only():
+        current_app.logger.warning("%s: %s refused: read-only mode", user, description)
+        flash("Opération refusée : le site est en lecture seule, "
+              "le répertoire des livres n'est pas modifié.", "error")
+        return None
     try:
         result = operation()
     except BookFileError as e:

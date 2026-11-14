@@ -1,3 +1,4 @@
+import os
 import time
 
 import pytest
@@ -19,7 +20,8 @@ class FakeCache(Cache):
         self.subproc = []
         self.requests = []
 
-    def create_thumbnail(self, pdffilename, sha1):
+    def _queue_thumbnail(self, pdffilename, thumbname):
+        sha1 = os.path.splitext(os.path.basename(thumbname))[0]
         self.requests.append((pdffilename, sha1))
 
     def __del__(self):
@@ -83,6 +85,7 @@ def app(tmp_bookdir, monkeypatch):
         "SECRET_KEY": "test",
         "BOOK_DIR": str(bookdir),
         "BOOK_DB": str(tmp_path / "book.db"),
+        "STATE_FILE": str(tmp_path / "reader_states.json"),
         "CACHE_DIR": str(cachedir),
         "BOOK_DIR_WATCH": "false",
     }.items():

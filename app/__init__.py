@@ -21,12 +21,13 @@ import os
 
 import click
 from config import Config
-from flask import Flask
+from flask import Flask, current_app
 from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from srcs.access import can_write_dir, check_write_access
 from srcs.cache import Cache
-from srcs.book import BookDir
+from srcs.book import DB_VERSION, BookDir
 from srcs.watcher import BookDirWatcher
 
 def _serves_requests():
@@ -60,6 +61,21 @@ def _serves_requests():
         reload = get_debug_flag()
     return not reload
 
+def is_read_only():
+    """
+    True when the server writes nothing on the disk (book.db, reader states,
+    files of the book directory): changes are kept in memory only, and lost
+    at the next restart.
+    """
+    return bool(current_app.read_only_reasons)
+
+def _read_only_context():
+    """ For the read-only notices of the pages """
+    return {
+        "read_only": bool(current_app.read_only_reasons),
+        "read_only_reasons": current_app.read_only_reasons,
+    }
+
 def create_app(config_name):
     # instance_relative_config: relative paths given to from_pyfile() are
     # resolved from app.instance_path (<project>/instance) and not from the
@@ -86,10 +102,29 @@ def create_app(config_name):
             x_host=1
         )
 
+    # (creates the cache directory if missing)
     app.cache = Cache.get_instance(app.config['CACHE_DIR'])
-    app.bookdir = BookDir(app.config['BOOK_DB'], app.cache)
+
+    # Read-only when the server can not write where it needs to, or when
+    # book.db was written by a newer version: the reasons, as messages.
+    app.read_only_reasons = check_write_access(
+        app.config['BOOK_DIR'], app.config['BOOK_DB'], app.config['STATE_FILE'],
+        app.config['CACHE_DIR'])
+    # No thumbnail generation which would fail
+    app.cache.writable = can_write_dir(app.config['CACHE_DIR'])
+
+    app.bookdir = BookDir(app.config['BOOK_DB'], app.cache,
+                          read_only=bool(app.read_only_reasons))
     # Last known book list, available at once (no directory scan)
     app.bookdir.open(app.config['BOOK_DIR'])
+    if app.bookdir.db_version is not None:
+        app.read_only_reasons.append(
+            f"La base des livres a été écrite par une version plus récente "
+            f"d'ebookonline (schéma {app.bookdir.db_version}, ce serveur gère "
+            f"le schéma {DB_VERSION})")
+    for reason in app.read_only_reasons:
+        print(f"*** Warning: read-only mode: {reason}")
+    app.context_processor(_read_only_context)
 
     # Startup scan: refresh book.db and the thumbnail cache, then keep them
     # up to date by watching the book directory.

@@ -4,24 +4,32 @@ import os
 import tempfile
 import threading
 
-from config import Config
 from pathlib import Path
 
-from flask import Blueprint, Flask, jsonify, request, send_from_directory
+from flask import Blueprint, current_app, jsonify, request
 
+from app import is_read_only
 from app.auth import api_login_required
 
 # =========================================================
 # CONFIGURATION
 # =========================================================
 
-# Following is current directory
-# BASE_DIR = Path(__file__).resolve().parent
-# STATE_FILE = BASE_DIR / "reader_states.json"
+def memory_states():
+    """
+    Read-only server: the states saved since its start, kept in memory only
+    (over the ones of the file).
+    """
+    return current_app.extensions.setdefault("ebookonline.reader_states", {})
 
-# Catch STATE_FILE location from Flask project config.py file
-STATE_FILE = Path(Config.STATE_FILE)
-BASE_DIR = STATE_FILE.parent
+
+def state_file():
+    """
+    The reader states file: STATE_FILE setting of the application (relative
+    to the current directory), which instance/config.py or
+    EBOOKONLINE_STATE_FILE can override.
+    """
+    return Path(current_app.config["STATE_FILE"])
 
 api = Blueprint('api', __name__)
 
@@ -42,10 +50,11 @@ def load_states():
     dictionnaire vide.
     """
 
-    if not STATE_FILE.exists():
+    path = state_file()
+    if not path.exists():
         return {}
 
-    with STATE_FILE.open("r", encoding="utf-8") as file:
+    with path.open("r", encoding="utf-8") as file:
         data = json.load(file)
 
     if not isinstance(data, dict):
@@ -63,10 +72,11 @@ def save_states(states):
     l'écriture laisse un fichier JSON partiellement écrit.
     """
 
+    path = state_file()
     fd, temporary_name = tempfile.mkstemp(
         prefix="reader_states_",
         suffix=".tmp",
-        dir=str(BASE_DIR),
+        dir=str(path.parent),
     )
 
     try:
@@ -83,7 +93,7 @@ def save_states(states):
             file.flush()
             os.fsync(file.fileno())
 
-        os.replace(temporary_name, STATE_FILE)
+        os.replace(temporary_name, path)
 
     finally:
         if os.path.exists(temporary_name):
@@ -191,8 +201,9 @@ def get_reader_state(document_id):
 
     try:
         with state_lock:
-            states = load_states()
-            state = states.get(document_id)
+            state = memory_states().get(document_id)
+            if state is None:
+                state = load_states().get(document_id)
 
     except (OSError, ValueError, json.JSONDecodeError):
         api.logger.exception(
@@ -230,6 +241,17 @@ def put_reader_state():
         return jsonify({
             "error": validation_error
         }), 400
+
+    if is_read_only():
+        with state_lock:
+            memory_states()[state["documentId"]] = state
+        return jsonify({
+            "success": True,
+            "readOnly": True,
+            "message": "Lecture seule : état du lecteur conservé en mémoire "
+                       "seulement, il sera perdu au redémarrage.",
+            "state": state,
+        }), 200
 
     try:
         with state_lock:

@@ -246,6 +246,44 @@ def test_db_without_version_is_migrated(library, tmp_bookdir):
         assert json.load(f)["version"] == srcs.book.DB_VERSION
 
 
+def test_read_only_db_is_never_written(library, tmp_bookdir):
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf")
+    library.rescan()
+    content = Path(library.dbfile).read_text()
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]), read_only=True)
+    reopened.open(library.dirpath)
+    assert reopened.read_only and reopened.db_version is None
+    make_pdf(root / "b.pdf")
+    reopened.rescan()
+    reopened.find_book_by_filename("a.pdf").bookmarked = True
+    reopened.save_db()
+    # kept in memory only
+    assert names(reopened.get_booklist()) == ["a.pdf", "b.pdf"]
+    assert Path(library.dbfile).read_text() == content
+
+
+def test_read_only_db_is_migrated_in_memory_only(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    library.find_book_by_filename("a.pdf").tags = "algo"
+    library.save_db()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    del db["version"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+    old_content = Path(library.dbfile).read_text()
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]), read_only=True)
+    reopened.open(library.dirpath)
+    assert reopened.find_book_by_filename("a.pdf").tags == "algo"
+    # neither backup nor save
+    assert Path(library.dbfile).read_text() == old_content
+    assert not list(Path(library.dbfile).parent.glob("*.bak"))
+
+
 def test_db_backup_is_not_overwritten(library, tmp_bookdir):
     make_pdf(Path(library.dirpath) / "a.pdf")
     library.rescan()
