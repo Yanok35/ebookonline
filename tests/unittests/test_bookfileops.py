@@ -10,6 +10,7 @@ from srcs.bookfileops import (
     ensure_trash,
     is_ignored,
     list_categories,
+    list_trash,
     move_no_replace,
     move_to_free_name,
 )
@@ -127,3 +128,15 @@ def test_list_categories(tmp_path):
     (tmp_path / "a.pdf").touch()
     os.symlink(tmp_path / "Science", tmp_path / "link")
     assert list_categories(str(tmp_path)) == ["art", "Science", "Zoo"]
+
+
+def test_list_trash(tmp_path):
+    assert list_trash(str(tmp_path)) == []
+    ensure_trash(str(tmp_path))
+    for name in ["Trash/b.pdf", "Trash/Science/a.pdf", "Trash/notes.txt", "Trash/.hidden/c.pdf"]:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("x" * 10)
+    files = list_trash(str(tmp_path))
+    assert [(f.filename, f.original) for f in files] == \
+        [("Trash/b.pdf", "b.pdf"), ("Trash/Science/a.pdf", "Science/a.pdf")]
+    assert files[0].filesize == 10
