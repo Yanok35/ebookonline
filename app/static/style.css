@@ -408,3 +408,13 @@ input:disabled {
     background-color: #fff;
     border-left: 4px solid darkred;
 }
+
+/* Read-only server: library badge */
+
+.read-only-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1em;
+    cursor: help;
+}

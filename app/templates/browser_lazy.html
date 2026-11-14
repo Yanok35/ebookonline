@@ -160,6 +160,10 @@
     <body>
         <div class="titlebar">
             <h1><a href="{{ url_for('.index') }}">Liste des livres</a></h1>
+            {% if read_only %}
+            <span class="badge read-only-badge"
+                  title="{{ (['Session en lecture seule : les modifications (épingles, positions de lecture) sont conservées en mémoire et seront perdues au redémarrage.'] + read_only_reasons) | join('\n') }}">lecture seule</span>
+            {% endif %}
         </div>
 
         <div class="actionbar">
