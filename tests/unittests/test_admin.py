@@ -264,3 +264,43 @@ def test_read_only_book_page(read_only_app):
     # applied in memory, not saved
     assert book.tags == "algo"
     assert Path(read_only_app.config["BOOK_DB"]).read_text() == db_content
+
+
+def test_duplicates_page_total_size(app, client):
+    root = Path(app.config["BOOK_DIR"])
+    # hidden without duplicates
+    assert "Taille totale" not in client.get("/bookadmin/duplicates").text
+
+    (root / "a.pdf").write_bytes(b"%PDF-" + b"a" * (1024 * 1024 - 5))
+    (root / "b.pdf").write_bytes(b"%PDF-" + b"b" * (512 * 1024 - 5))
+    for name in ["a", "b"]:
+        shutil.copy(root / f"{name}.pdf", root / f"copy-of-{name}.pdf")
+    shutil.copy(root / "a.pdf", root / "z.pdf")
+    app.bookdir.rescan()
+
+    # the copies only: 2 x 1 MiB + 0.5 MiB
+    html = client.get("/bookadmin/duplicates").text
+    assert "Taille totale des copies : 2.50&nbsp;Mo" in html
+    # between the title and the note
+    assert html.index("<h2>Doublons</h2>") < html.index("Taille totale") \
+        < html.index("Fichiers au contenu identique")
+
+
+def test_book_list_total_size(app, client):
+    root = Path(app.config["BOOK_DIR"])
+    # hidden without books
+    assert "Taille totale" not in client.get("/bookadmin/").text
+
+    (root / "a.pdf").write_bytes(b"%PDF-" + b"a" * (1024 * 1024 - 5))
+    (root / "b.pdf").write_bytes(b"%PDF-" + b"b" * (512 * 1024 - 5))
+    (root / "gone.pdf").write_bytes(b"%PDF-" + b"c" * (1024 * 1024 - 5))
+    app.bookdir.rescan()
+    os.remove(root / "gone.pdf")
+    app.bookdir.rescan()
+
+    # the missing book is not counted
+    html = client.get("/bookadmin/").text
+    assert "Taille totale : 1.50&nbsp;Mo" in html
+    # between the title and the table
+    assert html.index("<h2>Liste des livres</h2>") < html.index("Taille totale") \
+        < html.index("<table")

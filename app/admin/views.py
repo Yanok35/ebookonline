@@ -79,6 +79,8 @@ def book_list():
     return render_template("admin/book_list.html",
                            books=books,
                            nb_missing=sum(not b.present for b in books),
+                           # present books only (a missing book has no size)
+                           total_size=sum(b.filesize for b in books if b.present),
                            duplicates=current_app.bookdir.get_duplicates(),
                            nb_trash=len(list_trash(current_app.bookdir.dirpath)),
                            titre="eBook admin")
@@ -94,6 +96,8 @@ def duplicates():
                    key=lambda b: b.filename.lower())
     return render_template("admin/duplicates.html",
                            duplicate_books=[(b, duplicates[b.sha1]) for b in books],
+                           # space taken by the copies, freed by trashing them
+                           copies_size=sum(f.filesize for b in books for f in duplicates[b.sha1]),
                            trash_form=TrashDuplicateForm(),
                            titre="eBook admin - doublons")
 
@@ -288,8 +292,10 @@ def trash_duplicate():
 @login_required
 def trash():
     """ The PDF files of the trash, which can be restored """
+    files = list_trash(current_app.bookdir.dirpath)
     return render_template("admin/trash.html",
-                           files=list_trash(current_app.bookdir.dirpath),
+                           files=files,
+                           total_size=sum(f.filesize for f in files),
                            restore_form=RestoreForm(),
                            delete_form=DeleteFromTrashForm(),
                            empty_form=EmptyTrashForm(),

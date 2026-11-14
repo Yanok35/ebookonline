@@ -302,3 +302,18 @@ def test_empty_trash_requires_csrf_token(app, client, book):
 def test_trash_deletion_requires_login(app, url):
     response = app.test_client().post(url)
     assert response.status_code == 302 and response.location.endswith("/login")
+
+
+def test_trash_page_total_size(app, client):
+    trash = Path(app.config["BOOK_DIR"]) / "Trash"
+    # hidden when the trash is empty
+    assert "Taille totale" not in client.get("/bookadmin/trash").text
+
+    (trash / "Science").mkdir(parents=True)
+    (trash / "a.pdf").write_bytes(b"a" * (1024 * 1024))
+    (trash / "Science" / "b.pdf").write_bytes(b"b" * (256 * 1024))
+    html = client.get("/bookadmin/trash").text
+    assert "Taille totale : 1.25&nbsp;Mo" in html
+    # between the title and the table
+    assert html.index("<h2>Corbeille</h2>") < html.index("Taille totale") \
+        < html.index("<table")
