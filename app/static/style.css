@@ -366,3 +366,12 @@ form.inline-action {
 form.inline-action button {
     font-size: 0.8em;
 }
+
+.admin-table td.actions {
+    white-space: nowrap;
+}
+
+.admin-table td.actions form.inline-action {
+    display: inline-block;
+    margin-right: 0.3em;
+}

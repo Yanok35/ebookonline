@@ -33,6 +33,7 @@ from flask import (
 
 from app.admin.forms import (
     BookForm,
+    DeleteFromTrashForm,
     MoveBookForm,
     RenameBookForm,
     ResetThumbnailForm,
@@ -42,7 +43,13 @@ from app.admin.forms import (
 )
 from app.auth import login_required
 from srcs.book import DB_VERSION
-from srcs.bookfileops import ROOT_CATEGORY, BookFileError, list_categories, list_trash
+from srcs.bookfileops import (
+    ROOT_CATEGORY,
+    BookFileError,
+    delete_from_trash,
+    list_categories,
+    list_trash,
+)
 
 admin = Blueprint('admin', __name__)
 
@@ -284,6 +291,7 @@ def trash():
     return render_template("admin/trash.html",
                            files=list_trash(current_app.bookdir.dirpath),
                            restore_form=RestoreForm(),
+                           delete_form=DeleteFromTrashForm(),
                            titre="eBook admin - corbeille")
 
 
@@ -299,4 +307,20 @@ def restore():
                                    lambda: current_app.bookdir.restore_from_trash(filename))
         if restored:
             flash(f"Fichier restauré : {restored}")
+    return redirect(url_for(".trash"))
+
+
+@admin.route("/bookadmin/trash/delete", methods=["POST"])
+@login_required
+def delete():
+    form = DeleteFromTrashForm()
+    if not form.validate_on_submit():
+        _flash_form_errors(form)
+    else:
+        filename = form.filename.data
+        deleted = _file_operation(
+            f"delete '{filename}'",
+            lambda: delete_from_trash(current_app.bookdir.dirpath, filename))
+        if deleted:
+            flash(f"Fichier supprimé définitivement : {deleted}")
     return redirect(url_for(".trash"))

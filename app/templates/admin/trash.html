@@ -44,11 +44,17 @@
                 {% for f in files %}
                     <tr>
                         <td>{{ f.original }}</td>
-                        <td>
+                        <td class="actions">
                             <form class="inline-action" action="{{ url_for('.restore') }}" method="post">
                                 <input type="hidden" name="csrf_token" value="{{ restore_form.csrf_token.current_token }}">
                                 <input type="hidden" name="filename" value="{{ f.filename }}">
                                 <button type="submit" title="Remettre à {{ f.original }}">Restaurer</button>
+                            </form>
+                            <form class="inline-action" action="{{ url_for('.delete') }}" method="post"
+                                  onsubmit='return confirm({{ ("Supprimer définitivement « " ~ f.original ~ " » ?") | tojson }})'>
+                                <input type="hidden" name="csrf_token" value="{{ delete_form.csrf_token.current_token }}">
+                                <input type="hidden" name="filename" value="{{ f.filename }}">
+                                <button type="submit" class="danger" title="Supprimer définitivement le fichier">Supprimer</button>
                             </form>
                         </td>
                         <td class="size">{{ '%.2f' % (f.filesize / 1024 / 1024) }}&nbsp;Mo</td>

@@ -132,3 +132,10 @@ class RestoreForm(FlaskForm):
 
     filename = HiddenField(validators=[DataRequired()])
     submit = SubmitField("Restaurer")
+
+
+class DeleteFromTrashForm(FlaskForm):
+    """ Delete for good a file of the trash """
+
+    filename = HiddenField(validators=[DataRequired()])
+    submit = SubmitField("Supprimer")
