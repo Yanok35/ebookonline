@@ -1,7 +1,15 @@
-{% if bookdir_read_only %}
-        <p class="read-only-banner">
-            Base en lecture seule : book.db a été écrit par une version plus récente
-            d'ebookonline (schéma {{ bookdir_db_version }}, ce serveur gère le schéma {{ bookdir_supported_version }}).
-            Les modifications sont conservées en mémoire et seront perdues au redémarrage.
-        </p>
+{% if read_only %}
+        <div class="read-only-banner">
+            <p>
+                Site en lecture seule : rien n'est écrit sur le disque, ni la base
+                des livres, ni les positions de lecture, ni les fichiers du répertoire
+                des livres. Les modifications sont conservées en mémoire et seront
+                perdues au redémarrage.
+            </p>
+            <ul>
+            {% for reason in read_only_reasons %}
+                <li>{{ reason }}</li>
+            {% endfor %}
+            </ul>
+        </div>
 {% endif %}
