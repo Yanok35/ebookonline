@@ -99,9 +99,22 @@ def test_gunicorn_logger(root_handlers):
     assert not logger.access_log_enabled
 
 
-# failregex of the fail2ban filter of the README (<HOST> replaced): the
-# first occurrence of the message, the user name is after it
-FAIL2BAN_REGEX = r"^.*?Login failed from (?P<host>\S+): user"
+# The fail2ban filter of the README: prefregex keeps the content of the
+# messages of the application logger, after the journal prefix, then the
+# failregex (<ADDR>: an IP address) are anchored at its beginning.
+PREFREGEX = r"^\S+ \S+\[\d+\]: app: (?P<content>.+)$"
+ADDR = r"(?P<addr>[0-9a-fA-F:.]+)"
+FAILREGEX = {
+    "auth": rf"^Login failed from {ADDR}: user",
+    "notfound": rf"^Not found from {ADDR}: [A-Z]+\s",
+}
+
+
+def fail2ban_match(message, mode):
+    """ The address fail2ban would ban for a message of the app logger """
+    content = re.match(PREFREGEX, "server gunicorn[1234]: app: " + message)
+    match = content and re.match(FAILREGEX[mode], content.group("content"))
+    return match and match.group("addr")
 
 
 def test_failed_login_is_logged(app, caplog):
@@ -114,9 +127,9 @@ def test_failed_login_is_logged(app, caplog):
     assert response.status_code == 401
     messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert len(messages) == 1 and "\n" not in messages[0]
-    # the user name can not fake the address, in the line read by fail2ban
-    line = "server gunicorn[1234]: app: " + messages[0]
-    assert re.match(FAIL2BAN_REGEX, line).group("host") == "203.0.113.5"
+    # the user name can not fake the address
+    assert fail2ban_match(messages[0], "auth") == "203.0.113.5"
+    assert not fail2ban_match(messages[0], "notfound")
 
 
 def test_login_is_logged(app, caplog):
@@ -128,3 +141,33 @@ def test_login_is_logged(app, caplog):
     assert response.status_code == 302
     assert "Login from 127.0.0.1: user 'alice'" in caplog.text
     assert "Login failed" not in caplog.text
+    assert not any(fail2ban_match(r.getMessage(), mode)
+                   for r in caplog.records for mode in FAILREGEX)
+
+
+def test_anonymous_not_found_is_logged(app, caplog):
+    client = app.test_client()
+    response = client.get("/wp-login.php", headers={"X-Forwarded-For": "203.0.113.5"})
+    assert response.status_code == 404
+    # the path can not fake the address either
+    response = client.post("/x' Not found from 10.0.0.1: GET '/y",
+                           headers={"X-Forwarded-For": "203.0.113.6"})
+    assert response.status_code == 404
+
+    messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert messages[0] == "Not found from 203.0.113.5: GET '/wp-login.php'"
+    assert [fail2ban_match(m, "notfound") for m in messages] == ["203.0.113.5", "203.0.113.6"]
+    assert not any(fail2ban_match(m, "auth") for m in messages)
+
+
+def test_not_found_of_logged_in_user_is_not_a_failure(app, client, caplog):
+    caplog.set_level(logging.INFO)
+    # unknown page, and unknown book of the admin pages (e.g. a stale link)
+    assert client.get("/missing").status_code == 404
+    assert client.get("/bookadmin/" + "0" * 40).status_code == 404
+
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+    messages = [r.getMessage() for r in caplog.records if "Not found" in r.getMessage()]
+    assert messages == ["Not found from 127.0.0.1 for user 'test': GET '/missing'",
+                        "Not found from 127.0.0.1 for user 'test': GET '/bookadmin/" + "0" * 40 + "'"]
+    assert not any(fail2ban_match(m, mode) for m in messages for mode in FAILREGEX)
