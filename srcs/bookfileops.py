@@ -203,3 +203,46 @@ def list_trash(book_dir):
             original = relpath[len(TRASH_DIR) + 1:]
             files.append(TrashFile(relpath, original, st.st_mtime, st.st_size))
     return sorted(files, key=lambda f: f.original.lower())
+
+
+def _remove_empty_trash_dirs(book_dir, dirpath):
+    """ Remove dirpath and its parents while empty, up to the trash (kept) """
+    trash = os.path.realpath(os.path.join(book_dir, TRASH_DIR))
+    dirpath = os.path.realpath(dirpath)
+    while dirpath != trash and os.path.commonpath([trash, dirpath]) == trash:
+        try:
+            os.rmdir(dirpath)
+        except OSError:
+            return
+        dirpath = os.path.dirname(dirpath)
+
+
+def delete_from_trash(book_dir, relpath):
+    """
+    Delete for good a PDF file of the trash (relpath: Trash/...), or raise
+    BookFileError. The directories of the trash left empty are removed.
+    """
+    relpath = check_relpath(relpath)
+    if not relpath.startswith(TRASH_DIR + "/"):
+        raise BookFileError(f"not in the trash: {relpath!r}")
+    abspath = check_inside(book_dir, relpath)
+    if not os.path.isfile(abspath):
+        raise BookFileError(f"no such file: {relpath!r}")
+    try:
+        os.unlink(abspath)
+    except OSError as e:
+        raise BookFileError(f"can not delete {relpath!r}: {e.strerror}") from None
+    _remove_empty_trash_dirs(book_dir, os.path.dirname(abspath))
+    return relpath
+
+
+def empty_trash(book_dir):
+    """
+    Delete for good the PDF files of the trash (see list_trash()). Returns
+    the number of deleted files, or raises BookFileError on the first file
+    which can not be deleted.
+    """
+    files = list_trash(book_dir)
+    for f in files:
+        delete_from_trash(book_dir, f.filename)
+    return len(files)
