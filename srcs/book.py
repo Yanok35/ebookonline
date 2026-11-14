@@ -26,7 +26,7 @@ import threading
 from collections import namedtuple
 from threading import Thread
 
-from srcs import bookfileops
+from srcs import bookfileops, pdfcover
 from srcs.bookfileops import IGNORE_MARKER, BookFileError
 from srcs.cache import Cache
 from srcs.cache import sha1_file
@@ -527,6 +527,51 @@ class BookDir:
             log.info("Restored from the trash: '%s'", original)
             self.__rescan()
         return original
+
+    # Suffix of the name of a copy of a PDF file with a cover page
+    COVERED_SUFFIX = " (covered)"
+
+    def insert_cover(self, sha1, image):
+        """
+        Write a copy of the PDF file of a book, with a first page showing the
+        image (bytes of a JPEG or PNG file), next to it: 'name (covered).pdf'
+        (or 'name (covered) (2).pdf', ... if it exists). The copy keeps the
+        modification time of the file, and is a new book with the user
+        settings of the original one, which is not changed. Returns the path
+        of the copy, or raises BookFileError.
+        """
+        with self._scan_lock:
+            book = self.__present_book(sha1)
+            src = os.path.join(self.dirpath, book.filename)
+            stem = posixpath.splitext(book.filename)[0]
+            relpath = bookfileops.check_relpath(stem + self.COVERED_SUFFIX + ".pdf")
+            dst = bookfileops.check_inside(self.dirpath, relpath)
+
+            # Written next to its destination (same file system), under a
+            # name ignored by the scan and the watcher (hidden, not a PDF)
+            fd, tmpname = tempfile.mkstemp(prefix=".ebookonline-cover-", suffix=".tmp",
+                                           dir=os.path.dirname(dst))
+            os.close(fd)
+            try:
+                pdfcover.insert_cover(src, image, tmpname)
+                st = os.stat(src)
+                os.utime(tmpname, ns=(st.st_atime_ns, st.st_mtime_ns))
+                dst = bookfileops.move_to_free_name(tmpname, dst)
+            finally:
+                if os.path.exists(tmpname):
+                    os.unlink(tmpname)
+            relpath = os.path.relpath(dst, self.dirpath).replace(os.sep, "/")
+            log.info("Cover inserted: '%s' -> '%s'", book.filename, relpath)
+
+            self.__rescan()
+            copy = self.find_book_by_filename(relpath)
+            if copy is not None:
+                with self.lock:
+                    copy.tags, copy.editor = book.tags, book.editor
+                    copy.year, copy.isbn = book.year, book.isbn
+                    copy.bookmarked = book.bookmarked
+                self.save_db()
+        return relpath
 
     def __trash(self, relpath):
         bookfileops.ensure_trash(self.dirpath)
