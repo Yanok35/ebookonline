@@ -89,3 +89,14 @@ def test_read(cache_dir):
     with open(store.path(cache_dir, SHA1), "wb") as f:
         f.write(b"garbage")
     assert store.read(cache_dir, SHA1) is None
+
+
+def test_internal_error_is_tried_again(cache_dir, book_pdf):
+    """ An unexpected exception (a bug) is tried again; a damaged PDF file is not """
+    store.write_error(cache_dir, SHA1, store.INTERNAL_ERROR + "FzErrorFormat: code=7: object is not a stream")
+    assert store.is_internal_error(store.read(cache_dir, SHA1))
+    assert store.update(cache_dir, SHA1, str(book_pdf)) == store.EXTRACTED
+    assert store.read(cache_dir, SHA1)["error"] is None
+
+    store.write_error(cache_dir, SHA1, "can not open the PDF file: broken")
+    assert store.update(cache_dir, SHA1, str(book_pdf)) == store.CURRENT

@@ -80,9 +80,23 @@ def _now():
     return datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
 
 
+# Prefix of the error of an unexpected exception of the analysis (see
+# service._worker_main()): a bug, not a damaged PDF file
+INTERNAL_ERROR = "analysis failed: "
+
+
+def is_internal_error(entry):
+    return entry is not None and (entry.get("error") or "").startswith(INTERNAL_ERROR)
+
+
 def is_extracted(entry):
-    """ True when the raw data (or the error) of entry is up to date """
-    return entry is not None and entry.get("extract_version") == extract.EXTRACT_VERSION
+    """
+    True when the raw data (or the error) of entry is up to date. An
+    internal error is not: the book is tried again, once per start of the
+    server, in case the bug was fixed.
+    """
+    return entry is not None and entry.get("extract_version") == extract.EXTRACT_VERSION \
+        and not is_internal_error(entry)
 
 
 def is_current(entry):
