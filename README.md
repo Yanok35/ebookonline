@@ -116,6 +116,7 @@ it chooses the user and the command of the service.
 
 ```bash
 gunicorn -w 1 --threads 4 -b 127.0.0.1:5000 \
+    --no-control-socket \
     --logger-class srcs.gunicorn_logger.GunicornLogger \
     'ebookonline:create_app("default")'
 ```
@@ -127,6 +128,12 @@ book.db; `--threads 4`: up to 4 requests served at once by this process.
 the server. The application trusts the `X-Forwarded-For` header of the proxy
 (`BEHIND_REVERSE_PROXY`): a client reaching gunicorn directly could choose
 the address which is logged, thus banned by fail2ban.
+
+`--no-control-socket`: no control socket for the `gunicornc` tool (gunicorn
+25.1 and newer), which is not used. By default, gunicorn creates it in
+`$XDG_RUNTIME_DIR`, unset for a system service, or else in the home
+directory of the user, which a system user often does not have (e.g.
+`Permission denied: '/nonexistent'` at startup).
 
 `--logger-class` gives the messages of gunicorn itself the format of the
 application (see [Logs](#logs)); their level is set by the gunicorn
