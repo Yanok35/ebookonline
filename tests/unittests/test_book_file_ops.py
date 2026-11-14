@@ -282,3 +282,26 @@ def test_restore_from_trash_refused(library, book, relpath):
     with pytest.raises(BookFileError):
         library.restore_from_trash(relpath)
     assert (Path(library.dirpath) / "Trash" / "Science" / "a.pdf").exists()
+
+
+def test_file_operations_keep_the_modification_time(library, book):
+    root = Path(library.dirpath)
+    (root / "Art").mkdir()
+    mtime = 1_700_000_000.5
+    os.utime(root / "Science" / "a.pdf", (mtime, mtime))
+    library.rescan()
+
+    def file_mtime(relpath):
+        return os.stat(root / relpath).st_mtime
+
+    library.rename_book(book.sha1, "renamed")
+    assert file_mtime("Science/renamed.pdf") == mtime
+    library.move_book_to_category(book.sha1, "Art")
+    assert file_mtime("Art/renamed.pdf") == mtime
+    trashed = library.trash_book(book.sha1)
+    assert file_mtime(trashed) == mtime
+    library.restore_from_trash(trashed)
+    assert file_mtime("Art/renamed.pdf") == mtime
+    # and the book.db entry
+    assert book.mtime == mtime
+
