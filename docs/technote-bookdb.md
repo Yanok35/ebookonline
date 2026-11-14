@@ -175,9 +175,13 @@ The server runs read-only, the reasons being listed in
   `.ebookonline-write-test-*` in each directory):
   - the book directory (`BOOK_DIR`): file operations of the admin pages;
   - the directory of `BOOK_DB`, and the one of `STATE_FILE`: both files are
-    written to a temporary file of their directory, then renamed.
+    written to a temporary file of their directory, then renamed;
+  - the thumbnail cache directory (`CACHE_DIR`), which must also be
+    readable: when it can not be written, no thumbnail is generated
+    (`Cache.writable`) and "Régénérer la miniature" is disabled.
 
-Then nothing is written on the disk, except the thumbnail cache:
+Then nothing is written on the disk, except the thumbnail cache (when it is
+writable):
 
 - the file is loaded as usual, the keys unknown to this version are ignored;
 - `BookDir.read_only` is set, and `BookDir.save_db()` writes nothing. No
