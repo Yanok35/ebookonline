@@ -8,11 +8,20 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, request
 
+from app import is_read_only
 from app.auth import api_login_required
 
 # =========================================================
 # CONFIGURATION
 # =========================================================
+
+def memory_states():
+    """
+    Read-only server: the states saved since its start, kept in memory only
+    (over the ones of the file).
+    """
+    return current_app.extensions.setdefault("ebookonline.reader_states", {})
+
 
 def state_file():
     """
@@ -192,8 +201,9 @@ def get_reader_state(document_id):
 
     try:
         with state_lock:
-            states = load_states()
-            state = states.get(document_id)
+            state = memory_states().get(document_id)
+            if state is None:
+                state = load_states().get(document_id)
 
     except (OSError, ValueError, json.JSONDecodeError):
         api.logger.exception(
@@ -231,6 +241,17 @@ def put_reader_state():
         return jsonify({
             "error": validation_error
         }), 400
+
+    if is_read_only():
+        with state_lock:
+            memory_states()[state["documentId"]] = state
+        return jsonify({
+            "success": True,
+            "readOnly": True,
+            "message": "Lecture seule : état du lecteur conservé en mémoire "
+                       "seulement, il sera perdu au redémarrage.",
+            "state": state,
+        }), 200
 
     try:
         with state_lock:
