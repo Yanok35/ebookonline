@@ -21,10 +21,18 @@ import re
 
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField, FileRequired
-from wtforms import HiddenField, IntegerField, SelectField, StringField, SubmitField
+from wtforms import (
+    HiddenField,
+    IntegerField,
+    SelectField,
+    StringField,
+    SubmitField,
+    TextAreaField,
+)
 from wtforms.validators import DataRequired, Length, Optional, Regexp, ValidationError
 
 YEAR_MIN, YEAR_MAX = 1450, 2100
+AUTHORS_MAX, AUTHOR_MAX_LENGTH = 20, 200
 
 
 def _strip(value):
@@ -49,6 +57,25 @@ class YearField(IntegerField):
             raise ValueError("Année invalide.") from None
 
 
+class AuthorsField(TextAreaField):
+    """ A list of names: one per line, or separated by ';' """
+
+    def process_formdata(self, valuelist):
+        if valuelist:
+            names = (n.strip() for n in re.split(r"[\n;]", valuelist[0]))
+            self.data = [" ".join(n.split()) for n in names if n]
+
+    def _value(self):
+        return "\n".join(self.data or [])
+
+
+def _authors_check(form, field):
+    if len(field.data or []) > AUTHORS_MAX:
+        raise ValidationError(f"{AUTHORS_MAX} auteurs au plus.")
+    if any(len(n) > AUTHOR_MAX_LENGTH for n in field.data or []):
+        raise ValidationError(f"{AUTHOR_MAX_LENGTH} caractères au plus par auteur.")
+
+
 def _year_range(form, field):
     # not checked when the value could not be parsed (data is None)
     if field.data is not None and not YEAR_MIN <= field.data <= YEAR_MAX:
@@ -58,6 +85,16 @@ def _year_range(form, field):
 class BookForm(FlaskForm):
     """ User-defined attributes of a book (admin page) """
 
+    title = StringField(
+        "Titre",
+        filters=[_strip],
+        validators=[Length(max=500)])
+    authors = AuthorsField(
+        "Auteurs",
+        default=list,
+        validators=[_authors_check],
+        description="Un par ligne (ou séparés par « ; »).",
+        render_kw={"rows": 2})
     tags = StringField(
         "Tags",
         filters=[_normalize_tags],
@@ -65,6 +102,7 @@ class BookForm(FlaskForm):
         description="Séparés par des espaces.")
     editor = StringField(
         "Éditeur",
+        description="Maison d'édition.",
         filters=[_strip],
         validators=[Length(max=200)])
     year = YearField(
@@ -79,6 +117,15 @@ class BookForm(FlaskForm):
                    message="ISBN-10 ou ISBN-13 attendu (tirets et espaces acceptés)."),
         ])
     submit = SubmitField("Enregistrer")
+    # meta_reviewed: the user has reviewed the metadata, or not anymore
+    review = SubmitField("Enregistrer et marquer comme relu")
+    unreview = SubmitField("Enregistrer et remettre à relire")
+
+
+class AnalyseForm(FlaskForm):
+    """ Analyse the PDF file again (CSRF protection only) """
+
+    submit = SubmitField("Relancer l'analyse")
 
 
 class ResetThumbnailForm(FlaskForm):

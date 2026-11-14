@@ -153,6 +153,10 @@ class MetadataService:
                 self._todo.move_to_end(sha1, last=False)
             self._cond.notify_all()
 
+    @property
+    def running(self):
+        return self._running
+
     def is_pending(self, sha1):
         """ True when a book is waiting for, or under, processing """
         with self._cond:

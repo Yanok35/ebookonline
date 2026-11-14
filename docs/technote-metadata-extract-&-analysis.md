@@ -189,8 +189,8 @@ a damaged file is not opened at each start.
   known up to date is skipped, so only the first scan of the server reads
   every cache file;
 - the server process keeps the queue of the books, in a dispatcher thread;
-  a request marked urgent (e.g. "Relancer l'analyse" on the book page,
-  phase 2) goes first;
+  a request marked urgent ("Relancer l'analyse" on the book page) goes
+  first;
 - `METADATA_WORKERS` worker processes (1 by default), at the nice level
   `METADATA_NICE` (10 by default), make the cache files up to date
   (`store.update()`). A worker only gets a sha1 and a path and writes one
@@ -214,6 +214,38 @@ written, like the thumbnails: they do not depend on `book.db`.
 
 Order of magnitude: about 0.15 s per book on a desktop computer, one
 process.
+
+## Book page (`/bookadmin/<sha1>`)
+
+The suggestions are made when the page is shown (`app/admin/metadata.py`),
+from the cache file of the book, its file name, and what is learned from
+the other books of `book.db`. Nothing is saved until the user submits the
+form.
+
+- **Empty field**: prefilled with the suggestion, highlighted (yellow), the
+  score and the sources below it. Saving the form validates it. A field
+  edited by the user is no longer highlighted.
+- **Field with a value**: never replaced. When the suggestion is another
+  value (compared without case and accents; same publisher; same ISBN as
+  ISBN-13), a hint shows it, with a button "Utiliser" which sets it in the
+  field.
+- **Reviewed book** (`meta_reviewed`, badge "relu"): nothing is prefilled,
+  an empty field only gets the hint and "Utiliser": the user chose to leave
+  it empty.
+- The alternatives of a field are proposed in its list (datalist); the
+  other names of persons found, as buttons "+ name" adding an author.
+- Buttons: "Enregistrer" (keeps the review state), "Enregistrer et marquer
+  comme relu", and on a reviewed book "Enregistrer et remettre à relire".
+  The authors are entered one per line (or separated by ";").
+- **Analyse du PDF**: the state of the analysis (pending, date, no text,
+  error, done by an older version), and "Relancer l'analyse": the PDF file
+  is read again (`force`), before the other books. While the analysis is
+  pending, the page asks `/bookadmin/<sha1>/analysis` (JSON `{"pending":
+  bool}`) every 2 seconds, and reloads when it is done, unless the form was
+  edited meanwhile (then it only tells it).
+- **Détail de l'analyse** (bottom of the page): every candidate of each
+  field, with its source and weight, and the text extracted from the key
+  pages: to understand a wrong suggestion.
 
 ## Known limitations
 

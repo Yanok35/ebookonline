@@ -77,16 +77,43 @@
                     {% endif %}
                 </dl>
 
-                <h2>Informations</h2>
+                <h2>Informations
+                    {% if book.meta_reviewed %}<span class="badge reviewed">relu</span>{% endif %}</h2>
+                {% if suggestions and not book.meta_reviewed %}
+                <p class="hint">Les champs <span class="suggested-sample">surlignés</span> sont
+                    pré-remplis avec les suggestions trouvées dans le PDF : vérifiez-les,
+                    puis enregistrez.</p>
+                {% endif %}
                 <form method="post" novalidate>
                     {{ form.hidden_tag() }}
-                    {% for field in [form.tags, form.editor, form.year, form.isbn] %}
+                    {% for field in [form.title, form.authors, form.editor, form.year, form.isbn, form.tags] %}
+                    {% set s = suggestions.get(field.name) %}
                     <div class="field">
                         {{ field.label }}
-                        {% if field is sameas form.editor %}
-                        {{ field(list="library-editors") }}
-                        {% else %}
-                        {{ field() }}
+                        {% set attrs = {} %}
+                        {% if s and s.prefilled %}{% set _ = attrs.update({"class": "suggested", "title": s.tooltip}) %}{% endif %}
+                        {% if field is sameas form.editor %}{% set _ = attrs.update({"list": "editor-options"}) %}
+                        {% elif s and s.options %}{% set _ = attrs.update({"list": field.name ~ "-options"}) %}{% endif %}
+                        {{ field(**attrs) }}
+                        {% if s and s.options and field is not sameas form.editor %}
+                        <datalist id="{{ field.name }}-options">
+                            {% for option in s.options %}<option value="{{ option }}">{% endfor %}
+                        </datalist>
+                        {% endif %}
+                        {% if s and s.prefilled %}
+                        <p class="hint">Suggestion (score {{ s.score }}/100 : {{ s.sources }}).</p>
+                        {% elif s and s.differs %}
+                        <p class="hint suggestion">Suggestion : <q>{{ s.text }}</q>
+                            (score {{ s.score }}/100 : {{ s.sources }})
+                            <button type="button" class="use-suggestion" data-field="{{ field.id }}"
+                                    data-value="{{ s.form_value }}">Utiliser</button></p>
+                        {% endif %}
+                        {% if s and field is sameas form.authors and s.alternatives %}
+                        <p class="hint">Autres noms trouvés :
+                            {% for name in s.alternatives %}
+                            <button type="button" class="add-author" data-field="{{ field.id }}"
+                                    data-value="{{ name }}">+ {{ name }}</button>
+                            {% endfor %}</p>
                         {% endif %}
                         {% if field.description %}<p class="hint">{{ field.description }}</p>{% endif %}
                         {% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}
@@ -98,10 +125,27 @@
                     {% if library_tags %}
                     <p class="hint">Tags de la bibliothèque : {{ library_tags | join(' ') }}</p>
                     {% endif %}
-                    <datalist id="library-editors">
+                    <datalist id="editor-options">
+                        {% for option in (suggestions.editor.options if suggestions.editor else []) %}<option value="{{ option }}">{% endfor %}
                         {% for editor in library_editors %}<option value="{{ editor }}">{% endfor %}
                     </datalist>
-                    {{ form.submit() }}
+                    <div class="form-buttons">
+                        {{ form.submit() }}
+                        {% if book.meta_reviewed %}
+                        {{ form.unreview() }}
+                        {% else %}
+                        {{ form.review() }}
+                        {% endif %}
+                    </div>
+                </form>
+
+                <h2>Analyse du PDF</h2>
+                <p class="analysis-state" id="analysis-state"
+                   {% if analysis.pending %}data-poll="{{ url_for('.analysis_state', sha1 = book.sha1) }}"{% endif %}>
+                    {{ analysis.message }}</p>
+                <form action="{{ url_for('.analyse', sha1 = book.sha1) }}" method="post">
+                    {{ analyse_form.hidden_tag() }}
+                    {{ analyse_form.submit(disabled=not analysis.can_run or analysis.pending) }}
                 </form>
             </div>
 
@@ -140,9 +184,84 @@
             {% endif %}
         </div>
 
+        {% if analysis.entry and not analysis.error %}
+        <details class="admin-db analysis-detail">
+            <summary>Détail de l'analyse</summary>
+            <p class="hint">Valeurs trouvées dans le PDF, avec leur source et leur poids
+                (le nom du fichier et vos autres livres sont aussi pris en compte).</p>
+            {% for field, cands in analysis.candidates() %}
+            <h3>{{ form[field].label.text }}</h3>
+            <table class="admin-table">
+                <thead><tr><th>Poids</th><th>Source</th><th>Valeur</th></tr></thead>
+                <tbody>
+                {% for value, source, weight in cands %}
+                <tr><td class="size">{{ weight | round | int }}</td><td>{{ source }}</td><td>{{ value }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Aucune valeur trouvée.</p>
+            {% endfor %}
+            <details>
+                <summary>Texte extrait</summary>
+                {% for page, text in analysis.texts() %}
+                <h4>Page {{ page }}</h4>
+                <pre>{{ text }}</pre>
+                {% else %}
+                <p>Aucun texte.</p>
+                {% endfor %}
+            </details>
+        </details>
+        {% endif %}
+
         <details class="admin-db">
             <summary>Entrée book.db</summary>
             <pre>{{ book.to_json() | tojson(indent=2) }}</pre>
         </details>
+        <script>
+            // "Utiliser": set a suggestion in its field; "+ name": add an author
+            document.querySelectorAll("button.use-suggestion, button.add-author").forEach(function (button) {
+                button.addEventListener("click", function () {
+                    var field = document.getElementById(button.dataset.field);
+                    if (button.classList.contains("add-author")) {
+                        field.value = field.value.trim() ? field.value.trim() + "\n" + button.dataset.value
+                                                         : button.dataset.value;
+                        button.disabled = true;
+                    } else {
+                        field.value = button.dataset.value;
+                    }
+                    field.dispatchEvent(new Event("input", { bubbles: true }));
+                });
+            });
+
+            // A field changed by the user is no longer a suggestion
+            var edited = false;
+            document.querySelectorAll(".book-details form input, .book-details form textarea").forEach(function (field) {
+                field.addEventListener("input", function () {
+                    edited = true;
+                    field.classList.remove("suggested");
+                });
+            });
+
+            // Analysis pending: reload the page when it is done, unless the
+            // form was edited meanwhile
+            var state = document.getElementById("analysis-state");
+            if (state && state.dataset.poll) {
+                var timer = setInterval(function () {
+                    fetch(state.dataset.poll, { credentials: "same-origin" })
+                        .then(function (response) { return response.json(); })
+                        .then(function (data) {
+                            if (data.pending) { return; }
+                            clearInterval(timer);
+                            if (edited) {
+                                state.textContent = "Analyse terminée : rechargez la page pour voir les suggestions.";
+                            } else {
+                                window.location.reload();
+                            }
+                        })
+                        .catch(function () { clearInterval(timer); });
+                }, 2000);
+            }
+        </script>
     </body>
 </html>
