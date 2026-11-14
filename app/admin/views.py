@@ -133,6 +133,7 @@ def bookadmin(sha1):
         book=book,
         form=form,
         reset_form=ResetThumbnailForm(prefix=RESET_FORM_PREFIX),
+        cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
                                    data={"name": os.path.basename(book.filename)}),
         move_form=_move_form(data={"category": _category_dir(book)}),
@@ -157,6 +158,9 @@ def reset_thumbnail(sha1):
         flash("Formulaire expiré ou invalide, merci de réessayer.", "error")
     elif not book.present:
         flash("Le PDF est absent du répertoire des livres : "
+              "la miniature ne peut pas être régénérée.", "error")
+    elif not current_app.cache.writable:
+        flash("Le répertoire des miniatures n'est pas accessible en écriture : "
               "la miniature ne peut pas être régénérée.", "error")
     else:
         thumbname = current_app.cache.get_thumbname(sha1)

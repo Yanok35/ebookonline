@@ -35,7 +35,7 @@
                 {% if book.present %}
                 <form action="{{ url_for('.reset_thumbnail', sha1 = book.sha1) }}" method="post">
                     {{ reset_form.hidden_tag() }}
-                    {{ reset_form.submit() }}
+                    {{ reset_form.submit(disabled=not cache_writable) }}
                 </form>
                 {% endif %}
             </div>
