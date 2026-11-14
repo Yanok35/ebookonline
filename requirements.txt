@@ -9,6 +9,6 @@ MarkupSafe==3.0.4
 pypdf==6.21.4
 rapidfuzz==3.14.6
 Wand==0.7.2
-watchdog==6.0.0
+watchdog==7.1.0
 Werkzeug==3.1.9
 WTForms==3.3.2
