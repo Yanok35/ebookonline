@@ -25,3 +25,10 @@ def test_thumbnail(app, client):
 
     response = client.get(f"/images/{sha1}")
     assert response.mimetype == "image/jpeg" and response.data == b"\xff\xd8 jpeg"
+
+
+def test_readpdf_stays_in_the_book_directory(app, client):
+    app.bookdir.rescan()
+    # book.db is next to the book directory
+    assert (Path(app.config["BOOK_DIR"]).parent / "book.db").exists()
+    assert client.get("/readpdf/..%2Fbook.db").status_code == 404
