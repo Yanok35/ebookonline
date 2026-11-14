@@ -4,10 +4,9 @@ import os
 import tempfile
 import threading
 
-from config import Config
 from pathlib import Path
 
-from flask import Blueprint, Flask, jsonify, request, send_from_directory
+from flask import Blueprint, current_app, jsonify, request
 
 from app.auth import api_login_required
 
@@ -15,13 +14,13 @@ from app.auth import api_login_required
 # CONFIGURATION
 # =========================================================
 
-# Following is current directory
-# BASE_DIR = Path(__file__).resolve().parent
-# STATE_FILE = BASE_DIR / "reader_states.json"
-
-# Catch STATE_FILE location from Flask project config.py file
-STATE_FILE = Path(Config.STATE_FILE)
-BASE_DIR = STATE_FILE.parent
+def state_file():
+    """
+    The reader states file: STATE_FILE setting of the application (relative
+    to the current directory), which instance/config.py or
+    EBOOKONLINE_STATE_FILE can override.
+    """
+    return Path(current_app.config["STATE_FILE"])
 
 api = Blueprint('api', __name__)
 
@@ -42,10 +41,11 @@ def load_states():
     dictionnaire vide.
     """
 
-    if not STATE_FILE.exists():
+    path = state_file()
+    if not path.exists():
         return {}
 
-    with STATE_FILE.open("r", encoding="utf-8") as file:
+    with path.open("r", encoding="utf-8") as file:
         data = json.load(file)
 
     if not isinstance(data, dict):
@@ -63,10 +63,11 @@ def save_states(states):
     l'écriture laisse un fichier JSON partiellement écrit.
     """
 
+    path = state_file()
     fd, temporary_name = tempfile.mkstemp(
         prefix="reader_states_",
         suffix=".tmp",
-        dir=str(BASE_DIR),
+        dir=str(path.parent),
     )
 
     try:
@@ -83,7 +84,7 @@ def save_states(states):
             file.flush()
             os.fsync(file.fileno())
 
-        os.replace(temporary_name, STATE_FILE)
+        os.replace(temporary_name, path)
 
     finally:
         if os.path.exists(temporary_name):

@@ -83,6 +83,7 @@ def app(tmp_bookdir, monkeypatch):
         "SECRET_KEY": "test",
         "BOOK_DIR": str(bookdir),
         "BOOK_DB": str(tmp_path / "book.db"),
+        "STATE_FILE": str(tmp_path / "reader_states.json"),
         "CACHE_DIR": str(cachedir),
         "BOOK_DIR_WATCH": "false",
     }.items():
