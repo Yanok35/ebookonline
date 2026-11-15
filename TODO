@@ -31,15 +31,6 @@
  - Rename the file, to match a "pattern" for the whole library : opt. automatic using pattern from metadata ?
  - Move the file to another directory (category),
 
-# Thumbnails (srcs/cache.py)
- - Ghostscript fallback: the command is run by os.system() with the PDF file
-   name in a shell string: a name with '"' or '$(...)' runs a command (names
-   come from the book directory, and from the admin rename action). Use
-   subprocess.run([...]) without shell.
- - Ghostscript fallback: when gs fails, the function still returns True;
-   resizing the missing image then raises, and the exception stops this
-   thumbnail process for good.
-
 # Book metadata (later steps of the metadata extraction work)
  - Reader: side panel with the metadata form, saved with AJAX
    (e.g. /api/book/<sha1>/metadata), instead of the "à relire" badge link

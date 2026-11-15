@@ -24,6 +24,8 @@ import os
 import math
 import queue
 import signal
+import subprocess
+import tempfile
 
 import multiprocessing
 
@@ -53,6 +55,57 @@ def _reset_signal_handlers():
         signal.signal(getattr(signal, name), signal.SIG_DFL)
     # KeyboardInterrupt: stops the loop of the process (see __del__)
     signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
+# Ghostscript fallback: largest image before the resize (the resolution is
+# halved until below), longest run of gs
+GS_MAX_IMAGE_BYTES = 2048 * 1024
+GS_TIMEOUT = 120
+
+
+def _remove(filename):
+    try:
+        os.remove(filename)
+    except FileNotFoundError:
+        pass
+
+
+def ghostscript_jpeg(pdffilename, thumbname):
+    """
+    The first page of a PDF file as a JPEG image, with Ghostscript: True
+    when the image is written. The command is run without shell, the file
+    names as arguments: any name is safe ('"', '$(...)', a leading '-').
+    No image is left when gs fails.
+    """
+    # absolute: a name can not be taken for an option; '%' would be a page
+    # number in the output file name of gs
+    pdfpath = os.path.abspath(pdffilename)
+    output = os.path.abspath(thumbname).replace("%", "%%")
+    resolution = 150
+    while resolution >= 2:
+        log.info("Thumbnail of %s: trying with Ghostscript (%d dpi)", pdffilename, resolution)
+        cmd = ["gs", "-q", "-dSAFER", "-sDEVICE=jpeg", "-o", output, "-dFirstPage=1",
+               "-dLastPage=1", "-dJPEGQ=92", f"-r{resolution}", pdfpath]
+        log.debug("%s", cmd)
+        try:
+            result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True,
+                                    timeout=GS_TIMEOUT)
+        except (OSError, subprocess.SubprocessError) as e:
+            log.error("No thumbnail for %s: Ghostscript failed: %s", pdffilename, e)
+            _remove(thumbname)
+            return False
+        size = os.path.getsize(thumbname) if os.path.exists(thumbname) else 0
+        if result.returncode != 0 or size == 0:
+            log.error("No thumbnail for %s: Ghostscript failed (exit status %d): %s",
+                      pdffilename, result.returncode,
+                      result.stderr.decode(errors="replace").strip()[-500:])
+            _remove(thumbname)
+            return False
+        log.debug("Thumbnail size: %d bytes", size)
+        if size < GS_MAX_IMAGE_BYTES:
+            break
+        resolution = resolution // 2
+    return True
 
 
 def sha1_file(filename):
@@ -169,8 +222,7 @@ class Cache:
                 except queue.Empty:
                     continue
 
-                log.info("Thumbnail: %s -> %s", pdffilename, thumbname)
-                self.__pdf2jpeg(pdffilename, thumbname)
+                self._thumbnail_job(pdffilename, thumbname)
                 continue
 
             except KeyboardInterrupt:
@@ -179,7 +231,20 @@ class Cache:
 
         return
 
-        # extract first page of PDF
+    def _thumbnail_job(self, pdffilename, thumbname):
+        """
+        A thumbnail request of the queue. An error is logged, and no
+        incomplete thumbnail is left (a placeholder is shown): it does not
+        stop the process, which goes on with the next requests.
+        """
+        log.info("Thumbnail: %s -> %s", pdffilename, thumbname)
+        try:
+            self.__pdf2jpeg(pdffilename, thumbname)
+        except KeyboardInterrupt:
+            raise
+        except Exception:
+            log.error("No thumbnail for %s", pdffilename, exc_info=True)
+            _remove(thumbname)
 
     def __pdf2jpeg(self, pdffilename, thumbname):
         """
@@ -189,7 +254,7 @@ class Cache:
         jpeg_backends = [
             self.__pdf2jpeg_resize_then_wand,
             self.__pdf2jpeg_wand_only,
-            self.__pdf2jpeg_ghostscript
+            ghostscript_jpeg,
         ]
 
         for callback in jpeg_backends:
@@ -202,90 +267,72 @@ class Cache:
 
 
     def __pdf2jpeg_resize_then_wand(self, pdffilename, thumbname):
-
+        """
+        The first page copied alone (pypdf) to a temporary PDF file, then
+        converted to JPEG (wand). The temporary file has a unique name,
+        readable by this user only (tempfile), and is always removed.
+        """
         try:
-            f = open(pdffilename, 'rb') 
-            pdf = PdfReader(f)
-            if pdf.is_encrypted:
-                pdf.decrypt('')
-            # It has been observed working on a second call on some file.
-            try:
-                contents = pdf.get_page(0)
-            except:
-                contents = pdf.pages[0]
+            with open(pdffilename, 'rb') as f:
+                pdf = PdfReader(f)
+                if pdf.is_encrypted:
+                    pdf.decrypt('')
+                # It has been observed working on a second call on some file.
+                try:
+                    contents = pdf.get_page(0)
+                except Exception:
+                    contents = pdf.pages[0]
 
-            pdf = PdfWriter()
-            pdf.add_page(contents)
-            inter = f"/tmp/temp_output_{os.getpid()}.pdf"
-            f = open(inter, 'wb') 
-            pdf.write(f)
-            f.close()
+                writer = PdfWriter()
+                writer.add_page(contents)
+                fd, inter = tempfile.mkstemp(prefix="ebookonline-thumb-", suffix=".pdf")
+                try:
+                    # (the source file is still open: the page is read from it)
+                    with os.fdopen(fd, 'wb') as out:
+                        writer.write(out)
 
-            # Generate image from first page
-
-            # http://docs.wand-py.org/en/0.4.3/
-            # sudo apt-get install python-wand
-
-            with Image(filename=inter) as img:
-                img.alpha_channel = "remove"
-                img.options['pdf:use-cropbox'] = 'true'
-                img.save(filename=thumbname)
-
-            os.remove(inter)
+                    # Generate image from first page (http://docs.wand-py.org/)
+                    with Image(filename=inter) as img:
+                        img.alpha_channel = "remove"
+                        img.options['pdf:use-cropbox'] = 'true'
+                        img.save(filename=thumbname)
+                finally:
+                    _remove(inter)
             return True
 
         except KeyboardInterrupt:
-            raise KeyboardInterrupt
-        except:
+            raise
+        except Exception:
             log.warning("Thumbnail with pypdf and wand failed for %s",
                         pdffilename, exc_info=True)
             return False
 
 
     def __pdf2jpeg_wand_only(self, pdffilename, thumbname):
-
+        """
+        The first page converted to JPEG by wand (ImageMagick). ImageMagick
+        interprets the file names ('coder:' prefix, '[...]' frames, glob
+        characters, '@' list), depending on its version: it reads a symbolic
+        link to the PDF file, with a fixed name in a private temporary
+        directory.
+        """
         try:
             log.info("Thumbnail of %s: trying with wand only", pdffilename)
-            with Image() as img:
-                img.options['pdf:use-cropbox'] = 'true'
-                img.read(filename=pdffilename+"[0]")
-                img.save(filename=thumbname)
+            with tempfile.TemporaryDirectory(prefix="ebookonline-thumb-") as tmpdir:
+                link = os.path.join(tmpdir, "book.pdf")
+                os.symlink(os.path.abspath(pdffilename), link)
+                with Image() as img:
+                    img.options['pdf:use-cropbox'] = 'true'
+                    img.read(filename=link + "[0]")
+                    img.save(filename=thumbname)
             return True
         except KeyboardInterrupt:
-            raise KeyboardInterrupt
-        except:
+            raise
+        except Exception:
             log.warning("Thumbnail with wand failed for %s", pdffilename,
                         exc_info=True)
             return False
 
-
-    def __pdf2jpeg_ghostscript(self, pdffilename, thumbname):
-
-        try:
-            resolution = int(150)
-            while resolution >= 2:
-                log.info("Thumbnail of %s: trying with Ghostscript (%d dpi)",
-                         pdffilename, resolution)
-                cmdLine = f'gs -sDEVICE=jpeg -o "{thumbname}" -dFirstPage=1 -dLastPage=1 -dJPEGQ=92 -r{resolution}x{resolution} "{pdffilename}"'
-                log.debug("%s", cmdLine)
-                retCode = os.system(cmdLine)
-                log.debug("Ghostscript exit status: %d", retCode)
-                if retCode != 0:
-                    #raise "Ghostscript failed"
-                    break
-                filesize = os.stat(thumbname).st_size
-                log.debug("Thumbnail size: %d bytes", filesize)
-                if filesize < (2048 * 1024): # > 2MB
-                    break
-
-                resolution = resolution // 2
-            return True
-        except KeyboardInterrupt:
-            raise KeyboardInterrupt
-        except:
-            log.error("No thumbnail for %s: Ghostscript failed", pdffilename,
-                      exc_info=True)
-            return False
 
     def __thumb_resize_small(self, thumbname):
 
