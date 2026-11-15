@@ -44,6 +44,21 @@ def test_move_book(library, book, mocker):
     assert library.rescan() is False
 
 
+def test_move_book_does_not_rescan(library, book):
+    """ Only the moved book changes: no rescan of the whole directory """
+    make_pdf(Path(library.dirpath) / "c.pdf", title="C")
+    library.cache.requests.clear()
+    library.rename_book(book.sha1, "renamed")
+    assert library.find_book_by_filename("c.pdf") is None
+    assert library.cache.requests == []
+    with open(library.dbfile) as f:
+        entry = next(b for b in json.load(f)["booklist"] if b["sha1"] == book.sha1)
+    assert entry["filename"] == "Science/renamed.pdf" and entry["mtime"] == book.mtime
+    # found by the next scan (the watcher)
+    assert library.rescan() is True
+    assert library.find_book_by_filename("c.pdf") is not None
+
+
 def test_move_book_to_the_root(library, book):
     library.move_book(book.sha1, "a.pdf")
     assert book.filename == "a.pdf" and book.category == "Generals"

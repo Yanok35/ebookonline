@@ -140,6 +140,24 @@ def test_file_replaced_in_place(library):
     assert library.cache.requests == [(str(root / "a.pdf"), book.sha1)]
 
 
+def test_new_content_at_the_path_of_a_missing_book(library):
+    """ The missing book gets the new content: its user settings are kept """
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="v1")
+    make_pdf(root / "b.pdf", title="B")
+    library.rescan()
+    book = library.find_book_by_filename("a.pdf")
+    book.bookmarked = True
+    os.remove(root / "a.pdf")
+    library.rescan()
+    assert not book.present
+
+    make_pdf(root / "a.pdf", title="v2")
+    library.rescan()
+    assert book.present and book.bookmarked and book.filename == "a.pdf"
+    assert len(library.booklist) == 2
+
+
 def test_duplicate_is_not_added(library):
     root = Path(library.dirpath)
     make_pdf(root / "a.pdf", title="same")
