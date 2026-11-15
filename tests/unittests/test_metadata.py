@@ -305,6 +305,42 @@ def test_consolidate_title_forms(candidates, expected):
     assert analyse.consolidate("title", candidates)["value"] == expected
 
 
+@pytest.mark.parametrize("title, expected", [
+    ("Python Algorithms: Mastering Basic Algorithms",
+     ("Python Algorithms", "Mastering Basic Algorithms")),
+    ("Les Misérables — Fantine", ("Les Misérables", "Fantine")),
+    # a series at the end is left out
+    ("Fractional Order Systems: Modeling and Control (World Scientific Series a)",
+     ("Fractional Order Systems", "Modeling and Control")),
+    # an edition, a volume: not a subtitle
+    ("Python for Secret Agents - Second Edition", ("Python for Secret Agents - Second Edition", "")),
+    ("Learning Python: 5th Edition", ("Learning Python: 5th Edition", "")),
+    ("Les Misérables : Tome 2", ("Les Misérables : Tome 2", "")),
+    ("Python Cookbook", ("Python Cookbook", "")),
+    ("C++: The Guide", ("C++", "The Guide")),
+])
+def test_split_title(title, expected):
+    assert analyse.split_title(title) == expected
+
+
+def test_suggest_subtitle():
+    cands = {"title": [["Python Algorithms: Mastering Basic Algorithms", "xmp", 50],
+                       ["Python Algorithms", "title-page", 50],
+                       ["Other Title: Not This One", "meta", 35]]}
+    s = analyse.suggest(cands, filename="Python Algorithms - Magnus Lie Hetland.pdf")
+    assert s["title"]["value"] == "Python Algorithms"
+    assert s["subtitle"]["value"] == "Mastering Basic Algorithms"
+    assert s["subtitle"]["sources"] == ["xmp"] and s["subtitle"]["score"] == 50
+    # the only title has a subtitle: cut to its title
+    s = analyse.suggest({"title": [["Python in Practice: Create Better Programs", "xmp", 50]]})
+    assert (s["title"]["value"], s["subtitle"]["value"]) == ("Python in Practice",
+                                                            "Create Better Programs")
+    # not from the file name, whose parts are often an author
+    s = analyse.suggest({"title": [["Python Algorithms", "xmp", 50]]},
+                        filename="Python Algorithms - Mastering Basic Algorithms.pdf")
+    assert "subtitle" not in s
+
+
 def test_extract_with_damaged_xmp(tmp_path):
     """
     A low level error of MuPDF (FzErrorFormat "object is not a stream", not

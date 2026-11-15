@@ -559,17 +559,40 @@ def test_db_version_2_is_migrated(library, tmp_bookdir):
     assert Path(library.dbfile + ".v2.bak").exists()
 
 
+def test_db_version_3_is_migrated(library, tmp_bookdir):
+    make_pdf(Path(library.dirpath) / "a.pdf")
+    library.rescan()
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    db["version"] = 3
+    for b in db["booklist"]:
+        del b["subtitle"]
+    with open(library.dbfile, "w") as f:
+        json.dump(db, f)
+
+    reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
+    reopened.open(library.dirpath)
+    assert reopened.find_book_by_filename("a.pdf").subtitle == ""
+    with open(library.dbfile) as f:
+        db = json.load(f)
+    assert db["version"] == srcs.book.DB_VERSION and db["min_reader_version"] == 1
+    assert db["booklist"][0]["subtitle"] == ""
+    assert Path(library.dbfile + ".v3.bak").exists()
+
+
 def test_metadata_fields_are_saved(library, tmp_bookdir):
     make_pdf(Path(library.dirpath) / "a.pdf")
     library.rescan()
     book = library.find_book_by_filename("a.pdf")
     book.title, book.authors, book.meta_reviewed = "Les Misérables", ["Victor Hugo"], True
+    book.subtitle = "Fantine"
     library.save_db()
 
     reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
     reopened.open(library.dirpath)
     book = reopened.find_book_by_filename("a.pdf")
-    assert (book.title, book.authors, book.meta_reviewed) == ("Les Misérables", ["Victor Hugo"], True)
+    assert (book.title, book.subtitle, book.authors, book.meta_reviewed) == \
+        ("Les Misérables", "Fantine", ["Victor Hugo"], True)
 
 
 class FakeMetadata:
