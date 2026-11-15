@@ -152,3 +152,40 @@ def test_pypdf_wand_thumbnail_leaves_no_temporary_file(tmp_path, monkeypatch, va
         assert done is False
     elif done:  # (ImageMagick may refuse the PDF files: its security policy)
         assert thumbname.read_bytes()[:2] == b"\xff\xd8"
+
+
+@pytest.mark.parametrize("name", ["k*.pdf", "m?.pdf", "a[1].pdf", "img:b.pdf", "@c.pdf", "d%d.pdf"])
+def test_wand_thumbnail_with_any_file_name(tmp_path, monkeypatch, name):
+    """
+    The file is read whatever its name, and only it (glob characters: not
+    another file); no temporary file is left
+    """
+    import tempfile
+
+    from pypdf import PdfWriter
+    from wand.image import Image
+
+    from tests.conftest import FakeCache
+
+    def pdf(path, width):
+        writer = PdfWriter()
+        writer.add_blank_page(width=width, height=297)
+        with open(path, "wb") as f:
+            writer.write(f)
+
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmpdir))
+    # relative names: a 'coder:' prefix would be interpreted
+    monkeypatch.chdir(tmp_path)
+    pdf(tmp_path / name, 100)
+    for other in ("kz.pdf", "mz.pdf", "a1.pdf", "c.pdf"):
+        pdf(tmp_path / other, 400)
+    thumbname = tmp_path / "out.jpg"
+    cache = FakeCache(tmp_path)
+    if not cache._Cache__pdf2jpeg_wand_only("kz.pdf", str(thumbname)):
+        pytest.skip("ImageMagick refuses the PDF files (security policy)")
+    assert cache._Cache__pdf2jpeg_wand_only(name, str(thumbname))
+    with Image(filename=str(thumbname)) as img:
+        assert img.width < 200  # this file, not another one (400 points)
+    assert list(tmpdir.iterdir()) == []
