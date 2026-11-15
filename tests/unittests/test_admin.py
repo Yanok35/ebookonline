@@ -178,6 +178,13 @@ def test_thumbnail_info(app, client, book):
         < html.index('name="cover-image"')
 
 
+def test_cmyk_thumbnail_info(app, client, book):
+    sof = b"\xff\xc0\x00\x11\x08" + (450).to_bytes(2, "big") + (300).to_bytes(2, "big") + b"\x04"
+    Path(app.cache.get_thumbname(book.sha1)).write_bytes(b"\xff\xd8" + sof)
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "CMYK (couleurs faussées : à régénérer)" in html
+
+
 def test_unreadable_thumbnail_info(app, client, book):
     Path(app.cache.get_thumbname(book.sha1)).write_bytes(b"not an image")
     html = client.get(f"/bookadmin/{book.sha1}").text

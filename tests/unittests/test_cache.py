@@ -239,11 +239,99 @@ def test_jpeg_size(tmp_path):
     assert cache_module.jpeg_size(tmp_path / "a.jpg") == (300, 424)
     # a progressive JPEG (SOF2), after an APP0 segment and fill bytes: the
     # header only
-    sof2 = b"\xff\xc2\x00\x11\x08" + (5).to_bytes(2, "big") + (17).to_bytes(2, "big")
+    sof2 = b"\xff\xc2\x00\x11\x08" + (5).to_bytes(2, "big") + (17).to_bytes(2, "big") + b"\x04"
     (tmp_path / "p.jpg").write_bytes(b"\xff\xd8\xff\xe0\x00\x04ab\xff\xff" + sof2)
     assert cache_module.jpeg_size(tmp_path / "p.jpg") == (17, 5)
+    # the number of components: 4 for CMYK, 3 for RGB
+    assert cache_module.jpeg_info(tmp_path / "p.jpg") == (17, 5, 4)
+    assert cache_module.jpeg_info(tmp_path / "a.jpg") == (300, 424, 3)
     (tmp_path / "bad.jpg").write_bytes(b"\xff\xd8\xff")
     assert cache_module.jpeg_size(tmp_path / "bad.jpg") is None
     (tmp_path / "png.jpg").write_bytes(b"\x89PNG\r\n")
     assert cache_module.jpeg_size(tmp_path / "png.jpg") is None
     assert cache_module.jpeg_size(tmp_path / "missing.jpg") is None
+
+
+# --- colours (CMYK) ---
+
+def make_cmyk_pdf(path):
+    """ A PDF file whose page is a CMYK image (a printed cover) """
+    import pymupdf
+
+    pix = pymupdf.Pixmap(pymupdf.csCMYK, pymupdf.IRect(0, 0, 60, 80), False)
+    pix.set_rect(pix.irect, (200, 20, 80, 10))
+    doc = pymupdf.open()
+    page = doc.new_page(width=120, height=160)
+    page.insert_image(page.rect, stream=pix.tobytes("jpg"))
+    doc.save(path)
+    return path
+
+
+def centre_pixel(path):
+    import pymupdf
+
+    pix = pymupdf.Pixmap(str(path))
+    return pix.pixel(pix.width // 2, pix.height // 2)
+
+
+@need_gs
+@pytest.mark.parametrize("backend", ["resize_then_wand", "wand_only"])
+def test_wand_thumbnail_of_a_cmyk_pdf_is_rgb(tmp_path, backend):
+    """
+    In RGB, with the colours of Ghostscript: in CMYK, the browsers convert
+    it naively (a teal becomes a fluorescent green)
+    """
+    pdf = make_cmyk_pdf(tmp_path / "cmyk.pdf")
+    cache = FakeCache(tmp_path)
+    if not getattr(cache, f"_Cache__pdf2jpeg_{backend}")(str(pdf), str(tmp_path / "w.jpg")):
+        pytest.skip("ImageMagick refuses the PDF files (security policy)")
+    assert cache_module.jpeg_info(tmp_path / "w.jpg")[2] == 3
+    assert cache._Cache__pdf2jpeg_ghostscript_jpeg(str(pdf), str(tmp_path / "gs.jpg"))
+    wand, gs = centre_pixel(tmp_path / "w.jpg"), centre_pixel(tmp_path / "gs.jpg")
+    assert all(abs(a - b) <= 12 for a, b in zip(wand, gs)), (wand, gs)
+
+
+def test_thumbnail_info_cmyk(tmp_path):
+    cache = FakeCache(tmp_path)
+    sha1 = "0" * 40
+    sof = b"\xff\xc0\x00\x11\x08" + (450).to_bytes(2, "big") + (300).to_bytes(2, "big") + b"\x04"
+    with open(cache.get_thumbname(sha1), "wb") as f:
+        f.write(b"\xff\xd8" + sof)
+    assert cache.thumbnail_info(sha1) == {"width": 300, "height": 450, "size": 12, "cmyk": True}
+    write_jpeg(Path(cache.get_thumbname(sha1)), 30, 40)
+    assert cache.thumbnail_info(sha1)["cmyk"] is False
+
+
+# --- thumbnail made now (command line) ---
+
+def test_make_thumbnail_replaces_the_thumbnail(tmp_path, monkeypatch):
+    cache = FakeCache(tmp_path)
+    sha1 = "1" * 40
+    thumbname = Path(cache.get_thumbname(sha1))
+    thumbname.write_bytes(b"old")
+
+    def ok(pdffilename, thumbname, backend):
+        Path(thumbname).write_bytes(b"new")
+        return True
+
+    monkeypatch.setattr(cache, "_Cache__pdf2jpeg", ok)
+    assert cache.make_thumbnail("a.pdf", sha1) is True
+    assert thumbname.read_bytes() == b"new"
+
+    def fail(pdffilename, thumbname, backend):
+        Path(thumbname).write_bytes(b"partial")
+        return False
+
+    monkeypatch.setattr(cache, "_Cache__pdf2jpeg", fail)
+    assert cache.make_thumbnail("a.pdf", sha1) is False
+    # the previous thumbnail is kept, no temporary file left
+    assert thumbname.read_bytes() == b"new"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [thumbname.name]
+
+
+def test_cache_without_workers(tmp_path):
+    cache = Cache(str(tmp_path / "cache"), workers=0)
+    try:
+        assert cache.subproc == []
+    finally:
+        cache.__del__()

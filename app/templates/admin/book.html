@@ -45,6 +45,7 @@
                 {% else %}
                     {% if thumbnail.width %}{{ thumbnail.width }}&nbsp;×&nbsp;{{ thumbnail.height }}&nbsp;pixels,
                     {% else %}Image illisible,{% endif %}
+                    {% if thumbnail.cmyk %}<span class="error">CMYK (couleurs faussées : à régénérer)</span>,{% endif %}
                     {{ '%.1f' % (thumbnail.size / 1024) }}&nbsp;Ko ({{ thumbnail.size }} octets)
                 {% endif %}
                 </p>

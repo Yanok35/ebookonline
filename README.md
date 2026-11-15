@@ -48,6 +48,12 @@ thumbnail with its dimensions and size, and "Régénérer la miniature" uses
 the backends in turn ("Automatique"), or the one chosen in the list (the
 available ones only), e.g. when the automatic thumbnail is wrong.
 
+The thumbnails are in RGB. Older versions saved the thumbnails made by
+ImageMagick of the PDF files with CMYK colours (printed covers) in CMYK:
+the browsers show them with wrong colours (a teal becomes a fluorescent
+green). The book page tells "CMYK", and the command line finds and
+regenerates them (see [Command line interface](#command-line-interface)).
+
 ## Configure the service
 
 `config.py` only holds non-sensitive defaults. Secrets are loaded at startup,
@@ -178,6 +184,31 @@ journalctl -u ebookonline -p warning    # warnings and errors only
 ```
 
 Outside of systemd (terminal), each line starts with the date and the level.
+
+## Command line interface
+
+Two commands for the administrator, about the thumbnails:
+
+- `thumbnails check [--list]`: counts the thumbnails by state (ok, missing,
+  unreadable, cmyk) and lists the books whose thumbnail is not ok;
+- `thumbnails regenerate`: regenerates the thumbnails selected by state
+  (`--cmyk`, `--missing`, `--unreadable`, `--all`) or by book (sha1 or
+  path), with `-n` to only list them, `--jobs N` processes, `--backend`
+  to force a backend. A thumbnail is replaced once the new one is made,
+  the old one is kept on failure.
+
+`thumbnails help [COMMAND]` shows their options. They use the configuration
+of the server, start none of its services, and can run while it runs. In
+production, as the user and with the secrets of the service (see
+`resources/ebookonline.service.sample`):
+
+```bash
+sudo systemd-run --pty --wait --collect -p User=ebookonline -p Nice=10 \
+    -p WorkingDirectory=/opt/ebookonline \
+    -p EnvironmentFile=/etc/ebookonline/secrets.env \
+    -E EBOOKONLINE_BOOK_DIR=/srv/books \
+    /opt/ebookonline/venv/bin/flask --app ebookonline thumbnails check --list
+```
 
 ## fail2ban
 

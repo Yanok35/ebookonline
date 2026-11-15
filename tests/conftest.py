@@ -130,7 +130,7 @@ def app(tmp_bookdir, monkeypatch):
     }.items():
         monkeypatch.setenv("EBOOKONLINE_" + name, value)
     monkeypatch.setattr(Cache, "get_instance",
-                        classmethod(lambda cls, cachedir: FakeCache(cachedir)))
+                        classmethod(lambda cls, cachedir, **kwargs: FakeCache(cachedir)))
 
     app = create_app("default")
     app.config["TESTING"] = True
