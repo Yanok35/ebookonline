@@ -188,7 +188,7 @@ Outside of systemd (terminal), each line starts with the date and the level.
 
 ## Command line interface
 
-Two commands for the administrator, about the thumbnails:
+Commands for the administrator, about the thumbnails:
 
 - `thumbnails check [--list]`: counts the thumbnails by state (ok, missing,
   unreadable, cmyk) and lists the books whose thumbnail is not ok;
@@ -198,8 +198,20 @@ Two commands for the administrator, about the thumbnails:
   to force a backend. A thumbnail is replaced once the new one is made,
   the old one is kept on failure.
 
-`thumbnails help [COMMAND]` shows their options. They use the configuration
-of the server, start none of its services, and can run while it runs. In
+and about the metadata analysis (see
+[technote-metadata-extract-&-analysis.md](docs/technote-metadata-extract-&-analysis.md#command-line-appclipy)):
+
+- `metadata scan`: analyses the PDF files not analysed yet (or outdated),
+  with `-n`, `--jobs N`, `--force`; e.g. the initial analysis of a large
+  library on a desktop computer, whose cache files are then copied to the
+  server;
+- `metadata show BOOK`: the values, suggestions and candidates of a book;
+- `metadata stats`: state of the analysis, and agreement of the
+  suggestions with the reviewed books, to tune the rules.
+
+`thumbnails help [COMMAND]` and `metadata help [COMMAND]` show their
+options. They use the configuration of the server, start none of its
+services, and can run while it runs. In
 production, as the user and with the secrets of the service (see
 `resources/ebookonline.service.sample`):
 

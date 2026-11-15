@@ -73,13 +73,35 @@ def _alarm(signum, frame):
     raise _Timeout()
 
 
+def analyse_book(cache_dir, sha1, pdf_path, force=False):
+    """
+    store.update() of a book, stopped after TASK_TIMEOUT seconds, an error
+    saved in its cache file: never raises. Returns the status (store.*).
+    In the main thread of a process only (SIGALRM): a worker process of the
+    service, or the command line (app/cli.py).
+    """
+    previous = signal.signal(signal.SIGALRM, _alarm)
+    signal.alarm(TASK_TIMEOUT)
+    try:
+        return store.update(cache_dir, sha1, pdf_path, force)
+    except _Timeout:
+        store.write_error(cache_dir, sha1, f"analysis stopped after {TASK_TIMEOUT} s")
+        return store.FAILED
+    except Exception as e:
+        log.exception("Metadata of %s: analysis failed", pdf_path)
+        store.write_error(cache_dir, sha1, f"{store.INTERNAL_ERROR}{type(e).__name__}: {e}")
+        return store.FAILED
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
 def _worker_main(num, cache_dir, tasks, results, log_level, nice):
     """ Loop of a worker process: (sha1, pdf path, force) tasks, None to stop """
     setup_logging(log_level)
     # Stopped by the server (see MetadataService.stop()), not by a Ctrl-C
     # of the terminal
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.signal(signal.SIGALRM, _alarm)
     if nice:
         os.nice(nice)
     log.debug("Metadata process %d: started", num)
@@ -97,18 +119,7 @@ def _worker_main(num, cache_dir, tasks, results, log_level, nice):
             return
         sha1, pdf_path, force = task
         results.put(("start", num, sha1))
-        signal.alarm(TASK_TIMEOUT)
-        try:
-            status = store.update(cache_dir, sha1, pdf_path, force)
-        except _Timeout:
-            store.write_error(cache_dir, sha1, f"analysis stopped after {TASK_TIMEOUT} s")
-            status = store.FAILED
-        except Exception as e:
-            log.exception("Metadata of %s: analysis failed", pdf_path)
-            store.write_error(cache_dir, sha1, f"{store.INTERNAL_ERROR}{type(e).__name__}: {e}")
-            status = store.FAILED
-        finally:
-            signal.alarm(0)
+        status = analyse_book(cache_dir, sha1, pdf_path, force)
         if status != store.CURRENT:
             log.info("Metadata of %s: %s", pdf_path, status)
         results.put(("done", num, sha1, status))

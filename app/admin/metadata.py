@@ -34,7 +34,8 @@ def _user_value(book, field):
     return value or None
 
 
-def _same(field, user, suggested):
+def same_value(field, user, suggested):
+    """ True when a value of book.db is the suggested one (case, accents, ISBN-10) """
     if field == "authors":
         return [norm_key(n) for n in user] == [norm_key(n) for n in suggested]
     if field == "year":
@@ -74,7 +75,7 @@ class FieldSuggestion:
         if user_value is None:
             self.differs = not self.prefilled
         else:
-            self.differs = not _same(field, user_value, self.value)
+            self.differs = not same_value(field, user_value, self.value)
 
     @property
     def text(self):

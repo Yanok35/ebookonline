@@ -24,6 +24,10 @@ configuration of the server (instance/config.py, EBOOKONLINE_* variables).
     flask --app ebookonline thumbnails help [COMMAND]
     flask --app ebookonline thumbnails check [--list]
     flask --app ebookonline thumbnails regenerate --cmyk [--jobs 2]
+    flask --app ebookonline metadata help [COMMAND]
+    flask --app ebookonline metadata scan [--jobs 2]
+    flask --app ebookonline metadata show <sha1 or path>
+    flask --app ebookonline metadata stats
 
 The commands do not start the services of the server (directory scan,
 watcher, thumbnail and analysis processes): they can run while the server
@@ -33,6 +37,7 @@ runs. book.db is only read.
 import logging
 import multiprocessing
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import click
@@ -42,7 +47,32 @@ from flask.cli import AppGroup
 from srcs.cache import BACKENDS, Cache, available_backends
 from srcs.logs import setup_logging
 
+def add_help_command(group):
+    """ A 'help [COMMAND]' command in a group: its help, or the one of COMMAND """
+
+    @group.command("help")
+    @click.argument("command", required=False)
+    @click.pass_context
+    def help_(ctx, command):
+        """
+        Show the help of the commands, or of COMMAND (as --help).
+        """
+        group_ctx = ctx.parent
+        if command is None:
+            click.echo(group_ctx.get_help())
+            return
+        cmd = group_ctx.command.get_command(group_ctx, command)
+        if cmd is None:
+            raise click.UsageError(f"no such command: {command} (commands: "
+                                   + ", ".join(group_ctx.command.list_commands(group_ctx)) + ")")
+        with click.Context(cmd, info_name=command, parent=group_ctx) as cmd_ctx:
+            click.echo(cmd.get_help(cmd_ctx))
+
+    return help_
+
+
 thumbnails = AppGroup("thumbnails", help="Thumbnails of the books, in the cache directory.")
+add_help_command(thumbnails)
 
 # States of a thumbnail, for the selection of the books
 STATES = ("ok", "missing", "unreadable", "cmyk")
@@ -79,25 +109,6 @@ def check(show):
         if show and state != "ok":
             click.echo(f"{state:10} {book.sha1}  {book.filename}")
     click.echo(", ".join(f"{state}: {n}" for state, n in counts.items()))
-
-
-@thumbnails.command("help")
-@click.argument("command", required=False)
-@click.pass_context
-def help_(ctx, command):
-    """
-    Show the help of the thumbnails commands, or of COMMAND (as --help).
-    """
-    group_ctx = ctx.parent
-    if command is None:
-        click.echo(group_ctx.get_help())
-        return
-    cmd = group_ctx.command.get_command(group_ctx, command)
-    if cmd is None:
-        raise click.UsageError(f"no such command: {command} (commands: "
-                               + ", ".join(group_ctx.command.list_commands(group_ctx)) + ")")
-    with click.Context(cmd, info_name=command, parent=group_ctx) as cmd_ctx:
-        click.echo(cmd.get_help(cmd_ctx))
 
 
 # --- regeneration, in parallel processes ---
@@ -209,3 +220,289 @@ def regenerate(cmyk, missing, unreadable, all_, backend, jobs, dry_run, verbose,
     click.echo(f"{len(selected) - len(failed)} thumbnail(s) regenerated, {len(failed)} failed")
     if failed:
         raise SystemExit(1)
+
+
+# --- metadata ---
+
+metadata = AppGroup("metadata", help="Metadata analysis of the PDF files (cache directory).")
+add_help_command(metadata)
+
+
+def _find_book(arg):
+    """
+    The book (book.db, present or not) of a sha1 or of a path; or a PDF
+    file of the book directory unknown to book.db (e.g. a copy of the
+    library without book.db), as a book without user values
+    """
+    from srcs.book import Book
+    from srcs.cache import sha1_file
+
+    d = current_app.bookdir
+    book = d.find_book_by_sha1(arg) or d.find_book_by_filename(arg)
+    if book is not None:
+        return book
+    path = os.path.join(d.dirpath, arg)
+    if arg.lower().endswith(".pdf") and os.path.isfile(path):
+        book = Book(d.dirpath)
+        book.set_sha1(sha1_file(path))
+        book.set_filename(arg)
+        return book
+    raise click.BadParameter(f"no book with this sha1 or path: {arg}", param_hint="BOOK")
+
+
+def _init_metadata_worker(log_level, nice):
+    setup_logging(log_level)
+    if nice:
+        os.nice(nice)
+
+
+def _analyse(cache_dir, sha1, pdf_path, force):
+    from srcs.metadata.service import analyse_book
+    return analyse_book(cache_dir, sha1, pdf_path, force)
+
+
+@metadata.command("scan")
+@click.option("--force", is_flag=True, help="Read the PDF files again, even when up to date.")
+@click.option("--jobs", "-j", type=click.IntRange(min=1), default=1, show_default=True,
+              help="Number of parallel processes.")
+@click.option("--nice", type=click.IntRange(0, 19), default=10, show_default=True,
+              help="Priority of the analysis (nice level).")
+@click.option("--dry-run", "-n", is_flag=True, help="List the files, analyse nothing.")
+@click.option("--verbose", "-v", is_flag=True, help="Log each analysis.")
+@click.argument("books", nargs=-1)
+def scan(force, jobs, nice, dry_run, verbose, books):
+    """
+    Analyse the PDF files of the book directory whose analysis is missing
+    or outdated (or all of them, --force), or the BOOKS given by sha1 or
+    path.
+
+    The files are listed from the book directory itself: a file known to
+    book.db (same path and modification time) is not hashed again, the
+    other ones are. So the initial analysis of a large library can be made
+    on another computer, from a copy of the library (with or without
+    book.db): then copy its CACHE_DIR/*.meta.json.gz files to the cache
+    directory of the server (they are named after the content of the
+    files, not their path).
+    """
+    from srcs.metadata import store
+
+    cache_dir = current_app.config["CACHE_DIR"]
+    if not current_app.cache.writable:
+        raise click.ClickException(f"the cache directory can not be written: {cache_dir}")
+
+    click.echo("Listing the PDF files (the new ones are hashed)...", err=True)
+    files = {}
+    for f in sorted(current_app.bookdir.pdf_files(), key=lambda f: f.filename):
+        files.setdefault(f.sha1, f)  # one analysis per content
+    if books:
+        by_path = {f.filename: f for f in files.values()}
+        selected = {}
+        for arg in books:
+            f = files.get(arg) or by_path.get(arg)
+            if f is None:
+                raise click.BadParameter(f"no PDF file with this sha1 or path: {arg}",
+                                         param_hint="BOOKS")
+            selected[f.sha1] = f
+        files = selected
+    todo = [f for f in sorted(files.values(), key=lambda f: f.filename)
+            if force or not store.is_current(store.read(cache_dir, f.sha1))]
+
+    if dry_run or not todo:
+        for f in todo:
+            click.echo(f"{f.sha1}  {f.filename}")
+        click.echo(f"{len(todo)} of {len(files)} file(s) to analyse" + (" (dry run)" if dry_run else ""))
+        return
+
+    log_level = logging.getLogger().getEffectiveLevel() if verbose else logging.WARNING
+    loggers = [logging.getLogger(name) for name in ("srcs.metadata", "srcs.book")]
+    previous_levels = [lg.level for lg in loggers]
+    for lg in loggers:
+        lg.setLevel(log_level)
+    counts = {}
+    failed = []
+    try:
+        with click.progressbar(length=len(todo), label="Analysis",
+                               item_show_func=lambda f: f.filename[-50:] if f else None) as bar:
+            def done(f, status):
+                counts[status] = counts.get(status, 0) + 1
+                if status == store.FAILED:
+                    failed.append(f)
+                bar.update(1, f)
+
+            if jobs == 1:
+                if nice:
+                    os.nice(nice)
+                for f in todo:
+                    done(f, _analyse(cache_dir, f.sha1,
+                                     os.path.join(current_app.bookdir.dirpath, f.filename), force))
+            else:
+                with ProcessPoolExecutor(
+                        max_workers=jobs, mp_context=multiprocessing.get_context("forkserver"),
+                        initializer=_init_metadata_worker, initargs=(log_level, nice)) as pool:
+                    futures = {pool.submit(_analyse, cache_dir, f.sha1,
+                                           os.path.join(current_app.bookdir.dirpath, f.filename),
+                                           force): f for f in todo}
+                    for future in as_completed(futures):
+                        done(futures[future], future.result())
+    finally:
+        for lg, level in zip(loggers, previous_levels):
+            lg.setLevel(level)
+
+    for f in sorted(failed, key=lambda f: f.filename):
+        entry = store.read(cache_dir, f.sha1) or {}
+        click.echo(f"failed     {f.sha1}  {f.filename}: {entry.get('error')}", err=True)
+    click.echo(", ".join(f"{status}: {n}" for status, n in sorted(counts.items())))
+
+
+def _book_values(book):
+    from srcs.metadata import analyse
+    return {f: getattr(book, f) for f in analyse.FIELDS}
+
+
+def _text(field, value):
+    """ A value for a terminal: the authors separated by '; ' """
+    if value is None or value == "" or value == [] or value == 0:
+        return "-"
+    return "; ".join(value) if isinstance(value, list) else str(value)
+
+
+@metadata.command("show")
+@click.argument("book")
+@click.option("--text", is_flag=True, help="Also show the text extracted from the key pages.")
+@click.option("--json", "as_json", is_flag=True, help="Output JSON.")
+def show(book, text, as_json):
+    """
+    Show the analysis of a BOOK (sha1 or path): its values in book.db, the
+    suggestions, and the candidates with their source and weight.
+
+    The candidates are found again from the raw data of the cache file,
+    with the rules of this version of the code: a change of the rules
+    (srcs/metadata/) is seen at once, without analysing the file again.
+    """
+    import json
+
+    from srcs.metadata import analyse, store
+
+    book = _find_book(book)
+    entry = store.read(current_app.config["CACHE_DIR"], book.sha1)
+    raw = (entry or {}).get("raw") or {}
+    candidates = analyse.candidates(raw) if raw else (entry or {}).get("candidates") or {}
+    learned = analyse.Learned.from_books(current_app.bookdir.get_all_books())
+    suggestions = analyse.suggest(candidates, book.filename, learned) if candidates else {}
+
+    if as_json:
+        out = {"sha1": book.sha1, "filename": book.filename, "present": book.present,
+               "reviewed": book.meta_reviewed, "values": _book_values(book),
+               "cache": None if entry is None else {
+                   k: entry.get(k) for k in ("extract_version", "analyser_version",
+                                             "extracted_at", "analysed_at", "error")},
+               "suggestions": suggestions, "candidates": candidates}
+        if text:
+            out["texts"] = raw.get("texts") or {}
+        click.echo(json.dumps(out, ensure_ascii=False, indent=2))
+        return
+
+    click.echo(f"{book.filename}{'' if book.present else ' (missing)'}")
+    click.echo(f"sha1 {book.sha1}, {'reviewed' if book.meta_reviewed else 'not reviewed'}")
+    if entry is None:
+        click.echo("cache: not analysed")
+    elif entry.get("error"):
+        click.echo(f"cache: error: {entry['error']}")
+    else:
+        click.echo(f"cache: analysed {entry.get('analysed_at')} (extract v{entry.get('extract_version')}, "
+                   f"analyser v{entry.get('analyser_version')}"
+                   f"{'' if store.is_current(entry) else ', outdated'})")
+
+    click.echo()
+    click.echo(f"{'field':10} {'book.db':35} suggestion")
+    for field in analyse.FIELDS:
+        s = suggestions.get(field)
+        suggestion = "-" if s is None else \
+            f"{_text(field, s['value'])}  [{s['score']}: {', '.join(s['sources'])}]"
+        click.echo(f"{field:10} {_text(field, getattr(book, field))[:35]:35} {suggestion}")
+        for alternative in (s or {}).get("alternatives", []):
+            click.echo(f"{'':10} {'':35}   or {_text(field, alternative)}")
+
+    click.echo()
+    click.echo("candidates (weight, source, value):")
+    for field in analyse.FIELDS:
+        cands = sorted(candidates.get(field, []), key=lambda c: -c[2])
+        if not cands:
+            continue
+        click.echo(f"  {field}")
+        for value, source, weight in cands:
+            click.echo(f"    {weight:5.0f}  {source:18} {_text(field, value)}")
+
+    if text:
+        for page, txt in sorted((raw.get("texts") or {}).items(), key=lambda kv: int(kv[0])):
+            if txt.strip():
+                click.echo(f"\n--- page {int(page) + 1}\n{txt.strip()}")
+
+
+@metadata.command("stats")
+@click.option("--live", is_flag=True,
+              help="Find the candidates again with the rules of this version (slower), "
+                   "instead of the cached ones.")
+def stats(live):
+    """
+    Statistics of the analysis of the present books: state of the cache
+    files, and for each field, the books whose value is filled in book.db,
+    the books with a suggestion, and on the reviewed books, how often the
+    suggestion is the value of book.db (overall, and with a score of 80 or
+    more): a measure of the rules, to tune them.
+
+    The editor spellings learned from book.db include the reviewed books
+    themselves: the agreement of the editor is a little optimistic.
+    """
+    from app.admin.metadata import same_value
+    from srcs.metadata import analyse, store
+
+    cache_dir = current_app.config["CACHE_DIR"]
+    all_books = current_app.bookdir.get_all_books()
+    books = [b for b in all_books if b.present]
+    learned = analyse.Learned.from_books(all_books)
+    cache = {"current": 0, "outdated": 0, "failed": 0, "internal error": 0, "not analysed": 0}
+    fields = {f: {"filled": 0, "suggested": 0, "compared": 0, "agree": 0,
+                  "compared80": 0, "agree80": 0} for f in analyse.FIELDS}
+
+    with click.progressbar(books, label="Books", file=sys.stderr) as bar:
+        for book in bar:
+            entry = store.read(cache_dir, book.sha1)
+            if entry is None:
+                cache["not analysed"] += 1
+            elif store.is_internal_error(entry):
+                cache["internal error"] += 1
+            elif entry.get("error"):
+                cache["failed"] += 1
+            elif not store.is_current(entry):
+                cache["outdated"] += 1
+            else:
+                cache["current"] += 1
+            raw = (entry or {}).get("raw") or {}
+            candidates = analyse.candidates(raw) if live and raw else (entry or {}).get("candidates") or {}
+            suggestions = analyse.suggest(candidates, book.filename, learned) if candidates else {}
+            for field, c in fields.items():
+                value = getattr(book, field)
+                s = suggestions.get(field)
+                c["filled"] += bool(value)
+                c["suggested"] += s is not None
+                if book.meta_reviewed and value and s is not None:
+                    agree = same_value(field, value, s["value"])
+                    c["compared"] += 1
+                    c["agree"] += agree
+                    if s["score"] >= 80:
+                        c["compared80"] += 1
+                        c["agree80"] += agree
+
+    def rate(agree, compared):
+        return f"{agree}/{compared} ({100 * agree // compared}%)" if compared else "-"
+
+    reviewed = sum(b.meta_reviewed for b in books)
+    click.echo(f"books: {len(books)} present, {reviewed} reviewed")
+    click.echo("cache: " + ", ".join(f"{state} {n}" for state, n in cache.items()))
+    click.echo()
+    click.echo(f"{'field':10} {'filled':>7} {'suggested':>10}   "
+               f"{'reviewed: same value':24} {'score >= 80':18}")
+    for field, c in fields.items():
+        click.echo(f"{field:10} {c['filled']:7} {c['suggested']:10}   "
+                   f"{rate(c['agree'], c['compared']):24} {rate(c['agree80'], c['compared80']):18}")
