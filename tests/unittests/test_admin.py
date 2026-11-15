@@ -34,6 +34,19 @@ def test_book_list(app, client):
         assert f'/bookadmin/{b.sha1}"' in html
     assert "3 livres, dont 1 absent du répertoire." in html
     assert html.count('class="badge">absent<') == 1
+    assert "revu<" not in html
+
+
+def test_book_list_shows_reviewed_books(app, client):
+    root = Path(app.config["BOOK_DIR"])
+    make_pdf(root / "a.pdf")
+    make_pdf(root / "b.pdf")
+    app.bookdir.rescan()
+    app.bookdir.find_book_by_filename("b.pdf").meta_reviewed = True
+    html = client.get("/bookadmin/").text
+    assert html.count('class="badge reviewed end">revu<') == 1
+    # in the cell of b.pdf
+    assert html.index("a.pdf") < html.index(">revu<") < html.index("b.pdf")
 
 
 @pytest.fixture
