@@ -99,3 +99,13 @@ def test_regenerate_without_writable_cache(app, books):
     app.cache.writable = False
     result = run(app, "regenerate", "--all")
     assert result.exit_code == 1 and "can not be written" in result.output
+
+
+def test_help(app):
+    result = run(app, "help")
+    assert result.exit_code == 0
+    assert "check" in result.output and "regenerate" in result.output
+    result = run(app, "help", "regenerate")
+    assert result.exit_code == 0 and "--cmyk" in result.output and "--jobs" in result.output
+    result = run(app, "help", "foo")
+    assert result.exit_code == 2 and "no such command: foo" in result.output
