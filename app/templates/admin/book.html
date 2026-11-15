@@ -39,7 +39,8 @@
                 {% else %}
                 <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
                 {% endif %}
-                <p class="hint thumbnail-info">
+                <p class="hint thumbnail-info" id="thumbnail-info"
+                   {% if not thumbnail and book.present and cache_writable %}data-poll="{{ url_for('.thumbnail_state', sha1 = book.sha1) }}"{% endif %}>
                 {% if not thumbnail %}
                     Pas de miniature : image de remplacement.
                 {% else %}
@@ -275,18 +276,26 @@
                 });
             });
 
-            // Analysis pending: reload the page when it is done, unless the
-            // form was edited meanwhile
-            var state = document.getElementById("analysis-state");
-            if (state && state.dataset.poll) {
+            // Poll the url of element.dataset.poll every 2 s until done(data),
+            // then reload the page, unless the form was edited meanwhile
+            // (editedText is shown instead); after timeout ms, show
+            // timeoutText and stop
+            function reloadWhenDone(element, done, editedText, timeout, timeoutText) {
+                if (!element || !element.dataset.poll) { return; }
+                var start = Date.now();
                 var timer = setInterval(function () {
-                    fetch(state.dataset.poll, { credentials: "same-origin" })
+                    if (timeout && Date.now() - start > timeout) {
+                        clearInterval(timer);
+                        element.textContent = timeoutText;
+                        return;
+                    }
+                    fetch(element.dataset.poll, { credentials: "same-origin" })
                         .then(function (response) { return response.json(); })
                         .then(function (data) {
-                            if (data.pending) { return; }
+                            if (!done(data)) { return; }
                             clearInterval(timer);
                             if (edited) {
-                                state.textContent = "Analyse terminée : rechargez la page pour voir les suggestions.";
+                                element.textContent = editedText;
                             } else {
                                 window.location.reload();
                             }
@@ -294,6 +303,19 @@
                         .catch(function () { clearInterval(timer); });
                 }, 2000);
             }
+
+            // Analysis pending: reload the page when it is done
+            reloadWhenDone(document.getElementById("analysis-state"),
+                           function (data) { return !data.pending; },
+                           "Analyse terminée : rechargez la page pour voir les suggestions.");
+
+            // Thumbnail missing (being made): reload the page when it is ready
+            reloadWhenDone(document.getElementById("thumbnail-info"),
+                           function (data) { return data.ready; },
+                           "Miniature prête : rechargez la page pour la voir.",
+                           120000,
+                           "Toujours pas de miniature : la méthode a peut-être échoué "
+                           + "(voir les journaux), essayer une autre méthode.");
         </script>
     </body>
 </html>
