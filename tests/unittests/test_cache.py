@@ -335,3 +335,21 @@ def test_cache_without_workers(tmp_path):
         assert cache.subproc == []
     finally:
         cache.__del__()
+
+
+def test_thumbnail_processes_replace_the_thumbnail_once_complete(tmp_path, monkeypatch):
+    """ The image is made in a temporary file: the thumbnail never exists unfinished """
+    cache = FakeCache(tmp_path)
+    thumbname = Path(cache.get_thumbname("2" * 40))
+    seen = []
+
+    def make(pdffilename, tmpname, backend):
+        Path(tmpname).write_bytes(b"big image, not resized yet")
+        seen.append(thumbname.exists())
+        Path(tmpname).write_bytes(b"resized")
+        return True
+
+    monkeypatch.setattr(cache, "_Cache__pdf2jpeg", make)
+    assert cache._make_into("a.pdf", str(thumbname))
+    assert seen == [False] and thumbname.read_bytes() == b"resized"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [thumbname.name]

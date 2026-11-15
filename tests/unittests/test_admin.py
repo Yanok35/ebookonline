@@ -131,7 +131,9 @@ def test_reset_thumbnail(app, client, book):
     assert not thumbname.exists()
     pdffile = os.path.join(app.config["BOOK_DIR"], book.filename)
     assert app.cache.requests == [(pdffile, book.sha1)]
-    assert "Miniature en cours de régénération" in client.get(response.location).text
+    html = client.get(response.location).text
+    assert "Miniature en cours de régénération" in html
+    assert "la page se recharge dès qu&#39;elle est prête" in html
 
 
 def test_reset_thumbnail_backends(app, client, book, monkeypatch):
@@ -189,6 +191,27 @@ def test_unreadable_thumbnail_info(app, client, book):
     Path(app.cache.get_thumbname(book.sha1)).write_bytes(b"not an image")
     html = client.get(f"/bookadmin/{book.sha1}").text
     assert "Image illisible," in html and "(12 octets)" in html
+
+
+def test_thumbnail_state(app, client, book):
+    """ The book page waits for a missing thumbnail, then reloads """
+    url = f"/bookadmin/{book.sha1}/thumbnail"
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert f'data-poll="{url}"' in html
+    assert client.get(url).get_json() == {"ready": False}
+    write_jpeg(Path(app.cache.get_thumbname(book.sha1)), 30, 40)
+    assert client.get(url).get_json() == {"ready": True}
+    # no wait when the thumbnail exists
+    assert f'data-poll="{url}"' not in client.get(f"/bookadmin/{book.sha1}").text
+
+
+def test_thumbnail_state_errors(app, client, book):
+    assert client.get("/bookadmin/" + "0" * 40 + "/thumbnail").status_code == 404
+    anonymous = app.test_client()
+    assert anonymous.get(f"/bookadmin/{book.sha1}/thumbnail").status_code == 302
+    # no wait when the thumbnail can not be made
+    app.cache.writable = False
+    assert "data-poll" not in client.get(f"/bookadmin/{book.sha1}").text.split("thumbnail-info")[1][:200]
 
 
 def test_reset_missing_thumbnail(app, client, book):
