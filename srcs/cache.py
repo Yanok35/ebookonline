@@ -25,6 +25,7 @@ import math
 import queue
 import signal
 import subprocess
+import tempfile
 
 import multiprocessing
 
@@ -266,41 +267,42 @@ class Cache:
 
 
     def __pdf2jpeg_resize_then_wand(self, pdffilename, thumbname):
-
+        """
+        The first page copied alone (pypdf) to a temporary PDF file, then
+        converted to JPEG (wand). The temporary file has a unique name,
+        readable by this user only (tempfile), and is always removed.
+        """
         try:
-            f = open(pdffilename, 'rb') 
-            pdf = PdfReader(f)
-            if pdf.is_encrypted:
-                pdf.decrypt('')
-            # It has been observed working on a second call on some file.
-            try:
-                contents = pdf.get_page(0)
-            except:
-                contents = pdf.pages[0]
+            with open(pdffilename, 'rb') as f:
+                pdf = PdfReader(f)
+                if pdf.is_encrypted:
+                    pdf.decrypt('')
+                # It has been observed working on a second call on some file.
+                try:
+                    contents = pdf.get_page(0)
+                except Exception:
+                    contents = pdf.pages[0]
 
-            pdf = PdfWriter()
-            pdf.add_page(contents)
-            inter = f"/tmp/temp_output_{os.getpid()}.pdf"
-            f = open(inter, 'wb') 
-            pdf.write(f)
-            f.close()
+                writer = PdfWriter()
+                writer.add_page(contents)
+                fd, inter = tempfile.mkstemp(prefix="ebookonline-thumb-", suffix=".pdf")
+                try:
+                    # (the source file is still open: the page is read from it)
+                    with os.fdopen(fd, 'wb') as out:
+                        writer.write(out)
 
-            # Generate image from first page
-
-            # http://docs.wand-py.org/en/0.4.3/
-            # sudo apt-get install python-wand
-
-            with Image(filename=inter) as img:
-                img.alpha_channel = "remove"
-                img.options['pdf:use-cropbox'] = 'true'
-                img.save(filename=thumbname)
-
-            os.remove(inter)
+                    # Generate image from first page (http://docs.wand-py.org/)
+                    with Image(filename=inter) as img:
+                        img.alpha_channel = "remove"
+                        img.options['pdf:use-cropbox'] = 'true'
+                        img.save(filename=thumbname)
+                finally:
+                    _remove(inter)
             return True
 
         except KeyboardInterrupt:
-            raise KeyboardInterrupt
-        except:
+            raise
+        except Exception:
             log.warning("Thumbnail with pypdf and wand failed for %s",
                         pdffilename, exc_info=True)
             return False
