@@ -216,8 +216,17 @@ class Cache:
         then replaces the thumbnail: a thumbnail is never seen incomplete,
         and is kept when the new one can not be made.
         """
-        thumbname = self.get_thumbname(sha1)
-        tmpname = os.path.join(self.cachedir, f".{sha1}.{os.getpid()}.new.jpg")
+        return self._make_into(pdffilename, self.get_thumbname(sha1), backend)
+
+    def _make_into(self, pdffilename, thumbname, backend=None):
+        """
+        Make the thumbnail thumbname in a temporary file (hidden, in the
+        same directory), which replaces it once complete: True when done.
+        The thumbnail processes do the same: the book page, which waits for
+        a thumbnail to exist, never shows it unfinished (not resized yet).
+        """
+        dirname, name = os.path.split(thumbname)
+        tmpname = os.path.join(dirname, f".{name}.{os.getpid()}.new.jpg")
         _remove(tmpname)
         if self._thumbnail_job(pdffilename, tmpname, backend) and os.path.exists(tmpname):
             os.replace(tmpname, thumbname)
@@ -286,7 +295,7 @@ class Cache:
                 except queue.Empty:
                     continue
 
-                self._thumbnail_job(pdffilename, thumbname, backend)
+                self._make_into(pdffilename, thumbname, backend)
                 continue
 
             except KeyboardInterrupt:

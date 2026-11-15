@@ -217,6 +217,14 @@ def analysis_state(sha1):
     return jsonify(pending=current_app.metadata.is_pending(sha1))
 
 
+@admin.route("/bookadmin/<sha1>/thumbnail")
+@login_required
+def thumbnail_state(sha1):
+    """ JSON: whether the thumbnail of a book exists (book page, after a regeneration) """
+    _book_or_404(sha1)
+    return jsonify(ready=os.path.exists(current_app.cache.get_thumbname(sha1)))
+
+
 def _reset_form():
     """ The form of the thumbnail regeneration, with the available backends """
     form = ResetThumbnailForm(prefix=RESET_FORM_PREFIX)
@@ -254,9 +262,8 @@ def reset_thumbnail(sha1):
         current_app.logger.info("Regenerate thumbnail of '%s' (backend: %s)",
                                 pdffile, backend or "any")
         current_app.cache.create_thumbnail(pdffile, sha1, backend)
-        flash(f"Miniature en cours de régénération ({THUMBNAIL_BACKEND_LABELS[form.backend.data]}), "
-              "recharger la page dans quelques secondes. Si la méthode échoue, "
-              "la miniature reste vide : essayer une autre méthode.")
+        flash(f"Miniature en cours de régénération ({THUMBNAIL_BACKEND_LABELS[form.backend.data]}) : "
+              "la page se recharge dès qu'elle est prête.")
 
     return redirect(url_for(".bookadmin", sha1=sha1))
 
