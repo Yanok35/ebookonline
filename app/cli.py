@@ -21,6 +21,7 @@
 Command line interface, for the administrator: flask commands, with the
 configuration of the server (instance/config.py, EBOOKONLINE_* variables).
 
+    flask --app ebookonline thumbnails help [COMMAND]
     flask --app ebookonline thumbnails check [--list]
     flask --app ebookonline thumbnails regenerate --cmyk [--jobs 2]
 
@@ -78,6 +79,25 @@ def check(show):
         if show and state != "ok":
             click.echo(f"{state:10} {book.sha1}  {book.filename}")
     click.echo(", ".join(f"{state}: {n}" for state, n in counts.items()))
+
+
+@thumbnails.command("help")
+@click.argument("command", required=False)
+@click.pass_context
+def help_(ctx, command):
+    """
+    Show the help of the thumbnails commands, or of COMMAND (as --help).
+    """
+    group_ctx = ctx.parent
+    if command is None:
+        click.echo(group_ctx.get_help())
+        return
+    cmd = group_ctx.command.get_command(group_ctx, command)
+    if cmd is None:
+        raise click.UsageError(f"no such command: {command} (commands: "
+                               + ", ".join(group_ctx.command.list_commands(group_ctx)) + ")")
+    with click.Context(cmd, info_name=command, parent=group_ctx) as cmd_ctx:
+        click.echo(cmd.get_help(cmd_ctx))
 
 
 # --- regeneration, in parallel processes ---
