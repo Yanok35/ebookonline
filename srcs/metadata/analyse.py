@@ -52,7 +52,7 @@ from srcs.metadata.text import clean_spaces, fix_case, norm_key, strip_accents
 # weights, publishers.json). The candidates of the cache files of an older
 # version are found again from their raw data, without opening the PDF
 # files. suggest() runs on each request: no version.
-ANALYSER_VERSION = 1
+ANALYSER_VERSION = 2
 
 # The metadata fields, named as the attributes of srcs.book.Book
 FIELDS = ("title", "subtitle", "authors", "editor", "year", "isbn")
@@ -162,6 +162,62 @@ class Candidates:
 
 def _valid_year(year, current_year):
     return MIN_YEAR <= year <= current_year + 1
+
+
+# Lines of a title page which are not a subtitle: a web site, a publisher
+# city, a legal mention
+RE_NOT_SUBTITLE_LINE = re.compile(
+    r"www\.|https?:|@|copyright|©|isbn|d[ée]p[oô]t|birmingham|beijing|cambridge|new york|london|"
+    r"paris\b|publish|\bpress\b|[ée]ditions\b", re.IGNORECASE)
+# Spaced letters ('A L L - I N - O N E'): a decoration, not a subtitle
+RE_SPACED_LETTERS = re.compile(r"^(?:\S\s){3,}")
+
+
+def _join_lines(lines):
+    """ The lines of a text, the words cut by a hyphen ('mind-', 'blowing') joined """
+    text = ""
+    for line in lines:
+        text = text + line if text.endswith("-") and not text.endswith(" -") else text + " " + line
+    return clean_spaces(text)
+
+
+def title_page_subtitle(lines, in_title, referential, authors=()):
+    """
+    (subtitle, its lines) of a title page ([[font size, line]], in the reading
+    order), or '': the lines after the title (in_title(size): a line of the
+    title), in the same smaller font size, an edition between them skipped;
+    ends at a name of person (or one of authors, comparison keys), a
+    separator ('—'), a publisher, a city. A line which ends with a lowercase
+    word or a comma is continued by the next one, even if it looks like a
+    name ('Mastering Basic Algorithms in the' / 'Python Language').
+    ('', []) without a subtitle.
+    """
+    last = max((i for i, (size, _) in enumerate(lines) if in_title(size)), default=None)
+    if last is None:
+        return "", []
+    parts, part_size = [], None
+    for size, line in lines[last + 1:]:
+        line = clean_spaces(line)
+        if in_title(size):
+            break  # the title again
+        if part_size is None and RE_NOT_SUBTITLE.match(line):
+            continue  # 'Second Edition' between the title and the subtitle
+        if part_size is not None and abs(size - part_size) > 0.5:
+            break
+        continued = bool(parts) and re.search(r"(?:\b[a-zà-ÿ]\w*|[,\-])$", parts[-1])
+        name = canonical_person(re.sub(r"^(?:by|par|de|dr\.?|prof\.?)\s+", "", line,
+                                       flags=re.IGNORECASE))
+        if (re.fullmatch(r"[\d\W]*", line) or RE_NOT_SUBTITLE_LINE.search(line)
+                or RE_SPACED_LETTERS.match(line) or RE_NOT_SUBTITLE.match(line)
+                or norm_key(name) in authors or referential.is_known(line)
+                or (not continued and looks_like_person(name, referential))):
+            break
+        parts.append(line)
+        part_size = size
+        if len(parts) > 4:
+            return "", []  # body text, not a subtitle
+    subtitle = _join_lines(parts).strip(" .,;:")
+    return (subtitle, parts) if 3 <= len(subtitle) <= 200 else ("", [])
 
 
 def candidates(raw, referential=None):
@@ -295,16 +351,31 @@ def candidates(raw, referential=None):
                   for size, t in good if size < largest * tolerance]
         names = [n for n in others
                  if looks_like_person(n, referential) and norm_key(n) not in translators]
+        def in_title(size):
+            return size >= largest * tolerance
         if looks_like_person(title, referential) and not names:
             # the largest text is a name: the author, the title is the next
             # largest text
             smaller = [size for size, t in good if size < largest * tolerance]
             if smaller:
                 c.add("authors", canonical_person(title), "title-page", 30)
-                title = clean_spaces(" ".join(t for size, t in good if size == max(smaller)))
+                title_size = max(smaller)
+                title = clean_spaces(" ".join(t for size, t in good if size == title_size))
+
+                def in_title(size):
+                    return size == title_size
+        subtitle, subtitle_lines = title_page_subtitle(
+            lines, in_title, referential, {norm_key(v) for v, _, _ in c.fields.get("authors", [])})
+        # the lines of the subtitle are not names ('Python Language' of
+        # 'Mastering Basic Algorithms in the' / 'Python Language')
+        not_names = {norm_key(canonical_person(t)) for t in subtitle_lines}
+        names = [n for n in names if norm_key(n) not in not_names]
         title_page, big_title = int(page), title
-        c.add("title", fix_case(title), "title-page" if names else "large-font",
-              50 if names else 30)
+        source = "title-page" if names else "large-font"
+        c.add("title", fix_case(title), source, 50 if names else 30)
+        if subtitle:
+            # with the title of the page: see subtitle_candidates()
+            c.add("subtitle", fix_case(subtitle), source, 40 if names else 25)
         for name in names[:3]:
             c.add("authors", name, "title-page", 50)
         break
@@ -457,18 +528,29 @@ def split_title(value):
     return title, subtitle
 
 
-def subtitle_candidates(title_candidates, title):
+# Sources of a subtitle found with a title, on the title page
+TITLE_PAGE_SOURCES = ("title-page", "large-font")
+
+
+def subtitle_candidates(title_candidates, title, page_subtitles=()):
     """
     [[subtitle, source, weight]] of the title candidates (but the file
     name, whose parts are often an author or a publisher) made of the title
-    and a subtitle
+    and a subtitle, and the subtitles of the title page (page_subtitles)
+    when the title of the page is the title
     """
-    found = []
+    key = norm_key(title)
+    page_titles = [norm_key(split_title(v)[0]) for v, source, _ in title_candidates
+                   if source in TITLE_PAGE_SOURCES]
+    found = [list(c) for c in page_subtitles
+             if any(k and _similar("title", k, key) for k in page_titles)
+             # not the end of the title: the title page in two font sizes
+             and norm_key(c[0]) not in key]
     for value, source, weight in title_candidates:
         if source == "filename":
             continue
         t, subtitle = split_title(value)
-        if subtitle and norm_key(t) == norm_key(title):
+        if subtitle and norm_key(t) == key:
             found.append([subtitle, source, weight])
     return found
 
@@ -579,7 +661,8 @@ def suggest(field_candidates, filename=None, learned=None, referential=None):
             if "title" not in suggestions:
                 continue
             cands = subtitle_candidates(field_candidates.get("title", []),
-                                        suggestions["title"]["value"])
+                                        suggestions["title"]["value"],
+                                        field_candidates.get("subtitle", []))
         else:
             cands = field_candidates.get(field, [])
         s = consolidate(field, cands, referential)
