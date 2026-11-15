@@ -66,6 +66,7 @@ source is trusted. Main sources and weights:
 | title | Info title | 35 (45 for calibre) |
 | title | largest font of the title page, with names of persons on the page | 50 (30 without names) |
 | title | file name | 15 |
+| subtitle | lines under the title of the title page, with names of persons on the page | 40 (25 without names) |
 | authors | XMP `dc:creator` | 50 |
 | authors | names of persons of the title page | 50 |
 | authors | Info author | 35 (45 for calibre) |
@@ -132,17 +133,33 @@ of the group (`shortest_title()`):
 - the weaker sources (the file name) never lengthen a title: they often
   add a subtitle, an author or a publisher.
 
-The **subtitle** has no candidate of its own: it comes from the title
-candidates made of the title and a subtitle (`analyse.split_title()`,
-`analyse.subtitle_candidates()`), after `: ` or a dash between spaces, when
-their title is the suggested one: `Python Algorithms: Mastering Basic
-Algorithms in the Python Language` gives the subtitle `Mastering Basic
-Algorithms in the Python Language`, with the source and the weight of this
-candidate. A series at the end in parentheses (`(World Scientific Series
-...)`) is left out; an edition or a volume (`- Second Edition`,
-`: Tome 2`) is not a subtitle. The file name is not used: its parts are
-often an author or a publisher. A suggested title made of a title and a
-subtitle is cut to its title, the subtitle having its own field.
+The **subtitle** comes from two sources, used only when their title is the
+suggested one (`analyse.subtitle_candidates()`):
+
+- the title candidates made of a title and a subtitle
+  (`analyse.split_title()`), after `: ` or a dash between spaces:
+  `Python Algorithms: Mastering Basic Algorithms in the Python Language`
+  gives the subtitle `Mastering Basic Algorithms in the Python Language`,
+  with the source and the weight of this candidate. A series at the end in
+  parentheses (`(World Scientific Series ...)`) is left out; an edition or
+  a volume (`- Second Edition`, `: Tome 2`) is not a subtitle. The file
+  name is not used: its parts are often an author or a publisher;
+- the title page (`analyse.title_page_subtitle()`, cached candidates): the
+  lines just after the title, in a single smaller font size, an edition
+  between them skipped ("Second Edition"). It ends at a name of person, a
+  separator (`—`), a publisher, a city ("BIRMINGHAM - MUMBAI"), a web
+  site; a line ending with a lowercase word or a comma is continued by the
+  next one, even if it looks like a name (`Mastering Basic Algorithms in
+  the` / `Python Language`), and the lines of the subtitle are not taken
+  for authors. The end of the title in a smaller size (`Python` / `In A
+  Nutshell`) is not a subtitle. The taglines of some publishers ("Over 80
+  recipes to ...") are found as subtitles: they are often long, but their
+  words help the search.
+
+A suggested title made of a title and a subtitle is cut to its title, the
+subtitle having its own field. The two sources agree on the same subtitle
+for most books which have both (`Python Algorithms`: XMP and title page,
+score 90).
 
 For the authors, every name scoring at least 75% of the first one (and 30)
 is kept, 4 at most.
