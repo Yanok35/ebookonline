@@ -46,7 +46,8 @@ first of these backends which succeeds (`srcs/cache.py`):
 On the book page (`/bookadmin/<sha1>`), the "Miniature" column shows the
 thumbnail with its dimensions and size, and "Régénérer la miniature" uses
 the backends in turn ("Automatique"), or the one chosen in the list (the
-available ones only), e.g. when the automatic thumbnail is wrong.
+available ones only), e.g. when the automatic thumbnail is wrong. Their
+differences: [technote-thumbnails-backends.md](docs/technote-thumbnails-backends.md).
 
 The thumbnails are in RGB. Older versions saved the thumbnails made by
 ImageMagick of the PDF files with CMYK colours (printed covers) in CMYK:
