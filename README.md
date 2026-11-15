@@ -48,6 +48,32 @@ thumbnail with its dimensions and size, and "Régénérer la miniature" uses
 the backends in turn ("Automatique"), or the one chosen in the list (the
 available ones only), e.g. when the automatic thumbnail is wrong.
 
+The thumbnails are in RGB. Older versions saved the thumbnails made by
+ImageMagick of the PDF files with CMYK colours (printed covers) in CMYK:
+the browsers show them with wrong colours (a teal becomes a fluorescent
+green). The book page tells "CMYK", and the command line finds and
+regenerates them (see below).
+
+### Command line
+For the administrator, with the configuration of the server
+(`instance/config.py`, `EBOOKONLINE_*` variables). The commands start none
+of the services of the server, and can run while it runs:
+
+```bash
+# count the thumbnails by state (ok, missing, unreadable, cmyk), list the
+# books whose thumbnail is not ok
+flask --app ebookonline thumbnails check --list
+# regenerate the CMYK thumbnails: list them first (-n), then 2 processes,
+# at a low priority
+flask --app ebookonline thumbnails regenerate --cmyk -n
+nice flask --app ebookonline thumbnails regenerate --cmyk --jobs 2
+```
+
+`regenerate` selects the books with `--cmyk`, `--missing`, `--unreadable`,
+`--all`, or by sha1 or path; `--backend` forces a backend. A thumbnail is
+replaced once the new one is made: the old one is kept on failure (listed,
+exit status 1). See `flask --app ebookonline thumbnails regenerate --help`.
+
 ## Configure the service
 
 `config.py` only holds non-sensitive defaults. Secrets are loaded at startup,
