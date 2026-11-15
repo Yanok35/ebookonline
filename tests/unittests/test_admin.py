@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from srcs.cache import available_backends
 from tests.conftest import make_pdf
 
 
@@ -131,6 +132,36 @@ def test_reset_thumbnail(app, client, book):
     pdffile = os.path.join(app.config["BOOK_DIR"], book.filename)
     assert app.cache.requests == [(pdffile, book.sha1)]
     assert "Miniature en cours de régénération" in client.get(response.location).text
+
+
+def test_reset_thumbnail_backends(app, client, book, monkeypatch):
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    select = re.search(r'<select[^>]*name="reset-backend".*?</select>', html, re.S).group(0)
+    assert re.findall(r'<option (?:selected )?value="([^"]*)"', select) == \
+        [""] + list(available_backends())
+    assert "Automatique (le premier qui réussit)" in select
+
+    # a chosen backend is queued with the request; none: each one in turn
+    app.cache.requests.clear()
+    app.cache.backends.clear()
+    for backend in ("wand", ""):
+        response = client.post(f"/reset-thumbnail/{book.sha1}", data={
+            "reset-csrf_token": reset_csrf_token(client, book), "reset-backend": backend})
+    assert app.cache.backends == ["wand", None]
+    assert "(Automatique (le premier qui réussit))" in client.get(response.location).text
+
+
+def test_reset_thumbnail_unavailable_backend(app, client, book, monkeypatch):
+    # gs is not installed: Ghostscript is not proposed, and refused
+    monkeypatch.setattr("srcs.cache.shutil.which", lambda name: None)
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert 'value="ghostscript"' not in html
+    app.cache.requests.clear()
+    for backend in ("ghostscript", "unknown"):
+        response = client.post(f"/reset-thumbnail/{book.sha1}", data={
+            "reset-csrf_token": reset_csrf_token(client, book), "reset-backend": backend})
+        assert app.cache.requests == []
+        assert "Méthode de génération indisponible." in client.get(response.location).text
 
 
 def test_reset_missing_thumbnail(app, client, book):

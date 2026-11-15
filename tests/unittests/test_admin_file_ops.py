@@ -37,7 +37,8 @@ def test_book_page_shows_file_actions(app, client, book):
     assert "Actions sur le fichier" in html
     assert 'value="O&#39;Reilly.pdf"' in html
     # categories: the root and the existing directories, current one selected
-    assert re.findall(r'<option (?:selected )?value="([^"]*)"', html) == ["", "Art", "Science"]
+    select = re.search(r'<select[^>]*name="move-category".*?</select>', html, re.S).group(0)
+    assert re.findall(r'<option (?:selected )?value="([^"]*)"', select) == ["", "Art", "Science"]
     assert '<option selected value="Science">' in html
     # confirmation of the trash, the file name escaped for javascript
     assert "return confirm(" in html and "O\\u0027Reilly.pdf" in html
