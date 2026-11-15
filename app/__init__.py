@@ -183,9 +183,10 @@ def create_app(config_name):
     from .api import api as api_blueprint
     app.register_blueprint(api_blueprint)
 
-    # Command line interface (flask --app ebookonline thumbnails ...)
-    from .cli import thumbnails
+    # Command line interface (flask --app ebookonline thumbnails|metadata ...)
+    from .cli import metadata, thumbnails
     app.cli.add_command(thumbnails)
+    app.cli.add_command(metadata)
 
     app.register_error_handler(404, _log_not_found)
 
