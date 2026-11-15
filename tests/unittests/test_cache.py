@@ -81,7 +81,7 @@ def test_thumbnail_process_can_be_terminated():
 # --- Ghostscript fallback ---
 
 from srcs import cache as cache_module
-from tests.conftest import FakeCache, make_pdf
+from tests.conftest import FakeCache, make_pdf, write_jpeg
 
 need_gs = pytest.mark.skipif(not __import__("shutil").which("gs"), reason="Ghostscript (gs) required")
 
@@ -232,3 +232,18 @@ def test_available_backends(monkeypatch):
     assert cache_module.available_backends()[:2] == ["pypdf-wand", "wand"]
     monkeypatch.setattr(cache_module.shutil, "which", lambda name: None)
     assert cache_module.available_backends() == ["pypdf-wand", "wand"]
+
+
+def test_jpeg_size(tmp_path):
+    write_jpeg(tmp_path / "a.jpg", 300, 424)
+    assert cache_module.jpeg_size(tmp_path / "a.jpg") == (300, 424)
+    # a progressive JPEG (SOF2), after an APP0 segment and fill bytes: the
+    # header only
+    sof2 = b"\xff\xc2\x00\x11\x08" + (5).to_bytes(2, "big") + (17).to_bytes(2, "big")
+    (tmp_path / "p.jpg").write_bytes(b"\xff\xd8\xff\xe0\x00\x04ab\xff\xff" + sof2)
+    assert cache_module.jpeg_size(tmp_path / "p.jpg") == (17, 5)
+    (tmp_path / "bad.jpg").write_bytes(b"\xff\xd8\xff")
+    assert cache_module.jpeg_size(tmp_path / "bad.jpg") is None
+    (tmp_path / "png.jpg").write_bytes(b"\x89PNG\r\n")
+    assert cache_module.jpeg_size(tmp_path / "png.jpg") is None
+    assert cache_module.jpeg_size(tmp_path / "missing.jpg") is None

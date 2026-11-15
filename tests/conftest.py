@@ -45,6 +45,15 @@ def make_pdf(path, title=None):
     return path
 
 
+def write_jpeg(path, width, height):
+    """ A white JPEG image (PyMuPDF: wand would start the threads of ImageMagick) """
+    import pymupdf
+
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, width, height), False)
+    pix.clear_with(255)
+    path.write_bytes(pix.tobytes("jpg"))
+
+
 def make_book_pdf(path, pages, metadata=None, xmp=None):
     """
     Write a PDF file with text (PyMuPDF), for the metadata analysis: pages
