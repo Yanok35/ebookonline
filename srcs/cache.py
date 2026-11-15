@@ -87,10 +87,16 @@ _JPEG_SOF = set(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
 
 
 def jpeg_size(filename):
+    """ (width, height) of a JPEG file, None when it is not a JPEG file """
+    info = jpeg_info(filename)
+    return info[:2] if info else None
+
+
+def jpeg_info(filename):
     """
-    (width, height) of a JPEG file, read from its header, None when it is
-    not a JPEG file. Pure Python: ImageMagick would start its threads in the
-    server process.
+    (width, height, components) of a JPEG file, read from its header, None
+    when it is not a JPEG file. components: 1 (gray), 3 (RGB), 4 (CMYK).
+    Pure Python: ImageMagick would start its threads in the server process.
     """
     try:
         with open(filename, "rb") as f:
@@ -110,10 +116,11 @@ def jpeg_size(filename):
                 if length < 2:
                     return None
                 if code in _JPEG_SOF:
-                    data = f.read(5)
-                    if len(data) < 5:
+                    data = f.read(6)
+                    if len(data) < 6:
                         return None
-                    return int.from_bytes(data[3:5], "big"), int.from_bytes(data[1:3], "big")
+                    return (int.from_bytes(data[3:5], "big"), int.from_bytes(data[1:3], "big"),
+                            data[5])
                 f.seek(length - 2, os.SEEK_CUR)
     except OSError:
         return None
@@ -133,13 +140,18 @@ class Cache:
     writable = True
 
     @classmethod
-    def get_instance(cls, *args):
+    def get_instance(cls, *args, **kwargs):
         if cls.instance == None:
-            log.debug("Cache instance: %s", args)
-            cls.instance = cls(*args)
+            log.debug("Cache instance: %s %s", args, kwargs)
+            cls.instance = cls(*args, **kwargs)
         return cls.instance
 
-    def __init__(self, cachedir):
+    def __init__(self, cachedir, workers=None):
+        """
+        workers: number of thumbnail processes (requests of
+        create_thumbnail()), the number of processors - 1 by default; 0 for
+        none, e.g. for make_thumbnail() only (command line).
+        """
         if not os.path.exists(cachedir):
             os.mkdir(cachedir)
         self.cachedir = cachedir
@@ -151,7 +163,9 @@ class Cache:
         # the processes log like this one (when they do not inherit its
         # logging configuration: not started by fork)
         log_level = logging.getLogger().getEffectiveLevel()
-        for num in range(max(1, os.cpu_count()-1)):
+        if workers is None:
+            workers = max(1, os.cpu_count() - 1)
+        for num in range(workers):
             p = multiprocessing.Process(
                 target=self.__subproc_thumbnail_create,
                 args=(num, log_level),
@@ -179,17 +193,37 @@ class Cache:
 
     def thumbnail_info(self, sha1):
         """
-        {'width', 'height', 'size'} of the thumbnail of a book (pixels,
-        bytes), None without thumbnail. width and height are None when the
-        image can not be read; only its header is read (jpeg_size()).
+        {'width', 'height', 'size', 'cmyk'} of the thumbnail of a book
+        (pixels, bytes), None without thumbnail. width and height are None
+        when the image can not be read; only its header is read
+        (jpeg_info()). cmyk: an image in CMYK, whose colours are wrong in
+        the browsers (made by an older version, see
+        __pdf2jpeg_wand_only()).
         """
         thumbname = self.get_thumbname(sha1)
         try:
             size = os.path.getsize(thumbname)
         except OSError:
             return None
-        width, height = jpeg_size(thumbname) or (None, None)
-        return {"width": width, "height": height, "size": size}
+        width, height, components = jpeg_info(thumbname) or (None, None, None)
+        return {"width": width, "height": height, "size": size, "cmyk": components == 4}
+
+    def make_thumbnail(self, pdffilename, sha1, backend=None):
+        """
+        Make the thumbnail of a book now, in this process (not by the
+        thumbnail processes), e.g. from the command line: True when done.
+        The image is made in a temporary file of the cache directory, which
+        then replaces the thumbnail: a thumbnail is never seen incomplete,
+        and is kept when the new one can not be made.
+        """
+        thumbname = self.get_thumbname(sha1)
+        tmpname = os.path.join(self.cachedir, f".{sha1}.{os.getpid()}.new.jpg")
+        _remove(tmpname)
+        if self._thumbnail_job(pdffilename, tmpname, backend) and os.path.exists(tmpname):
+            os.replace(tmpname, thumbname)
+            return True
+        _remove(tmpname)
+        return False
 
     def create_thumbnail(self, pdffilename, sha1, backend=None):
         """
@@ -263,18 +297,21 @@ class Cache:
 
     def _thumbnail_job(self, pdffilename, thumbname, backend=None):
         """
-        A thumbnail request of the queue. An error is logged, and no
-        incomplete thumbnail is left (a placeholder is shown): it does not
-        stop the process, which goes on with the next requests.
+        A thumbnail request of the queue: True when the thumbnail is made.
+        An error is logged, and no incomplete thumbnail is left (a
+        placeholder is shown): it does not stop the process, which goes on
+        with the next requests.
         """
         log.info("Thumbnail: %s -> %s (backend: %s)", pdffilename, thumbname, backend or "any")
         try:
-            self.__pdf2jpeg(pdffilename, thumbname, backend)
+            if self.__pdf2jpeg(pdffilename, thumbname, backend):
+                return True
         except KeyboardInterrupt:
             raise
         except Exception:
             log.error("No thumbnail for %s", pdffilename, exc_info=True)
-            _remove(thumbname)
+        _remove(thumbname)
+        return False
 
     def __pdf2jpeg(self, pdffilename, thumbname, backend=None):
         """
@@ -299,6 +336,7 @@ class Cache:
             self.__thumb_resize_small(thumbname)
         else:
             log.error("No thumbnail for %s (backend: %s)", pdffilename, backend or "any")
+        return jpegReady
 
 
     def __pdf2jpeg_resize_then_wand(self, pdffilename, thumbname):
@@ -326,10 +364,13 @@ class Cache:
                     with os.fdopen(fd, 'wb') as out:
                         writer.write(out)
 
-                    # Generate image from first page (http://docs.wand-py.org/)
-                    with Image(filename=inter) as img:
-                        img.alpha_channel = "remove"
+                    # Generate image from first page (http://docs.wand-py.org/),
+                    # in RGB (see __pdf2jpeg_wand_only()); the options are
+                    # set before reading the file, to be used
+                    with Image() as img:
                         img.options['pdf:use-cropbox'] = 'true'
+                        img.read(filename=inter, colorspace="srgb")
+                        img.alpha_channel = "remove"
                         img.save(filename=thumbname)
                 finally:
                     _remove(inter)
@@ -350,6 +391,13 @@ class Cache:
         characters, '@' list), depending on its version: it reads a symbolic
         link to the PDF file, with a fixed name in a private temporary
         directory.
+
+        The page is read in RGB (colorspace="srgb"). Otherwise, a PDF with
+        CMYK colours (a printed cover) is rendered in CMYK by ImageMagick,
+        and saved as a CMYK JPEG without colour profile: the browsers
+        convert it to RGB naively, with wrong colours (a teal becomes a
+        fluorescent green). Read in RGB, the page is converted by
+        Ghostscript with its colour profiles, as by the Ghostscript backend.
         """
         try:
             log.info("Thumbnail of %s: trying with wand only", pdffilename)
@@ -358,7 +406,7 @@ class Cache:
                 os.symlink(os.path.abspath(pdffilename), link)
                 with Image() as img:
                     img.options['pdf:use-cropbox'] = 'true'
-                    img.read(filename=link + "[0]")
+                    img.read(filename=link + "[0]", colorspace="srgb")
                     img.save(filename=thumbname)
             return True
         except KeyboardInterrupt:
