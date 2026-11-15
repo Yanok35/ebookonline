@@ -438,7 +438,8 @@ class BookDir:
     # the file, then rescan the directory: the book list follows the same
     # rules as for a change made outside of the server (e.g. a duplicate
     # replaces a book moved to the trash). The rescan hashes no file again,
-    # a move keeps the modification time of the file.
+    # a move keeps the modification time of the file. A move or a rename of
+    # a book only updates this book: nothing else changes.
 
     def __check_writable(self):
         if self.read_only:
@@ -472,11 +473,16 @@ class BookDir:
                 return relpath
             bookfileops.move_no_replace(os.path.join(self.dirpath, book.filename), dst)
             log.info("Book moved: '%s' -> '%s'", book.filename, relpath)
-            # Known at its new path: the rescan does not hash it again
+            # Only this book changes (same content, thumbnail and metadata):
+            # no rescan of the whole directory, which takes a while for a
+            # large library. The other changes of the directory, if any,
+            # are found by the watcher, or by the next scan.
+            st = os.stat(dst)
             with self.lock:
                 book.filename = relpath
                 book.category = bookfileops.category_of(relpath)
-            self.__rescan()
+                book.mtime, book.filesize = st.st_mtime, st.st_size
+            self.save_db()
         return relpath
 
     def rename_book(self, sha1, name):
@@ -649,19 +655,28 @@ class BookDir:
         # one is complete. Book objects are shared, so a bookmark toggled
         # during the scan is not lost.
         with self.lock:
-            remaining = list(self.booklist)
+            books = list(self.booklist)
             known_duplicates = list(self.duplicates)
+        # the books not found yet, by sha1 (unique), in the order of the list
+        remaining = {b.sha1: b for b in books}
+        by_filename = {}
+        for b in books:
+            by_filename.setdefault(b.filename, []).append(b)
         refreshed_booklist = []
         refreshed_duplicates = []
         changed = False
 
         def take(book):
-            remaining.remove(book)
+            del remaining[book.sha1]
             refreshed_booklist.append(book)
+
+        def remaining_at(filename):
+            return next((b for b in by_filename.get(filename, ())
+                         if remaining.get(b.sha1) is b), None)
 
         # 1. List the PDF files of the directory, with their sha1. Only new
         #    or modified files are hashed.
-        files, hashed = self.__list_pdf_files(book_dir, remaining, known_duplicates)
+        files, hashed = self.__list_pdf_files(book_dir, books, known_duplicates)
         changed |= hashed
 
         # 2. Group the files by content (sha1). The first file of a group is
@@ -694,7 +709,7 @@ class BookDir:
 
         new_contents = []
         for sha1, group in groups.items():
-            book = next((b for b in remaining if b.sha1 == sha1), None)
+            book = remaining.get(sha1)
             if book is None:
                 new_contents.append(group)
                 continue
@@ -712,19 +727,19 @@ class BookDir:
         for group in new_contents:
             # Same path but new content (file replaced in place): same book
             # entry, user settings kept, new sha1 and thumbnail
-            book, f = next(((b, f) for f in group for b in remaining
-                            if b.filename == f.filename), (None, group[0]))
+            book, f = next(((remaining_at(f.filename), f) for f in group
+                            if remaining_at(f.filename)), (None, group[0]))
             if book:
                 log.info("Book modified: '%s'", f.filename)
+                take(book)
                 book.sha1 = f.sha1
             else:
                 log.info("New book: '%s'", f.filename)
                 book = Book(book_dir)
                 book.set_sha1(f.sha1)
-                remaining.append(book)
+                refreshed_booklist.append(book)
             changed = True
             update(book, f)
-            take(book)
             add_duplicates(f, group)
 
         if set(refreshed_duplicates) != set(known_duplicates):
@@ -732,7 +747,7 @@ class BookDir:
 
         # remaining contains all db entries not found in dir, thus removed.
         # let's keep those entry to keep user settings in case they reappears
-        for b in remaining:
+        for b in remaining.values():
             if b.present:
                 log.info("Book missing: '%s'", b.filename)
                 changed = True
@@ -756,6 +771,12 @@ class BookDir:
         """
         files = []
         hashed = False
+        # path -> known book (first), or duplicate
+        known_files = {}
+        for b in books:
+            known_files.setdefault(b.filename, b)
+        for d in duplicates:
+            known_files.setdefault(d.filename, d)
         log.info("Scanning directory '%s' for PDF files", book_dir)
         for (dir, subdirs, filenames) in os.walk(book_dir):
 
@@ -776,8 +797,8 @@ class BookDir:
                 if not abspath.lower().endswith("pdf"):
                     continue
                 try:
-                    mtime = os.path.getmtime(abspath)
-                    filesize = os.stat(abspath).st_size
+                    st = os.stat(abspath)
+                    mtime, filesize = st.st_mtime, st.st_size
                 except OSError:
                     # removed in the meantime (or dangling symlink)
                     continue
@@ -785,8 +806,7 @@ class BookDir:
                 # Book object path are relative to BookDir path
                 relpath = os.path.relpath(abspath, book_dir)
 
-                known = next((b for b in books if b.filename == relpath), None) \
-                    or next((d for d in duplicates if d.filename == relpath), None)
+                known = known_files.get(relpath)
                 if known and known.mtime == mtime:
                     sha1 = known.sha1
                 else:
