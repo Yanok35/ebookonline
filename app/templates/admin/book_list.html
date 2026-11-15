@@ -54,6 +54,7 @@
                 {% for b in books %}
                     <tr{% if not b.present %} class="missing"{% endif %}>
                         <td>
+                            {%- if b.meta_reviewed %}<span class="badge reviewed end">revu</span>{% endif %}
                             <a href="{{ url_for('.bookadmin', sha1 = b.sha1) }}">{{ b.filename }}</a>
                             {% if not b.present %}<span class="badge">absent</span>{% endif %}
                             {% if b.sha1 in duplicates %}<span class="badge duplicate">doublon</span>{% endif %}

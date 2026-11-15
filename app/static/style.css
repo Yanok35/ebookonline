@@ -478,6 +478,12 @@ input:disabled {
     background-color: #2e7d32;
 }
 
+/* At the end of its cell (book list: next to the category) */
+.badge.end {
+    float: right;
+    margin-left: 0.5em;
+}
+
 .admin .analysis-state {
     margin: 0 0 0.5em 0;
 }
