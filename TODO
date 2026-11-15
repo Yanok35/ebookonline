@@ -49,7 +49,3 @@
    copy, as for the cover page
  - Local file of publishers (e.g. in instance/, set by a config key), which
    extends srcs/metadata/publishers.json without changing the repository
- - Command line interface for the metadata, next to "flask thumbnails"
-   (app/cli.py), e.g. "flask --app ebookonline metadata
-   scan|show <sha1>|stats": initial analysis of a big library on a desktop
-   computer (the cache is then copied to the server), tuning of the rules
