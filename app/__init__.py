@@ -129,8 +129,10 @@ def create_app(config_name):
             x_host=1
         )
 
-    # (creates the cache directory if missing)
-    app.cache = Cache.get_instance(app.config['CACHE_DIR'])
+    # (creates the cache directory if missing). No thumbnail processes in a
+    # process which serves no requests (flask commands, see app/cli.py).
+    app.cache = Cache.get_instance(app.config['CACHE_DIR'],
+                                   workers=None if _serves_requests() else 0)
 
     # Read-only when the server can not write where it needs to, or when
     # book.db was written by a newer version: the reasons, as messages.
@@ -180,6 +182,10 @@ def create_app(config_name):
 
     from .api import api as api_blueprint
     app.register_blueprint(api_blueprint)
+
+    # Command line interface (flask --app ebookonline thumbnails ...)
+    from .cli import thumbnails
+    app.cli.add_command(thumbnails)
 
     app.register_error_handler(404, _log_not_found)
 
