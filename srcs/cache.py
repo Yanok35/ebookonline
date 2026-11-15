@@ -309,17 +309,26 @@ class Cache:
 
 
     def __pdf2jpeg_wand_only(self, pdffilename, thumbname):
-
+        """
+        The first page converted to JPEG by wand (ImageMagick). ImageMagick
+        interprets the file names ('coder:' prefix, '[...]' frames, glob
+        characters, '@' list), depending on its version: it reads a symbolic
+        link to the PDF file, with a fixed name in a private temporary
+        directory.
+        """
         try:
             log.info("Thumbnail of %s: trying with wand only", pdffilename)
-            with Image() as img:
-                img.options['pdf:use-cropbox'] = 'true'
-                img.read(filename=pdffilename+"[0]")
-                img.save(filename=thumbname)
+            with tempfile.TemporaryDirectory(prefix="ebookonline-thumb-") as tmpdir:
+                link = os.path.join(tmpdir, "book.pdf")
+                os.symlink(os.path.abspath(pdffilename), link)
+                with Image() as img:
+                    img.options['pdf:use-cropbox'] = 'true'
+                    img.read(filename=link + "[0]")
+                    img.save(filename=thumbname)
             return True
         except KeyboardInterrupt:
-            raise KeyboardInterrupt
-        except:
+            raise
+        except Exception:
             log.warning("Thumbnail with wand failed for %s", pdffilename,
                         exc_info=True)
             return False
