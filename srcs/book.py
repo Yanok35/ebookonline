@@ -637,6 +637,18 @@ class BookDir:
         thr.start()
         return thr
 
+    def pdf_files(self):
+        """
+        [PdfFile] of the PDF files of the book directory, books and
+        duplicates, without changing anything (e.g. for the command line).
+        The sha1 of a file known at this path with this modification time
+        is not computed again; the other files are hashed.
+        """
+        with self.lock:
+            books = list(self.booklist)
+            duplicates = list(self.duplicates)
+        return self.__list_pdf_files(self.dirpath, books, duplicates)[0]
+
     def rescan(self):
         """
         Synchronize the book list with the content of the book directory:
