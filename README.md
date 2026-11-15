@@ -33,27 +33,6 @@ entry in ```/etc/ImageMagick-6/policy.xml```
 <policy domain="coder" rights="read" pattern="PDF" />
 ```
 
-## Thumbnails
-The thumbnail of a book is the first page of its PDF file, made by the
-first of these backends which succeeds (`srcs/cache.py`):
-
-1. `pypdf-wand`: the first page copied alone by pypdf, then converted by
-   ImageMagick (wand);
-2. `wand`: ImageMagick (wand) on the whole file;
-3. `ghostscript`: Ghostscript, when it is installed (`sudo apt install
-   ghostscript`).
-
-On the book page (`/bookadmin/<sha1>`), the "Miniature" column shows the
-thumbnail with its dimensions and size, and "Régénérer la miniature" uses
-the backends in turn ("Automatique"), or the one chosen in the list (the
-available ones only), e.g. when the automatic thumbnail is wrong. Their
-differences: [technote-thumbnails-backends.md](docs/technote-thumbnails-backends.md).
-
-The thumbnails are in RGB. Older versions saved the thumbnails made by
-ImageMagick of the PDF files with CMYK colours (printed covers) in CMYK:
-the browsers show them with wrong colours (a teal becomes a fluorescent
-green). The book page tells "CMYK", and the command line finds and
-regenerates them (see [Command line interface](#command-line-interface)).
 
 ## Configure the service
 
@@ -146,6 +125,8 @@ sudo systemctl enable --now ebookonline
 As for fail2ban, the unit is copied rather than linked (`systemctl link`):
 it chooses the user and the command of the service.
 
+# Operations
+
 ## Start the Flask production server
 
 ```bash
@@ -223,7 +204,7 @@ sudo systemd-run --pty --wait --collect -p User=ebookonline -p Nice=10 \
     /opt/ebookonline/venv/bin/flask --app ebookonline thumbnails check --list
 ```
 
-## fail2ban
+## fail2ban configuration
 
 The application logs, as warnings of its `app` logger:
 
@@ -233,7 +214,7 @@ The application logs, as warnings of its `app` logger:
   `Not found from <address>: GET '<path>'`. A logged in user (e.g. a stale
   link) is only logged as info, with another message, and is never banned.
 
-The address is the client one given by the reverse proxy (see
+The address is the client given by the reverse proxy (see
 `BEHIND_REVERSE_PROXY`), always before the user name or the path, which the
 client chooses. fail2ban reads them from the journal.
 
