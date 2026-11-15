@@ -81,7 +81,7 @@ def test_thumbnail_process_can_be_terminated():
 # --- Ghostscript fallback ---
 
 from srcs import cache as cache_module
-from tests.conftest import make_pdf
+from tests.conftest import FakeCache, make_pdf, write_jpeg
 
 need_gs = pytest.mark.skipif(not __import__("shutil").which("gs"), reason="Ghostscript (gs) required")
 
@@ -93,7 +93,7 @@ def test_ghostscript_jpeg_with_any_file_name(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     pdf = make_pdf(tmp_path / '-a "$(touch pwned)" `touch pwned2` 100%.pdf')
     thumbname = "-100% thumb.jpg"
-    assert cache_module.ghostscript_jpeg(pdf.name, thumbname)
+    assert FakeCache(tmp_path)._Cache__pdf2jpeg_ghostscript_jpeg(pdf.name, thumbname)
     assert (tmp_path / thumbname).read_bytes()[:2] == b"\xff\xd8"  # JPEG
     assert not (tmp_path / "pwned").exists() and not (tmp_path / "pwned2").exists()
 
@@ -103,14 +103,14 @@ def test_ghostscript_jpeg_failure(tmp_path):
     bad = tmp_path / "bad.pdf"
     bad.write_bytes(b"not a PDF file")
     thumbname = tmp_path / "bad.jpg"
-    assert cache_module.ghostscript_jpeg(str(bad), str(thumbname)) is False
+    assert FakeCache(tmp_path)._Cache__pdf2jpeg_ghostscript_jpeg(str(bad), str(thumbname)) is False
     assert not thumbname.exists()
 
 
 def test_ghostscript_jpeg_without_gs(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", str(tmp_path))
     pdf = make_pdf(tmp_path / "a.pdf")
-    assert cache_module.ghostscript_jpeg(str(pdf), str(tmp_path / "a.jpg")) is False
+    assert FakeCache(tmp_path)._Cache__pdf2jpeg_ghostscript_jpeg(str(pdf), str(tmp_path / "a.jpg")) is False
 
 
 def test_failed_thumbnail_job_does_not_stop_the_process(tmp_path, monkeypatch, caplog):
@@ -189,3 +189,61 @@ def test_wand_thumbnail_with_any_file_name(tmp_path, monkeypatch, name):
     with Image(filename=str(thumbname)) as img:
         assert img.width < 200  # this file, not another one (400 points)
     assert list(tmpdir.iterdir()) == []
+
+
+# --- choice of the backend ---
+
+def backends_called(tmp_path, monkeypatch, backend, results):
+    """ The backends run for a request, each one returning results[name] """
+    cache = FakeCache(tmp_path)
+    called = []
+    for name, method in (("pypdf-wand", "resize_then_wand"), ("wand", "wand_only"),
+                         ("ghostscript", "ghostscript_jpeg")):
+        def run(pdffilename, thumbname, name=name):
+            called.append(name)
+            return results.get(name, False)
+        monkeypatch.setattr(cache, f"_Cache__pdf2jpeg_{method}", run)
+    monkeypatch.setattr(cache, "_Cache__thumb_resize_small", lambda thumbname: called.append("resize"))
+    cache._thumbnail_job("a.pdf", str(tmp_path / "a.jpg"), backend)
+    return called
+
+
+def test_backends_in_turn(tmp_path, monkeypatch):
+    assert backends_called(tmp_path, monkeypatch, None, {"wand": True}) == \
+        ["pypdf-wand", "wand", "resize"]
+    assert backends_called(tmp_path, monkeypatch, None, {}) == ["pypdf-wand", "wand", "ghostscript"]
+
+
+def test_chosen_backend_only(tmp_path, monkeypatch, caplog):
+    assert backends_called(tmp_path, monkeypatch, "ghostscript", {"ghostscript": True}) == \
+        ["ghostscript", "resize"]
+    # it fails: not the other ones
+    with caplog.at_level(logging.ERROR):
+        assert backends_called(tmp_path, monkeypatch, "wand", {"pypdf-wand": True}) == ["wand"]
+    assert "No thumbnail for a.pdf (backend: wand)" in caplog.text
+
+
+def test_create_thumbnail_unknown_backend(tmp_path):
+    with pytest.raises(ValueError, match="unknown thumbnail backend"):
+        FakeCache(tmp_path).create_thumbnail("a.pdf", "0" * 40, "magic")
+
+
+def test_available_backends(monkeypatch):
+    assert cache_module.available_backends()[:2] == ["pypdf-wand", "wand"]
+    monkeypatch.setattr(cache_module.shutil, "which", lambda name: None)
+    assert cache_module.available_backends() == ["pypdf-wand", "wand"]
+
+
+def test_jpeg_size(tmp_path):
+    write_jpeg(tmp_path / "a.jpg", 300, 424)
+    assert cache_module.jpeg_size(tmp_path / "a.jpg") == (300, 424)
+    # a progressive JPEG (SOF2), after an APP0 segment and fill bytes: the
+    # header only
+    sof2 = b"\xff\xc2\x00\x11\x08" + (5).to_bytes(2, "big") + (17).to_bytes(2, "big")
+    (tmp_path / "p.jpg").write_bytes(b"\xff\xd8\xff\xe0\x00\x04ab\xff\xff" + sof2)
+    assert cache_module.jpeg_size(tmp_path / "p.jpg") == (17, 5)
+    (tmp_path / "bad.jpg").write_bytes(b"\xff\xd8\xff")
+    assert cache_module.jpeg_size(tmp_path / "bad.jpg") is None
+    (tmp_path / "png.jpg").write_bytes(b"\x89PNG\r\n")
+    assert cache_module.jpeg_size(tmp_path / "png.jpg") is None
+    assert cache_module.jpeg_size(tmp_path / "missing.jpg") is None

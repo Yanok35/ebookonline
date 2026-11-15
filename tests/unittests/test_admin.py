@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import make_pdf
+from srcs.cache import available_backends
+from tests.conftest import make_pdf, write_jpeg
 
 
 def test_book_list_requires_login(app):
@@ -131,6 +132,56 @@ def test_reset_thumbnail(app, client, book):
     pdffile = os.path.join(app.config["BOOK_DIR"], book.filename)
     assert app.cache.requests == [(pdffile, book.sha1)]
     assert "Miniature en cours de régénération" in client.get(response.location).text
+
+
+def test_reset_thumbnail_backends(app, client, book, monkeypatch):
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    select = re.search(r'<select[^>]*name="reset-backend".*?</select>', html, re.S).group(0)
+    assert re.findall(r'<option (?:selected )?value="([^"]*)"', select) == \
+        [""] + list(available_backends())
+    assert "Automatique (le premier qui réussit)" in select
+
+    # a chosen backend is queued with the request; none: each one in turn
+    app.cache.requests.clear()
+    app.cache.backends.clear()
+    for backend in ("wand", ""):
+        response = client.post(f"/reset-thumbnail/{book.sha1}", data={
+            "reset-csrf_token": reset_csrf_token(client, book), "reset-backend": backend})
+    assert app.cache.backends == ["wand", None]
+    assert "(Automatique (le premier qui réussit))" in client.get(response.location).text
+
+
+def test_reset_thumbnail_unavailable_backend(app, client, book, monkeypatch):
+    # gs is not installed: Ghostscript is not proposed, and refused
+    monkeypatch.setattr("srcs.cache.shutil.which", lambda name: None)
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert 'value="ghostscript"' not in html
+    app.cache.requests.clear()
+    for backend in ("ghostscript", "unknown"):
+        response = client.post(f"/reset-thumbnail/{book.sha1}", data={
+            "reset-csrf_token": reset_csrf_token(client, book), "reset-backend": backend})
+        assert app.cache.requests == []
+        assert "Méthode de génération indisponible." in client.get(response.location).text
+
+
+def test_thumbnail_info(app, client, book):
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "Pas de miniature : image de remplacement." in html
+    write_jpeg(Path(app.cache.get_thumbname(book.sha1)), 300, 424)
+    size = os.path.getsize(app.cache.get_thumbname(book.sha1))
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "300&nbsp;×&nbsp;424&nbsp;pixels" in html
+    assert f"{size / 1024:.1f}&nbsp;Ko ({size} octets)" in html
+    # the groups of actions
+    assert html.index("<h2>Miniature</h2>") < html.index("<h3>Extraire du PDF</h3>") \
+        < html.index('name="reset-backend"') < html.index("<h3>Insérer depuis une image</h3>") \
+        < html.index('name="cover-image"')
+
+
+def test_unreadable_thumbnail_info(app, client, book):
+    Path(app.cache.get_thumbname(book.sha1)).write_bytes(b"not an image")
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert "Image illisible," in html and "(12 octets)" in html
 
 
 def test_reset_missing_thumbnail(app, client, book):

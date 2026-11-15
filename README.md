@@ -33,6 +33,21 @@ entry in ```/etc/ImageMagick-6/policy.xml```
 <policy domain="coder" rights="read" pattern="PDF" />
 ```
 
+## Thumbnails
+The thumbnail of a book is the first page of its PDF file, made by the
+first of these backends which succeeds (`srcs/cache.py`):
+
+1. `pypdf-wand`: the first page copied alone by pypdf, then converted by
+   ImageMagick (wand);
+2. `wand`: ImageMagick (wand) on the whole file;
+3. `ghostscript`: Ghostscript, when it is installed (`sudo apt install
+   ghostscript`).
+
+On the book page (`/bookadmin/<sha1>`), the "Miniature" column shows the
+thumbnail with its dimensions and size, and "Régénérer la miniature" uses
+the backends in turn ("Automatique"), or the one chosen in the list (the
+available ones only), e.g. when the automatic thumbnail is wrong.
+
 ## Configure the service
 
 `config.py` only holds non-sensitive defaults. Secrets are loaded at startup,

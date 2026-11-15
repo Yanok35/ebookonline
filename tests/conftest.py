@@ -19,10 +19,13 @@ class FakeCache(Cache):
         self.cachedir = str(cachedir)
         self.subproc = []
         self.requests = []
+        # backend of each request (None: each one in turn)
+        self.backends = []
 
-    def _queue_thumbnail(self, pdffilename, thumbname):
+    def _queue_thumbnail(self, pdffilename, thumbname, backend=None):
         sha1 = os.path.splitext(os.path.basename(thumbname))[0]
         self.requests.append((pdffilename, sha1))
+        self.backends.append(backend)
 
     def __del__(self):
         pass
@@ -40,6 +43,15 @@ def make_pdf(path, title=None):
     with open(path, "wb") as f:
         writer.write(f)
     return path
+
+
+def write_jpeg(path, width, height):
+    """ A white JPEG image (PyMuPDF: wand would start the threads of ImageMagick) """
+    import pymupdf
+
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, width, height), False)
+    pix.clear_with(255)
+    path.write_bytes(pix.tobytes("jpg"))
 
 
 def make_book_pdf(path, pages, metadata=None, xmp=None):
