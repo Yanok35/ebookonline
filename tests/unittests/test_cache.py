@@ -128,3 +128,27 @@ def test_failed_thumbnail_job_does_not_stop_the_process(tmp_path, monkeypatch, c
         cache._thumbnail_job("a.pdf", str(thumbname))
     assert "No thumbnail for a.pdf" in caplog.text
     assert not thumbname.exists()
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_pypdf_wand_thumbnail_leaves_no_temporary_file(tmp_path, monkeypatch, valid):
+    """ The temporary PDF file of the first page is removed, success or not """
+    import tempfile
+
+    from tests.conftest import FakeCache
+
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmpdir))
+    if valid:
+        pdf = make_pdf(tmp_path / "a.pdf")
+    else:
+        pdf = tmp_path / "a.pdf"
+        pdf.write_bytes(b"not a PDF file")
+    thumbname = tmp_path / "a.jpg"
+    done = FakeCache(tmp_path)._Cache__pdf2jpeg_resize_then_wand(str(pdf), str(thumbname))
+    assert list(tmpdir.iterdir()) == []
+    if not valid:
+        assert done is False
+    elif done:  # (ImageMagick may refuse the PDF files: its security policy)
+        assert thumbname.read_bytes()[:2] == b"\xff\xd8"
