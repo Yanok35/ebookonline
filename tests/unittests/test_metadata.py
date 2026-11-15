@@ -71,6 +71,11 @@ def test_split_authors():
     ("Victor", False),
     ("Chapter 12", False),
     ("Albin Michel", False),  # a publisher
+    # initials (not the article 'a'), 'Mc', Latin Extended-A letters
+    ("Kenneth A. Lambert", True),
+    ("Wes McKinney", True),
+    ("Igor Milovanović", True),
+    ("A Concise Guide", False),
 ])
 def test_looks_like_person(text, expected):
     assert looks_like_person(text) is expected
@@ -339,6 +344,63 @@ def test_suggest_subtitle():
     s = analyse.suggest({"title": [["Python Algorithms", "xmp", 50]]},
                         filename="Python Algorithms - Mastering Basic Algorithms.pdf")
     assert "subtitle" not in s
+
+
+def page_raw(lines, xmp_title=None):
+    """ The raw data of a PDF file whose first page has these [[size, line]] """
+    xmp = {"dc:title": [xmp_title]} if xmp_title else {}
+    return {"pages": 10, "meta": {}, "xmp": xmp, "texts": {"0": "\n".join(t for _, t in lines)},
+            "fonts": [[0, lines]], "has_text": True}
+
+
+@pytest.mark.parametrize("lines, subtitle, authors", [
+    # a line which ends with a lowercase word is continued, even if the
+    # next one looks like a name
+    ([[92, "Python"], [92, "Algorithms"], [30, "Mastering Basic Algorithms in the"],
+      [30, "Python Language"], [24, "Magnus Lie Hetland"], [12, "www.allitebooks.com"]],
+     "Mastering Basic Algorithms in the Python Language", ["Magnus Lie Hetland"]),
+    # a separator, then the author in the same size; a word cut by a hyphen
+    ([[60, "Python Unit Test"], [60, "Automation"], [24, "Practical Techniques for mind-"],
+      [24, "blowing Developers"], [24, "—"], [24, "Ashwin Pajankar"]],
+     "Practical Techniques for mind-blowing Developers", ["Ashwin Pajankar"]),
+    # an edition between the title and the subtitle; a city after it
+    ([[28, "Python Geospatial"], [28, "Development"], [18, "Second Edition"],
+      [16, "Learn to build mapping applications"], [14, "Erik Westra"],
+      [10.5, "BIRMINGHAM - MUMBAI"]],
+     "Learn to build mapping applications", ["Erik Westra"]),
+    # a name in a subtitle line is still an author of the page
+    ([[40, "Days"], [24, "Copies of Mark Kistler’s books sold"], [16, "Mark Kistler"]],
+     "Copies of Mark Kistler’s books sold", ["Mark Kistler"]),
+    # no subtitle: the author follows the title
+    ([[31.5, "Python for Data Analysis"], [15, "Wes McKinney"], [10.4, "Beijing • Cambridge"]],
+     None, ["Wes McKinney"]),
+])
+def test_title_page_subtitle(lines, subtitle, authors):
+    s = analyse.suggest(analyse.candidates(page_raw(lines)))
+    assert s.get("subtitle", {}).get("value") == subtitle
+    assert s["authors"]["value"] == authors
+    if subtitle:
+        assert s["subtitle"]["sources"] == ["title-page"] and s["subtitle"]["score"] == 40
+
+
+def test_title_page_subtitle_end_of_title():
+    # the end of the title in a smaller size (the XMP has the whole title):
+    # not a subtitle
+    raw = page_raw([[50, "Python"], [30, "In A Nutshell"], [16, "Alex Martelli"]],
+                   xmp_title="Python In A Nutshell")
+    s = analyse.suggest(analyse.candidates(raw))
+    assert s["title"]["value"] == "Python In A Nutshell" and "subtitle" not in s
+
+
+def test_title_page_subtitle_of_another_title():
+    # the title of the page is not the suggested one: its subtitle is not used
+    c = analyse.candidates(page_raw([[40, "Contents at a Glance"], [20, "A Short Overview"],
+                                     [12, "About the Author"]]))
+    c["title"].append(["Python Graphics", "xmp", 50])
+    c["title"].append(["Python Graphics", "meta", 35])
+    assert c["subtitle"] == [["A Short Overview", "large-font", 25]]
+    s = analyse.suggest(c)
+    assert s["title"]["value"] == "Python Graphics" and "subtitle" not in s
 
 
 def test_extract_with_damaged_xmp(tmp_path):
