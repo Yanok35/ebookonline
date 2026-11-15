@@ -626,10 +626,15 @@ class Learned:
         referential = referential or publishers.default()
         pairs = []
         spellings = defaultdict(Counter)
+        # the canonical name of each spelling, once: a library has few of
+        # them, and canonical() searches every alias of the referential
+        keys = {}
         for b in books:
             if not b.editor:
                 continue
-            spellings[norm_key(referential.canonical(b.editor))][b.editor] += 1
+            if b.editor not in keys:
+                keys[b.editor] = norm_key(referential.canonical(b.editor))
+            spellings[keys[b.editor]][b.editor] += 1
             isbn13 = to_isbn13(b.isbn)
             if isbn13:
                 pairs.append((isbn13, b.editor))
