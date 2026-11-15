@@ -43,9 +43,10 @@ first of these backends which succeeds (`srcs/cache.py`):
 3. `ghostscript`: Ghostscript, when it is installed (`sudo apt install
    ghostscript`).
 
-On the book page (`/bookadmin/<sha1>`), "Régénérer la miniature" uses them
-in turn ("Automatique"), or the one chosen in the list (the available ones
-only), e.g. when the automatic thumbnail is wrong.
+On the book page (`/bookadmin/<sha1>`), the "Miniature" column shows the
+thumbnail with its dimensions and size, and "Régénérer la miniature" uses
+the backends in turn ("Automatique"), or the one chosen in the list (the
+available ones only), e.g. when the automatic thumbnail is wrong.
 
 ## Configure the service
 
