@@ -85,7 +85,7 @@ overridden, e.g. `EBOOKONLINE_BOOK_DIR=/srv/books`.
 ### Metadata analysis
 
 The PDF files are analysed in background processes, at a low priority, to
-suggest the title, authors, editor, year and ISBN of the books in the admin
+suggest the title, subtitle, authors, editor, year and ISBN of the books in the admin
 pages (nothing is written in `book.db` without the user). The results are
 kept in `CACHE_DIR`, next to the thumbnails. See `METADATA_ANALYSIS`,
 `METADATA_WORKERS` and `METADATA_NICE` in `config.py`, and

@@ -47,6 +47,7 @@ the books whose file is missing.
 | `filesize`   | integer | Size of the file in bytes. `0` when the file is missing. Recomputed from the file when loaded. |
 | `tags`       | string  | Tags, separated by spaces. `""` when none. |
 | `title`      | string  | Title. `""` when unknown. |
+| `subtitle`   | string  | Subtitle, optional. `""` when none or unknown. |
 | `authors`    | array   | Authors, strings (`"Victor Hugo"`). `[]` when unknown. |
 | `editor`     | string  | Editor (publisher). `""` when unknown. |
 | `year`       | integer | Publication year. `0` when unknown. |
@@ -57,7 +58,8 @@ the books whose file is missing.
 Required when loading: `sha1`, `filename`, `category`. The other keys take
 the default value above when missing.
 
-`title`, `authors`, `editor`, `year` and `isbn` are only set by the user:
+`title`, `subtitle`, `authors`, `editor`, `year` and `isbn` are only set by
+the user:
 the suggestions found in the PDF files (see
 [technote-metadata-extract-&-analysis.md](technote-metadata-extract-&-analysis.md))
 prefill the forms, they are never written in `book.db` without the user.
@@ -85,7 +87,7 @@ their sha1 is not computed again by each scan.
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "min_reader_version": 1,
   "dirpath": "/srv/ebookonline/books",
   "booklist": [
@@ -97,6 +99,7 @@ their sha1 is not computed again by each scan.
       "filesize": 6418234,
       "tags": "r statistics",
       "title": "R in Action",
+      "subtitle": "Data analysis and graphics with R and Tidyverse",
       "authors": ["Robert I. Kabacoff"],
       "editor": "Manning",
       "year": 2022,
@@ -125,6 +128,7 @@ their sha1 is not computed again by each scan.
 | 1 | `version` key added. | — (not written) |
 | 2 | `duplicates` added. `min_reader_version` written since then. | 1 |
 | 3 | `title`, `authors` and `meta_reviewed` added to the books. | 1 |
+| 4 | `subtitle` added to the books. | 1 |
 
 ## Versioning
 
@@ -142,7 +146,7 @@ numbers, or of the ext4 "read-only compatible" features:
 - a **compatible** change keeps it unchanged: older code ignores what it
   does not know and still reads the file correctly, e.g. a new key
   (`duplicates` in version 2, `title`, `authors` and `meta_reviewed` in
-  version 3);
+  version 3, `subtitle` in version 4);
 - an **incompatible** change sets it to the new version: older code would
   misread the file, e.g. a key whose type or meaning changes (`tags` becoming
   a list), or a restructuring of the file.

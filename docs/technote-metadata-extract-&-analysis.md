@@ -1,7 +1,7 @@
 # Technical note: metadata extraction and analysis
 
 The server reads the PDF files of the books to suggest their metadata to the
-user: title, authors, editor (publisher), year, ISBN. The suggestions
+user: title, subtitle, authors, editor (publisher), year, ISBN. The suggestions
 prefill the forms of the admin pages, for the user to review, complete or
 validate. **Nothing is written in `book.db` without the user**: the
 suggestions are kept in the cache directory only.
@@ -131,6 +131,18 @@ of the group (`shortest_title()`):
 - similar spellings of the same weight: the shortest one;
 - the weaker sources (the file name) never lengthen a title: they often
   add a subtitle, an author or a publisher.
+
+The **subtitle** has no candidate of its own: it comes from the title
+candidates made of the title and a subtitle (`analyse.split_title()`,
+`analyse.subtitle_candidates()`), after `: ` or a dash between spaces, when
+their title is the suggested one: `Python Algorithms: Mastering Basic
+Algorithms in the Python Language` gives the subtitle `Mastering Basic
+Algorithms in the Python Language`, with the source and the weight of this
+candidate. A series at the end in parentheses (`(World Scientific Series
+...)`) is left out; an edition or a volume (`- Second Edition`,
+`: Tome 2`) is not a subtitle. The file name is not used: its parts are
+often an author or a publisher. A suggested title made of a title and a
+subtitle is cut to its title, the subtitle having its own field.
 
 For the authors, every name scoring at least 75% of the first one (and 30)
 is kept, 4 at most.
