@@ -632,3 +632,16 @@ def test_scan_requests_the_metadata_analysis(library):
 
     assert sorted(library.metadata.requests) == sorted(
         (b.sha1, os.path.join(library.dirpath, b.filename)) for b in library.get_booklist())
+
+
+def test_pdf_files(library, mocker):
+    """ The files of the directory, without change; only the unknown ones are hashed """
+    root = Path(library.dirpath)
+    make_pdf(root / "a.pdf", title="A")
+    library.rescan()
+    make_pdf(root / "Science" / "b.pdf", title="B")
+    spy = mocker.spy(srcs.book, "sha1_file")
+    files = sorted(library.pdf_files(), key=lambda f: f.filename)
+    assert [(f.filename, f.category) for f in files] == [("Science/b.pdf", "Science"), ("a.pdf", "Generals")]
+    assert spy.call_count == 1
+    assert library.find_book_by_filename("Science/b.pdf") is None

@@ -152,3 +152,25 @@ def test_worker_dying_on_a_book_is_restarted_at_once(tmp_path, mocker):
     assert spawn.call_count == 1
     assert s.read("a" * 40)["error"] == "the PDF reader stopped (exit code 1)"
     s._running = False
+
+
+# --- analyse_book(), also used by the command line ---
+
+def test_analyse_book_errors(tmp_path, monkeypatch):
+    from srcs.metadata import service, store
+
+    def boom(*args):
+        raise ValueError("bug")
+
+    monkeypatch.setattr(store, "update", boom)
+    assert service.analyse_book(str(tmp_path), "a" * 40, "a.pdf") == store.FAILED
+    assert store.read(str(tmp_path), "a" * 40)["error"] == store.INTERNAL_ERROR + "ValueError: bug"
+
+    def slow(*args):
+        import time
+        time.sleep(3)
+
+    monkeypatch.setattr(store, "update", slow)
+    monkeypatch.setattr(service, "TASK_TIMEOUT", 1)
+    assert service.analyse_book(str(tmp_path), "b" * 40, "b.pdf") == store.FAILED
+    assert store.read(str(tmp_path), "b" * 40)["error"] == "analysis stopped after 1 s"
