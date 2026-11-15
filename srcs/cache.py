@@ -24,6 +24,7 @@ import os
 import math
 import queue
 import signal
+import shutil
 import subprocess
 import tempfile
 
@@ -57,6 +58,16 @@ def _reset_signal_handlers():
     signal.signal(signal.SIGINT, signal.default_int_handler)
 
 
+# Backends of the thumbnails, tried in this order when none is chosen: the
+# first one which makes an image (see Cache.__pdf2jpeg())
+BACKENDS = ("pypdf-wand", "wand", "ghostscript")
+
+
+def available_backends():
+    """ The backends which can run here: Ghostscript when gs is installed """
+    return [b for b in BACKENDS if b != "ghostscript" or shutil.which("gs")]
+
+
 # Ghostscript fallback: largest image before the resize (the resolution is
 # halved until below), longest run of gs
 GS_MAX_IMAGE_BYTES = 2048 * 1024
@@ -68,44 +79,6 @@ def _remove(filename):
         os.remove(filename)
     except FileNotFoundError:
         pass
-
-
-def ghostscript_jpeg(pdffilename, thumbname):
-    """
-    The first page of a PDF file as a JPEG image, with Ghostscript: True
-    when the image is written. The command is run without shell, the file
-    names as arguments: any name is safe ('"', '$(...)', a leading '-').
-    No image is left when gs fails.
-    """
-    # absolute: a name can not be taken for an option; '%' would be a page
-    # number in the output file name of gs
-    pdfpath = os.path.abspath(pdffilename)
-    output = os.path.abspath(thumbname).replace("%", "%%")
-    resolution = 150
-    while resolution >= 2:
-        log.info("Thumbnail of %s: trying with Ghostscript (%d dpi)", pdffilename, resolution)
-        cmd = ["gs", "-q", "-dSAFER", "-sDEVICE=jpeg", "-o", output, "-dFirstPage=1",
-               "-dLastPage=1", "-dJPEGQ=92", f"-r{resolution}", pdfpath]
-        log.debug("%s", cmd)
-        try:
-            result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True,
-                                    timeout=GS_TIMEOUT)
-        except (OSError, subprocess.SubprocessError) as e:
-            log.error("No thumbnail for %s: Ghostscript failed: %s", pdffilename, e)
-            _remove(thumbname)
-            return False
-        size = os.path.getsize(thumbname) if os.path.exists(thumbname) else 0
-        if result.returncode != 0 or size == 0:
-            log.error("No thumbnail for %s: Ghostscript failed (exit status %d): %s",
-                      pdffilename, result.returncode,
-                      result.stderr.decode(errors="replace").strip()[-500:])
-            _remove(thumbname)
-            return False
-        log.debug("Thumbnail size: %d bytes", size)
-        if size < GS_MAX_IMAGE_BYTES:
-            break
-        resolution = resolution // 2
-    return True
 
 
 def sha1_file(filename):
@@ -166,8 +139,13 @@ class Cache:
         with open(thumbname, 'rb') as f:
             return f.read()
 
-    def create_thumbnail(self, pdffilename, sha1):
-
+    def create_thumbnail(self, pdffilename, sha1, backend=None):
+        """
+        Queue the generation of the thumbnail of a book, unless it exists.
+        backend: one of BACKENDS, None for each of them in turn.
+        """
+        if backend is not None and backend not in BACKENDS:
+            raise ValueError(f"unknown thumbnail backend: {backend!r}")
         if not self.writable:
             return
 
@@ -177,11 +155,11 @@ class Cache:
         if os.path.exists(thumbname):
             return
 
-        self._queue_thumbnail(pdffilename, thumbname)
+        self._queue_thumbnail(pdffilename, thumbname, backend)
 
-    def _queue_thumbnail(self, pdffilename, thumbname):
+    def _queue_thumbnail(self, pdffilename, thumbname, backend=None):
         # Push thumbnail generation request to the process pool
-        msg = (pdffilename, thumbname)
+        msg = (pdffilename, thumbname, backend)
         self.sha1_queue.put(msg)
 
     def __del__(self):
@@ -218,11 +196,11 @@ class Cache:
                     log.info("Thumbnail process %d: parent process is gone, exit", subprocId)
                     break
                 try:
-                    (pdffilename, thumbname) = self.sha1_queue.get(timeout=1)
+                    (pdffilename, thumbname, backend) = self.sha1_queue.get(timeout=1)
                 except queue.Empty:
                     continue
 
-                self._thumbnail_job(pdffilename, thumbname)
+                self._thumbnail_job(pdffilename, thumbname, backend)
                 continue
 
             except KeyboardInterrupt:
@@ -231,39 +209,44 @@ class Cache:
 
         return
 
-    def _thumbnail_job(self, pdffilename, thumbname):
+    def _thumbnail_job(self, pdffilename, thumbname, backend=None):
         """
         A thumbnail request of the queue. An error is logged, and no
         incomplete thumbnail is left (a placeholder is shown): it does not
         stop the process, which goes on with the next requests.
         """
-        log.info("Thumbnail: %s -> %s", pdffilename, thumbname)
+        log.info("Thumbnail: %s -> %s (backend: %s)", pdffilename, thumbname, backend or "any")
         try:
-            self.__pdf2jpeg(pdffilename, thumbname)
+            self.__pdf2jpeg(pdffilename, thumbname, backend)
         except KeyboardInterrupt:
             raise
         except Exception:
             log.error("No thumbnail for %s", pdffilename, exc_info=True)
             _remove(thumbname)
 
-    def __pdf2jpeg(self, pdffilename, thumbname):
+    def __pdf2jpeg(self, pdffilename, thumbname, backend=None):
         """
-        Generate a Jpeg from a Pdf using different 'backends'
+        Generate a Jpeg from a Pdf with a backend (one of BACKENDS), or with
+        each of them in turn until one succeeds (None).
         When thumbnail is almost ready, resize it to a small memory footprint
         """
-        jpeg_backends = [
-            self.__pdf2jpeg_resize_then_wand,
-            self.__pdf2jpeg_wand_only,
-            ghostscript_jpeg,
-        ]
+        jpeg_backends = {
+            "pypdf-wand": self.__pdf2jpeg_resize_then_wand,
+            "wand": self.__pdf2jpeg_wand_only,
+            "ghostscript": self.__pdf2jpeg_ghostscript_jpeg,
+        }
+        names = [backend] if backend else BACKENDS
 
-        for callback in jpeg_backends:
-            jpegReady = callback(pdffilename, thumbname)
+        jpegReady = False
+        for name in names:
+            jpegReady = jpeg_backends[name](pdffilename, thumbname)
             if jpegReady:
                 break
 
         if jpegReady:
             self.__thumb_resize_small(thumbname)
+        else:
+            log.error("No thumbnail for %s (backend: %s)", pdffilename, backend or "any")
 
 
     def __pdf2jpeg_resize_then_wand(self, pdffilename, thumbname):
@@ -333,6 +316,43 @@ class Cache:
                         exc_info=True)
             return False
 
+
+    def __pdf2jpeg_ghostscript_jpeg(self, pdffilename, thumbname):
+        """
+        The first page of a PDF file as a JPEG image, with Ghostscript: True
+        when the image is written. The command is run without shell, the file
+        names as arguments: any name is safe ('"', '$(...)', a leading '-').
+        No image is left when gs fails.
+        """
+        # absolute: a name can not be taken for an option; '%' would be a page
+        # number in the output file name of gs
+        pdfpath = os.path.abspath(pdffilename)
+        output = os.path.abspath(thumbname).replace("%", "%%")
+        resolution = 150
+        while resolution >= 2:
+            log.info("Thumbnail of %s: trying with Ghostscript (%d dpi)", pdffilename, resolution)
+            cmd = ["gs", "-q", "-dSAFER", "-sDEVICE=jpeg", "-o", output, "-dFirstPage=1",
+                   "-dLastPage=1", "-dJPEGQ=92", f"-r{resolution}", pdfpath]
+            log.debug("%s", cmd)
+            try:
+                result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True,
+                                        timeout=GS_TIMEOUT)
+            except (OSError, subprocess.SubprocessError) as e:
+                log.error("No thumbnail for %s: Ghostscript failed: %s", pdffilename, e)
+                _remove(thumbname)
+                return False
+            size = os.path.getsize(thumbname) if os.path.exists(thumbname) else 0
+            if result.returncode != 0 or size == 0:
+                log.error("No thumbnail for %s: Ghostscript failed (exit status %d): %s",
+                          pdffilename, result.returncode,
+                          result.stderr.decode(errors="replace").strip()[-500:])
+                _remove(thumbname)
+                return False
+            log.debug("Thumbnail size: %d bytes", size)
+            if size < GS_MAX_IMAGE_BYTES:
+                break
+            resolution = resolution // 2
+        return True
 
     def __thumb_resize_small(self, thumbname):
 
