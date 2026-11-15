@@ -86,7 +86,7 @@
                 {% endif %}
                 <form method="post" novalidate>
                     {{ form.hidden_tag() }}
-                    {% for field in [form.title, form.authors, form.editor, form.year, form.isbn, form.tags] %}
+                    {% for field in [form.title, form.subtitle, form.authors, form.editor, form.year, form.isbn, form.tags] %}
                     {% set s = suggestions.get(field.name) %}
                     <div class="field">
                         {{ field.label }}

@@ -89,6 +89,11 @@ class BookForm(FlaskForm):
         "Titre",
         filters=[_strip],
         validators=[Length(max=500)])
+    subtitle = StringField(
+        "Sous-titre",
+        filters=[_strip],
+        validators=[Length(max=500)],
+        description="Facultatif.")
     authors = AuthorsField(
         "Auteurs",
         default=list,

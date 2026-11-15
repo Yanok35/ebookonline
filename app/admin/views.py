@@ -129,6 +129,7 @@ def bookadmin(sha1):
     # user submits the form
     form = BookForm(data=metadata.prefill({
         "title": book.title,
+        "subtitle": book.subtitle,
         "authors": list(book.authors),
         "tags": book.tags,
         "editor": book.editor,
@@ -137,6 +138,7 @@ def bookadmin(sha1):
     }, suggestions))
     if form.validate_on_submit():
         book.title = form.title.data
+        book.subtitle = form.subtitle.data
         book.authors = form.authors.data or []
         book.tags = form.tags.data
         book.editor = form.editor.data

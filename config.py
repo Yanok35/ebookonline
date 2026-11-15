@@ -62,11 +62,12 @@ class Config:
     METADATA_NICE = 10
 
     # Name of the PDF files after their metadata (book.db), proposed on the
-    # book page: {title}, {author}, {authors}, {author_sort}, {editor},
-    # {year}, {isbn}; a missing value is left out with its parentheses or
-    # separator. A file name only, without directory. See
-    # docs/technote-file-naming.md.
-    FILENAME_PATTERN = "{title} - {author_sort}, {year}"
+    # book page: {title}, {subtitle}, {author}, {authors}, {author_sort},
+    # {editor}, {year}, {isbn}; a missing value is left out with its
+    # parentheses or separator. A file name only, without directory. The
+    # subtitle makes the file name searchable in the library (the search
+    # is on the file names). See docs/technote-file-naming.md.
+    FILENAME_PATTERN = "{title} {subtitle} - {author_sort}, {year}"
 
     # Following are in current directory
     BOOK_DB = "book.db"
