@@ -25,11 +25,9 @@
  - Add multiples bookdir ? magazine, mangas ...
 
 # Book admin
- - Ability to add a missing cover to PDF,
- - PDF automatic analysis to extract metadata : isbn
- - Recover some metadata from OCR ? title, edition, author(s), date, isbn,
- - Rename the file, to match a "pattern" for the whole library : opt. automatic using pattern from metadata ?
- - Move the file to another directory (category),
+ - Remove some watermarks
+ - Améliorer la gestion des catégories : Renommer (et donc sur le disque aussi?)
+   Ne plus mettre à plat, mais garder une arborescence ? à réfléchir.
 
 # Book metadata (later steps of the metadata extraction work)
  - Reader: side panel with the metadata form, saved with AJAX
