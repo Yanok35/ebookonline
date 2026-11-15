@@ -316,6 +316,42 @@ toolbar of the reader shows a badge "À relire" (only its icon on a narrow
 screen), a link to the book page, opened in a new tab so that the reading
 goes on. It is not shown by the deprecated route `/pdfjsviewer/...`.
 
+## Command line (`app/cli.py`)
+
+`flask --app ebookonline metadata ...`, with the configuration of the
+server, without starting its services (book.db is only read):
+
+- `scan`: analyses the present PDF files whose cache file is missing or
+  outdated (internal errors included), or all of them (`--force`), or the
+  given ones, in `--jobs` processes at the `--nice` level, with the same
+  timeout and error handling as the service (`service.analyse_book()`).
+  The files are listed from the book directory (`BookDir.pdf_files()`):
+  only the files unknown to book.db (path and modification time) are
+  hashed. **Initial analysis of a large library on another computer**: on
+  a copy of the library (book.db is not needed), set `BOOK_DIR` and
+  `CACHE_DIR`, run `scan --jobs N`, then copy the `*.meta.json.gz` files
+  to the cache directory of the server: they are named after the content
+  of the PDF files, not their paths, and the server finds them up to date
+  (same `EXTRACT_VERSION` and `ANALYSER_VERSION`).
+- `show BOOK`: the values of book.db, the suggestions (score, sources,
+  alternatives) and the candidates (weight, source) of a book, by sha1 or
+  path (also a file unknown to book.db). The candidates are found again
+  from the cached raw data with the rules of the running code: a change
+  of the rules is seen at once (`--json`, `--text` for the extracted
+  text).
+- `stats`: the state of the cache files, and per field the books filled
+  in book.db, the books with a suggestion, and **on the reviewed books, how
+  often the suggestion is the value of book.db** (overall, and with a
+  score of 80 or more). `--live` finds the candidates again with the rules
+  of the running code.
+
+**Tuning the rules**: change `srcs/metadata/` (or `publishers.json`), check
+a few books with `show`, compare `stats --live` with `stats`, then
+increment `ANALYSER_VERSION` so that the cache files are updated (from
+their raw data, by the server or by `scan`). The editor spellings learned
+from book.db include the reviewed books themselves: the agreement of the
+editor is a little optimistic.
+
 ## Known limitations
 
 - No OCR: a scan without text layer only has its file name and its
