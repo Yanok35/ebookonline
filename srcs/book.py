@@ -40,7 +40,7 @@ import posixpath
 # Schema version of the book database file (book.db). A file without version
 # is version 0. Increment it when the file format changes, and append the
 # conversion from the previous version to _MIGRATIONS.
-DB_VERSION = 3
+DB_VERSION = 4
 
 # Oldest schema version whose code can read a book.db of version DB_VERSION
 # (saved in the file as 'min_reader_version'). Unchanged by a compatible
@@ -73,8 +73,15 @@ def _migrate_v2(db):
     return db
 
 
+def _migrate_v3(db):
+    """ 3 -> 4: subtitle is added to the books """
+    for b in db["booklist"]:
+        b.setdefault("subtitle", "")
+    return db
+
+
 # _MIGRATIONS[n] converts the JSON content of a version n file to version n+1
-_MIGRATIONS = [_migrate_v0, _migrate_v1, _migrate_v2]
+_MIGRATIONS = [_migrate_v0, _migrate_v1, _migrate_v2, _migrate_v3]
 assert len(_MIGRATIONS) == DB_VERSION
 
 
@@ -108,6 +115,7 @@ class Book:
         # - empty after scan_dir; never set from the suggestions of
         #   srcs/metadata without the user
         self.title = ""
+        self.subtitle = ""
         self.authors = []
         self.year = 0
         self.editor = ""
@@ -165,6 +173,7 @@ class Book:
             "filesize": self.filesize,
             "tags": self.tags,
             "title": self.title,
+            "subtitle": self.subtitle,
             "authors": self.authors,
             "editor": self.editor,
             "year": self.year,
@@ -267,6 +276,7 @@ class BookDir:
                     new.bookmarked = b["bookmarked"]
 
                 new.title = b.get("title", "")
+                new.subtitle = b.get("subtitle", "")
                 new.authors = list(b.get("authors", []))
                 new.meta_reviewed = b.get("meta_reviewed", False)
                 new.editor = b.get("editor", "")
@@ -592,7 +602,8 @@ class BookDir:
                 with self.lock:
                     copy.tags, copy.editor = book.tags, book.editor
                     copy.year, copy.isbn = book.year, book.isbn
-                    copy.title, copy.authors = book.title, list(book.authors)
+                    copy.title, copy.subtitle = book.title, book.subtitle
+                    copy.authors = list(book.authors)
                     copy.meta_reviewed = book.meta_reviewed
                     copy.bookmarked = book.bookmarked
                 self.save_db()

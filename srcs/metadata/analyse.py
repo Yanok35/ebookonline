@@ -55,7 +55,7 @@ from srcs.metadata.text import clean_spaces, fix_case, norm_key, strip_accents
 ANALYSER_VERSION = 1
 
 # The metadata fields, named as the attributes of srcs.book.Book
-FIELDS = ("title", "authors", "editor", "year", "isbn")
+FIELDS = ("title", "subtitle", "authors", "editor", "year", "isbn")
 
 # Sources of the candidates, as shown to the user
 SOURCE_LABELS = {
@@ -428,6 +428,51 @@ def shortest_title(values):
     return best
 
 
+# Between a title and its subtitle: 'Python Algorithms: Mastering ...'
+RE_SUBTITLE_SEP = re.compile(r"\s*:\s+|\s+[-–—]\s+")
+# What follows a title without being a subtitle: an edition, a volume
+RE_NOT_SUBTITLE = re.compile(
+    r"(?:\d+\s*(?:st|nd|rd|th|e|ème|eme|ère|ere|er)?|first|second|third|fourth|fifth|sixth|"
+    r"seventh|eighth|ninth|tenth|new|revised|updated|expanded|nouvelle|deuxième|troisième)?\s*"
+    r"(?:edition|édition|ed\.|éd\.)(?!\w)|(?:vol(?:ume)?|tome|part|partie|book|livre)\.?\s*"
+    r"(?:\d+|[IVX]+)\W*$", re.IGNORECASE)
+# A series at the end of a subtitle: '... (World Scientific Series ...)'
+RE_SERIES = re.compile(r"\s*[(\[][^()\[\]]*[)\]]\s*$")
+
+
+def split_title(value):
+    """
+    (title, subtitle) of a title: ('Python Algorithms', 'Mastering Basic
+    Algorithms') of 'Python Algorithms: Mastering Basic Algorithms', the
+    series at the end left out. (value, '') without a subtitle, or when what
+    follows the separator is an edition or a volume.
+    """
+    m = RE_SUBTITLE_SEP.search(value)
+    if not m:
+        return value, ""
+    title, subtitle = value[:m.start()].strip(), value[m.end():].strip()
+    subtitle = RE_SERIES.sub("", subtitle).strip(" .,;:")
+    if len(title) < 2 or not norm_key(title) or not subtitle or RE_NOT_SUBTITLE.match(subtitle):
+        return value, ""
+    return title, subtitle
+
+
+def subtitle_candidates(title_candidates, title):
+    """
+    [[subtitle, source, weight]] of the title candidates (but the file
+    name, whose parts are often an author or a publisher) made of the title
+    and a subtitle
+    """
+    found = []
+    for value, source, weight in title_candidates:
+        if source == "filename":
+            continue
+        t, subtitle = split_title(value)
+        if subtitle and norm_key(t) == norm_key(title):
+            found.append([subtitle, source, weight])
+    return found
+
+
 def consolidate(field, field_candidates, referential=None):
     """
     {'value', 'score', 'sources', 'alternatives'} of a field, or None
@@ -530,9 +575,19 @@ def suggest(field_candidates, filename=None, learned=None, referential=None):
                 field_candidates["editor"] = [
                     c for c in field_candidates.get("editor", []) if c[1] != "isbn-prefix"]
                 field_candidates["editor"].append([name, "learned-prefix", 45])
-        s = consolidate(field, field_candidates.get(field, []), referential)
+        if field == "subtitle":
+            if "title" not in suggestions:
+                continue
+            cands = subtitle_candidates(field_candidates.get("title", []),
+                                        suggestions["title"]["value"])
+        else:
+            cands = field_candidates.get(field, [])
+        s = consolidate(field, cands, referential)
         if s is None:
             continue
+        if field == "title":
+            # the subtitle is suggested in its own field
+            s["value"] = split_title(s["value"])[0]
         if field == "editor" and learned:
             s["value"] = learned.editors.get(norm_key(referential.canonical(s["value"])), s["value"])
         suggestions[field] = s

@@ -20,8 +20,9 @@
 
 """
 Names of the PDF files from the metadata of the books (book.db), after a
-pattern (FILENAME_PATTERN), e.g. "{title} - {author_sort}, {year}" ->
-"Les Misérables - Hugo, Victor, 2012.pdf". See docs/technote-file-naming.md.
+pattern (FILENAME_PATTERN), e.g. "{title} {subtitle} - {author_sort}, {year}"
+-> "Python Algorithms Mastering Basic Algorithms in the Python Language -
+Hetland, Magnus Lie, 2014.pdf". See docs/technote-file-naming.md.
 """
 
 import os
@@ -34,6 +35,7 @@ from srcs.metadata.names import PARTICLES
 # Variables of a pattern, from the attributes of srcs.book.Book
 VARIABLES = {
     "title": "titre",
+    "subtitle": "sous-titre",
     "author": "premier auteur",
     "authors": "auteurs (« et al. » au-delà de 2)",
     "author_sort": "premier auteur, nom d'abord (Hugo, Victor)",
@@ -108,11 +110,12 @@ def clean(value):
     return " ".join(value.split())
 
 
-def _values(book, title):
+def _values(book, title, subtitle):
     authors = list(book.authors or [])
     first = authors[0] if authors else ""
     return {
         "title": title,
+        "subtitle": subtitle,
         "author": first,
         "authors": first + " et al." if len(authors) > 2 else " & ".join(authors),
         "author_sort": author_sort(first) if first else "",
@@ -168,11 +171,16 @@ def file_name(pattern, book):
     title = clean(book.title or "")
     if "title" in names and not title:
         raise NamingError("titre manquant")
-    name = _render(pattern, _values(book, title))
-    # too long: the title is shortened, at a word boundary
-    while len((name + SUFFIX).encode("utf-8")) > MAX_NAME_BYTES and " " in title:
-        title = title.rsplit(" ", 1)[0].rstrip(" ,;:-")
-        name = _render(pattern, _values(book, title))
+    subtitle = clean(book.subtitle or "")
+    name = _render(pattern, _values(book, title, subtitle))
+    # too long: the subtitle is shortened, at a word boundary (left out at
+    # last), then the title
+    while len((name + SUFFIX).encode("utf-8")) > MAX_NAME_BYTES and (subtitle or " " in title):
+        if subtitle:
+            subtitle = subtitle.rsplit(" ", 1)[0].rstrip(" ,;:-") if " " in subtitle else ""
+        else:
+            title = title.rsplit(" ", 1)[0].rstrip(" ,;:-")
+        name = _render(pattern, _values(book, title, subtitle))
     if not name:
         raise NamingError("aucune métadonnée pour le nom")
     if len((name + SUFFIX).encode("utf-8")) > MAX_NAME_BYTES:
