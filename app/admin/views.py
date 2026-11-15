@@ -174,6 +174,7 @@ def bookadmin(sha1):
         analysis=analysis,
         analyse_form=AnalyseForm(prefix=ANALYSE_FORM_PREFIX),
         reset_form=_reset_form(),
+        thumbnail=current_app.cache.thumbnail_info(book.sha1),
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,

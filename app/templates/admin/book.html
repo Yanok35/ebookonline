@@ -31,6 +31,7 @@
 
         <div class="book">
             <div class="book-cover">
+                <h2>Miniature</h2>
                 {% if book.present %}
                 <a href="{{ url_for('main.book_reader', sha1 = book.sha1) }}" title="Lire le livre">
                     <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
@@ -38,17 +39,32 @@
                 {% else %}
                 <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
                 {% endif %}
+                <p class="hint thumbnail-info">
+                {% if not thumbnail %}
+                    Pas de miniature : image de remplacement.
+                {% else %}
+                    {% if thumbnail.width %}{{ thumbnail.width }}&nbsp;×&nbsp;{{ thumbnail.height }}&nbsp;pixels,
+                    {% else %}Image illisible,{% endif %}
+                    {{ '%.1f' % (thumbnail.size / 1024) }}&nbsp;Ko ({{ thumbnail.size }} octets)
+                {% endif %}
+                </p>
                 {% if book.present %}
+                <h3>Extraire du PDF</h3>
                 <form class="reset-form" action="{{ url_for('.reset_thumbnail', sha1 = book.sha1) }}" method="post">
                     {{ reset_form.hidden_tag() }}
-                    {{ reset_form.backend.label }}
-                    {{ reset_form.backend(disabled=not cache_writable) }}
+                    <div class="field">
+                        {{ reset_form.backend.label }}
+                        {{ reset_form.backend(disabled=not cache_writable) }}
+                    </div>
                     {{ reset_form.submit(disabled=not cache_writable) }}
                 </form>
+                <h3>Insérer depuis une image</h3>
                 <form class="cover-form" action="{{ url_for('.insert_cover', sha1 = book.sha1) }}"
                       method="post" enctype="multipart/form-data">
                     {{ cover_form.hidden_tag() }}
-                    {{ cover_form.image(required=True, disabled=read_only) }}
+                    <div class="field">
+                        {{ cover_form.image(required=True, disabled=read_only) }}
+                    </div>
                     {{ cover_form.submit(disabled=read_only) }}
                     <p class="hint">Crée une copie du PDF, « (covered) », avec l'image (JPEG ou PNG) en première page.</p>
                 </form>

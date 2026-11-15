@@ -206,6 +206,8 @@ body {
 
 .admin .book-cover {
     margin: 5px;
+    /* the width of the image */
+    max-width: 300px;
 }
 
 .admin .book-cover img {
@@ -219,8 +221,7 @@ body {
 }
 
 .admin .book-cover form {
-    margin-top: 10px;
-    text-align: center;
+    margin-bottom: 1.2em;
 }
 
 .admin .book-details {
@@ -240,9 +241,21 @@ body {
     padding: 0 1em 1em 1em;
 }
 
+.admin .book-cover h2,
 .admin .book-details h2,
 .admin .file-actions h2 {
     font-variant: small-caps;
+}
+
+/* the groups of actions of the thumbnail column */
+.admin .book-cover h3 {
+    font-size: 1em;
+    margin: 1em 0 0.5em 0;
+    border-bottom: 1px solid #ccc;
+}
+
+.admin .book-cover .thumbnail-info {
+    margin-top: 0.4em;
 }
 
 .admin dl {
@@ -425,20 +438,8 @@ input:disabled {
     font-weight: bold;
 }
 
-.admin .book-cover form.cover-form {
-    max-width: 300px;
-}
-
-.admin .book-cover form.cover-form input[type=file] {
-    display: block;
-    max-width: 100%;
-    margin: 0 auto 0.4em auto;
-}
-
-.admin .book-cover form.reset-form select {
-    display: block;
-    max-width: 100%;
-    margin: 0.2em auto 0.4em auto;
+.admin .book-cover form select {
+    width: 100%;
 }
 
 /* Admin: suggestions of metadata (book page) */
