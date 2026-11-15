@@ -81,6 +81,44 @@ def _remove(filename):
         pass
 
 
+# Start Of Frame markers of a JPEG file: they give its size (not DHT, JPG,
+# DAC, whose codes are in the range)
+_JPEG_SOF = set(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
+
+
+def jpeg_size(filename):
+    """
+    (width, height) of a JPEG file, read from its header, None when it is
+    not a JPEG file. Pure Python: ImageMagick would start its threads in the
+    server process.
+    """
+    try:
+        with open(filename, "rb") as f:
+            if f.read(2) != b"\xff\xd8":
+                return None
+            while True:
+                marker = f.read(2)
+                if len(marker) < 2 or marker[0] != 0xFF:
+                    return None
+                code = marker[1]
+                if code == 0xFF:
+                    f.seek(-1, os.SEEK_CUR)  # fill byte
+                    continue
+                if code in (0x01, *range(0xD0, 0xD8)):
+                    continue  # markers without length
+                length = int.from_bytes(f.read(2), "big")
+                if length < 2:
+                    return None
+                if code in _JPEG_SOF:
+                    data = f.read(5)
+                    if len(data) < 5:
+                        return None
+                    return int.from_bytes(data[3:5], "big"), int.from_bytes(data[1:3], "big")
+                f.seek(length - 2, os.SEEK_CUR)
+    except OSError:
+        return None
+
+
 def sha1_file(filename):
     with open(filename, 'rb') as fd_in:
         digest = hashlib.file_digest(fd_in, "sha1")
@@ -138,6 +176,20 @@ class Cache:
         # return the content of the whole jpeg
         with open(thumbname, 'rb') as f:
             return f.read()
+
+    def thumbnail_info(self, sha1):
+        """
+        {'width', 'height', 'size'} of the thumbnail of a book (pixels,
+        bytes), None without thumbnail. width and height are None when the
+        image can not be read; only its header is read (jpeg_size()).
+        """
+        thumbname = self.get_thumbname(sha1)
+        try:
+            size = os.path.getsize(thumbname)
+        except OSError:
+            return None
+        width, height = jpeg_size(thumbname) or (None, None)
+        return {"width": width, "height": height, "size": size}
 
     def create_thumbnail(self, pdffilename, sha1, backend=None):
         """
