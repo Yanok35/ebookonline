@@ -36,6 +36,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.admin import metadata
 from srcs import naming
+from srcs.cache import available_backends
 from app.admin.forms import (
     AnalyseForm,
     BookForm,
@@ -45,6 +46,7 @@ from app.admin.forms import (
     MoveBookForm,
     RenameBookForm,
     ResetThumbnailForm,
+    THUMBNAIL_BACKEND_LABELS,
     RestoreForm,
     TrashBookForm,
     TrashDuplicateForm,
@@ -171,7 +173,7 @@ def bookadmin(sha1):
         suggestions=suggestions,
         analysis=analysis,
         analyse_form=AnalyseForm(prefix=ANALYSE_FORM_PREFIX),
-        reset_form=ResetThumbnailForm(prefix=RESET_FORM_PREFIX),
+        reset_form=_reset_form(),
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
@@ -214,6 +216,14 @@ def analysis_state(sha1):
     return jsonify(pending=current_app.metadata.is_pending(sha1))
 
 
+def _reset_form():
+    """ The form of the thumbnail regeneration, with the available backends """
+    form = ResetThumbnailForm(prefix=RESET_FORM_PREFIX)
+    form.backend.choices = [(b, THUMBNAIL_BACKEND_LABELS.get(b, b))
+                            for b in [""] + available_backends()]
+    return form
+
+
 @admin.route("/reset-thumbnail/<sha1>", methods=["POST"])
 @login_required
 def reset_thumbnail(sha1):
@@ -223,9 +233,9 @@ def reset_thumbnail(sha1):
     if book is None:
         abort(404)
 
-    form = ResetThumbnailForm(prefix=RESET_FORM_PREFIX)
+    form = _reset_form()
     if not form.validate_on_submit():
-        flash("Formulaire expiré ou invalide, merci de réessayer.", "error")
+        flash(form.backend.errors[0] if form.backend.errors else CSRF_ERROR, "error")
     elif not book.present:
         flash("Le PDF est absent du répertoire des livres : "
               "la miniature ne peut pas être régénérée.", "error")
@@ -238,11 +248,14 @@ def reset_thumbnail(sha1):
             os.remove(thumbname)
         except FileNotFoundError:
             pass
+        backend = form.backend.data or None
         pdffile = os.path.join(book.book_dir, book.filename)
-        current_app.logger.info("Regenerate thumbnail of '%s'", pdffile)
-        current_app.cache.create_thumbnail(pdffile, sha1)
-        flash("Miniature en cours de régénération, "
-              "recharger la page dans quelques secondes.")
+        current_app.logger.info("Regenerate thumbnail of '%s' (backend: %s)",
+                                pdffile, backend or "any")
+        current_app.cache.create_thumbnail(pdffile, sha1, backend)
+        flash(f"Miniature en cours de régénération ({THUMBNAIL_BACKEND_LABELS[form.backend.data]}), "
+              "recharger la page dans quelques secondes. Si la méthode échoue, "
+              "la miniature reste vide : essayer une autre méthode.")
 
     return redirect(url_for(".bookadmin", sha1=sha1))
 

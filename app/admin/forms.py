@@ -133,9 +133,30 @@ class AnalyseForm(FlaskForm):
     submit = SubmitField("Relancer l'analyse")
 
 
-class ResetThumbnailForm(FlaskForm):
-    """ Delete and regenerate the thumbnail of a book (CSRF protection only) """
+# Backends of the thumbnails (srcs.cache.BACKENDS), as shown to the user
+THUMBNAIL_BACKEND_LABELS = {
+    "": "Automatique (le premier qui réussit)",
+    "pypdf-wand": "pypdf puis ImageMagick (wand)",
+    "wand": "ImageMagick (wand) seul",
+    "ghostscript": "Ghostscript",
+}
 
+
+class BackendField(SelectField):
+    def pre_validate(self, form):
+        try:
+            super().pre_validate(form)
+        except ValidationError:
+            raise ValidationError("Méthode de génération indisponible.") from None
+
+
+class ResetThumbnailForm(FlaskForm):
+    """
+    Delete and regenerate the thumbnail of a book, with a backend (choices
+    set by the view: the available ones), or each of them in turn ('')
+    """
+
+    backend = BackendField("Méthode", default="")
     submit = SubmitField("Régénérer la miniature")
 
 
