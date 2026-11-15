@@ -16,9 +16,9 @@ PATTERN = "{author_sort} - {title} ({year})"
 
 
 class Book:
-    def __init__(self, title="", authors=(), editor="", year=0, isbn=""):
+    def __init__(self, title="", authors=(), editor="", year=0, isbn="", subtitle=""):
         self.title, self.authors, self.editor = title, list(authors), editor
-        self.year, self.isbn = year, isbn
+        self.year, self.isbn, self.subtitle = year, isbn, subtitle
 
 
 @pytest.mark.parametrize("book, expected", [
@@ -36,6 +36,11 @@ def test_file_name(book, expected):
 
 
 @pytest.mark.parametrize("book, expected", [
+    (Book("Python Algorithms", ["Magnus Lie Hetland"], year=2014,
+          subtitle="Mastering Basic Algorithms in the Python Language"),
+     "Python Algorithms Mastering Basic Algorithms in the Python Language - "
+     "Hetland, Magnus Lie, 2014.pdf"),
+    # no subtitle: no space left
     (Book("Les Misérables", ["Victor Hugo"], year=2012), "Les Misérables - Hugo, Victor, 2012.pdf"),
     (Book("Les Misérables", ["Victor Hugo"]), "Les Misérables - Hugo, Victor.pdf"),
     # the comma is kept with the year, not the separator
@@ -44,7 +49,7 @@ def test_file_name(book, expected):
 ])
 def test_file_name_default_pattern(book, expected):
     from config import Config
-    assert Config.FILENAME_PATTERN == "{title} - {author_sort}, {year}"
+    assert Config.FILENAME_PATTERN == "{title} {subtitle} - {author_sort}, {year}"
     assert file_name(Config.FILENAME_PATTERN, book) == expected
 
 
@@ -72,6 +77,20 @@ def test_long_title_is_shortened():
     name = file_name(PATTERN, book)
     assert len(name.encode("utf-8")) <= MAX_NAME_BYTES
     assert name.startswith("Hugo, Victor - Mot Mot") and name.endswith(" (2012).pdf")
+
+
+def test_long_subtitle_is_shortened_first():
+    pattern = "{title} {subtitle} - {author_sort}, {year}"
+    title = "Les Misérables " + " ".join(["Titre"] * 20)
+    book = Book(title, ["Victor Hugo"], year=2012, subtitle=" ".join(["Mot"] * 100))
+    name = file_name(pattern, book)
+    assert len(name.encode("utf-8")) <= MAX_NAME_BYTES
+    assert name.startswith(title + " Mot Mot") and name.endswith(" - Hugo, Victor, 2012.pdf")
+    # left out, then the title is shortened
+    book.title = " ".join(["Titre"] * 100)
+    name = file_name(pattern, book)
+    assert len(name.encode("utf-8")) <= MAX_NAME_BYTES
+    assert "Mot" not in name and name.endswith(" - Hugo, Victor, 2012.pdf")
 
 
 @pytest.mark.parametrize("name, expected", [

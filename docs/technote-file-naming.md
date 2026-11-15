@@ -9,14 +9,21 @@ of the library are named in the same way. Code: `srcs/naming.py`.
 Setting `FILENAME_PATTERN`, by default:
 
 ```
-{title} - {author_sort}, {year}
+{title} {subtitle} - {author_sort}, {year}
 ```
 
--> `Les Misérables - Hugo, Victor, 2012.pdf`.
+-> `Python Algorithms Mastering Basic Algorithms in the Python Language -
+Hetland, Magnus Lie, 2014.pdf`, and `Les Misérables - Hugo, Victor,
+2012.pdf` for a book without subtitle.
+
+The subtitle is in the default pattern because the search of the library
+(`/browser_search`) is done on the file names: the words of the subtitle,
+often many, find the book too.
 
 | Variable | Value |
 |----------|-------|
 | `{title}` | Title |
+| `{subtitle}` | Subtitle (optional) |
 | `{author}` | First author: `Victor Hugo` |
 | `{authors}` | Authors: `A & B`, `A et al.` beyond 2 |
 | `{author_sort}` | First author, surname first: `Hugo, Victor`, `Saint-Exupéry, Antoine de`, `van Beethoven, Ludwig`, `King, Martin Luther, Jr.` |
@@ -40,15 +47,15 @@ refuse the start (`RuntimeError`).
   `Les Misérables - Hugo, Victor.pdf`, no author `Les Misérables, 2012.pdf`,
   neither `Les Misérables.pdf`; with `{author_sort} - {title} ({year})`, no
   year gives `Hugo, Victor - Les Misérables.pdf`, no author
-  `Les Misérables (2012).pdf`;
+  `Les Misérables (2012).pdf`; an empty subtitle leaves no space;
 - no name when the pattern uses the title and the book has none, or when
   nothing is left;
 - the values are cleaned up for any file system, Windows included (copies,
   Samba): `/` and `\` -> `-`, `:` -> ` -`, no `<>"|?*` nor control
   characters, single spaces, Unicode composed form (NFC), no dot or
   separator at the end;
-- `.pdf` is appended; a name longer than 240 bytes (UTF-8) gets its title
-  shortened at a word boundary.
+- `.pdf` is appended; a name longer than 240 bytes (UTF-8) gets its
+  subtitle shortened at a word boundary, left out at last, then its title.
 
 ## Book page
 

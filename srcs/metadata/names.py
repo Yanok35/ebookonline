@@ -45,8 +45,13 @@ inconnu auteur author anonymous anonyme user admin owner microsoft word adobe ac
 """.split()}  # noqa: SIM905
 
 # 'Hugo', 'Saint-Exupéry', 'HUGO', 'J.' or 'J.-P.'
-RE_NAME_TOKEN = (r"(?:[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ'’]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zà-öø-ÿ'’]+)*|[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’\-]+"
+# (Latin Extended-A letters, both cases, for 'Milovanović', 'Dvořák'; 'Mc'
+# and 'Mac' before a capital, for 'McKinney')
+RE_NAME_TOKEN = (r"(?:(?:Mc|Mac)?[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿĀ-ſ'’]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zà-öø-ÿĀ-ſ'’]+)*"
+                 r"|[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’\-]+"
                  r"|[A-ZÀ-ÖØ-Þ]\.(?:-?[A-ZÀ-ÖØ-Þ]\.)?)")
+# An initial: 'A.' is not the article 'a'
+RE_INITIAL = re.compile(r"[A-ZÀ-ÖØ-Þ]\.(?:-?[A-ZÀ-ÖØ-Þ]\.)?")
 RE_PERSON = re.compile(
     RE_NAME_TOKEN + r"(?:\s+(?:(?:de|du|des|von|van|der|den|le|la|di|da|del|y|ibn|ben|al|el)\s+|d['’])?"
     + RE_NAME_TOKEN + r"){1,3}")
@@ -64,7 +69,7 @@ def looks_like_person(s, referential=None):
     if len(real) < 2:
         return False
     for t in real:
-        if norm_key(t) in NOT_NAME_WORDS:
+        if norm_key(t) in NOT_NAME_WORDS and not RE_INITIAL.fullmatch(t):
             return False
         if not re.fullmatch(RE_NAME_TOKEN, t.replace("d’", "").replace("d'", "")) \
                 and not re.fullmatch(r"d['’]" + RE_NAME_TOKEN, t):

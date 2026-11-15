@@ -95,16 +95,29 @@ def test_save_title_and_authors(app, client, book):
     response = client.post(url, data={
         "csrf_token": csrf_token(client, url),
         "title": " Python in a Nutshell ",
+        "subtitle": " A Desktop Quick Reference ",
         "authors": "Alex Martelli\n\n  Anna   Ravenscroft ; Steve Holden",
         "editor": "O'Reilly", "year": "2006", "isbn": "", "tags": "",
     })
     assert response.status_code == 302
     assert book.title == "Python in a Nutshell"
+    assert book.subtitle == "A Desktop Quick Reference"
     assert book.authors == ["Alex Martelli", "Anna Ravenscroft", "Steve Holden"]
     assert book.meta_reviewed is False
     with open(app.config["BOOK_DB"]) as f:
         entry = next(b for b in json.load(f)["booklist"] if b["sha1"] == book.sha1)
     assert entry["authors"] == book.authors and entry["title"] == book.title
+    assert entry["subtitle"] == book.subtitle
+
+
+def test_subtitle_is_prefilled(app, client, book):
+    write_analysis(app, book, dict(CANDIDATES, title=[
+        ["Python in a Nutshell: A Desktop Quick Reference", "xmp", 50],
+        ["Python in a Nutshell", "title-page", 50]]))
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert 'value="Python in a Nutshell"' in field_tag(html, "title")
+    tag = field_tag(html, "subtitle")
+    assert 'value="A Desktop Quick Reference"' in tag and 'class="suggested"' in tag
 
 
 def test_save_and_mark_as_reviewed(app, client, book):
