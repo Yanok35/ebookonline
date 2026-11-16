@@ -216,6 +216,8 @@ def test_pending_analysis(app, client, book, mocker):
     assert "Analyse en cours…" in html
     assert f'data-poll="/bookadmin/{book.sha1}/analysis"' in html
     assert client.get(f"/bookadmin/{book.sha1}/analysis").json == {"pending": True}
+    # the page stops waiting after twice the time limit of an analysis
+    assert "600000,\n" in html and "Analyse toujours en cours" in html
 
 
 def test_analysis_state_requires_login(app, book):

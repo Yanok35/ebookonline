@@ -33,8 +33,11 @@
             <div class="book-cover">
                 <h2>Miniature</h2>
                 {% if book.present %}
+                {#- versioned: the browser never shows a former thumbnail #}
+                {%- set image_url = url_for('main.image', sha1 = book.sha1, v = thumbnail.mtime | int) if thumbnail
+                                    else url_for('main.image', sha1 = book.sha1) %}
                 <a href="{{ url_for('main.book_reader', sha1 = book.sha1) }}" title="Lire le livre">
-                    <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
+                    <img src="{{ image_url }}" alt="" />
                 </a>
                 {% else %}
                 <img src="{{ url_for('main.image', sha1 = book.sha1) }}" alt="" />
@@ -43,6 +46,7 @@
                    {% if not thumbnail and book.present and cache_writable %}data-poll="{{ url_for('.thumbnail_state', sha1 = book.sha1) }}"{% endif %}>
                 {% if not thumbnail %}
                     Pas de miniature : image de remplacement.
+                    {%- if book.present and cache_writable %} La page se recharge dès qu'elle est prête.{% endif %}
                 {% else %}
                     {% if thumbnail.width %}{{ thumbnail.width }}&nbsp;×&nbsp;{{ thumbnail.height }}&nbsp;pixels,
                     {% else %}Image illisible,{% endif %}
@@ -307,7 +311,10 @@
             // Analysis pending: reload the page when it is done
             reloadWhenDone(document.getElementById("analysis-state"),
                            function (data) { return !data.pending; },
-                           "Analyse terminée : rechargez la page pour voir les suggestions.");
+                           "Analyse terminée : rechargez la page pour voir les suggestions.",
+                           {{ analysis_timeout }},
+                           "Analyse toujours en cours : rechargez la page plus tard "
+                           + "(voir les journaux si elle n'aboutit pas).");
 
             // Thumbnail missing (being made): reload the page when it is ready
             reloadWhenDone(document.getElementById("thumbnail-info"),

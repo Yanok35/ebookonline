@@ -37,6 +37,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from app.admin import metadata
 from srcs import naming
 from srcs.cache import available_backends
+from srcs.metadata.service import TASK_TIMEOUT
 from app.admin.forms import (
     AnalyseForm,
     BookForm,
@@ -172,6 +173,8 @@ def bookadmin(sha1):
         form=form,
         suggestions=suggestions,
         analysis=analysis,
+        # the book is analysed next, after the current one at most
+        analysis_timeout=2 * TASK_TIMEOUT * 1000,
         analyse_form=AnalyseForm(prefix=ANALYSE_FORM_PREFIX),
         reset_form=_reset_form(),
         thumbnail=current_app.cache.thumbnail_info(book.sha1),
@@ -262,8 +265,9 @@ def reset_thumbnail(sha1):
         current_app.logger.info("Regenerate thumbnail of '%s' (backend: %s)",
                                 pdffile, backend or "any")
         current_app.cache.create_thumbnail(pdffile, sha1, backend)
-        flash(f"Miniature en cours de régénération ({THUMBNAIL_BACKEND_LABELS[form.backend.data]}) : "
-              "la page se recharge dès qu'elle est prête.")
+        # No promise of a reload here: the thumbnail may be ready before
+        # the book page is shown, which then waits for nothing
+        flash(f"Miniature en cours de régénération ({THUMBNAIL_BACKEND_LABELS[form.backend.data]}).")
 
     return redirect(url_for(".bookadmin", sha1=sha1))
 

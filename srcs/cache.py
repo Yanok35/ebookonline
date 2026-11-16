@@ -193,8 +193,8 @@ class Cache:
 
     def thumbnail_info(self, sha1):
         """
-        {'width', 'height', 'size', 'cmyk'} of the thumbnail of a book
-        (pixels, bytes), None without thumbnail. width and height are None
+        {'width', 'height', 'size', 'cmyk', 'mtime'} of the thumbnail of a
+        book (pixels, bytes, seconds), None without thumbnail. width and height are None
         when the image can not be read; only its header is read
         (jpeg_info()). cmyk: an image in CMYK, whose colours are wrong in
         the browsers (made by an older version, see
@@ -202,11 +202,12 @@ class Cache:
         """
         thumbname = self.get_thumbname(sha1)
         try:
-            size = os.path.getsize(thumbname)
+            st = os.stat(thumbname)
         except OSError:
             return None
         width, height, components = jpeg_info(thumbname) or (None, None, None)
-        return {"width": width, "height": height, "size": size, "cmyk": components == 4}
+        return {"width": width, "height": height, "size": st.st_size,
+                "cmyk": components == 4, "mtime": st.st_mtime}
 
     def make_thumbnail(self, pdffilename, sha1, backend=None):
         """
