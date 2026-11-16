@@ -249,7 +249,11 @@ the access is only checked at startup.
   memory and rewrites the whole file: the server must run a single process
   (e.g. gunicorn `-w 1`).
 - **Reader states** (`reader_states.json`, `STATE_FILE`) are a separate file,
-  which is not versioned.
+  which is not versioned. Each saved state is also appended to the journal
+  of the reader events (`reader_events.jsonl`, `READER_EVENTS_FILE`): one
+  JSON line `{"t", "doc", "page", "user"}` (time of the server in UTC, sha1
+  of the book, page, user name), the base of a reading history. Not written
+  in read-only mode; an empty setting disables it.
 - **Write access of the subdirectories.** Only the book directory itself is
   checked: a file operation in a subdirectory which can not be written is
   refused when it is done.
