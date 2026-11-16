@@ -169,6 +169,7 @@
         <div class="actionbar">
             <div class="linksbar">
                 <div><a href="{{ url_for('.logout') }}">Logout</a> |
+                    <a href="{{ url_for('timeline.timeline_page') }}">Mes lectures</a> |
                     La librairie contient <a href="{{ url_for('admin.book_list') }}">{{ nbBooklist }} livres</a>
                     <input type="checkbox" id="display-sorted">ajouts récents</input>
                     |
