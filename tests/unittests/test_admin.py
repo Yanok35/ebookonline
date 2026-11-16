@@ -145,8 +145,9 @@ def test_reset_thumbnail(app, client, book):
     pdffile = os.path.join(app.config["BOOK_DIR"], book.filename)
     assert app.cache.requests == [(pdffile, book.sha1)]
     html = client.get(response.location).text
-    assert "Miniature en cours de régénération" in html
-    assert "la page se recharge dès qu&#39;elle est prête" in html
+    assert "Miniature en cours de régénération (Automatique (le premier qui réussit))." in html
+    # told by the thumbnail paragraph, while waiting only
+    assert html.count("La page se recharge dès qu'elle est prête.") == 1
 
 
 def test_reset_thumbnail_backends(app, client, book, monkeypatch):
@@ -215,7 +216,20 @@ def test_thumbnail_state(app, client, book):
     write_jpeg(Path(app.cache.get_thumbname(book.sha1)), 30, 40)
     assert client.get(url).get_json() == {"ready": True}
     # no wait when the thumbnail exists
-    assert f'data-poll="{url}"' not in client.get(f"/bookadmin/{book.sha1}").text
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert f'data-poll="{url}"' not in html and "La page se recharge" not in html
+
+
+def test_thumbnail_image_url_is_versioned(app, client, book):
+    """ A regenerated thumbnail has a new URL: no former one from the browser cache """
+    thumbname = Path(app.cache.get_thumbname(book.sha1))
+    write_jpeg(thumbname, 30, 40)
+    os.utime(thumbname, (1700000000, 1700000000))
+    html = client.get(f"/bookadmin/{book.sha1}").text
+    assert f'<img src="/images/{book.sha1}?v=1700000000"' in html
+    assert client.get(f"/images/{book.sha1}?v=1700000000").mimetype == "image/jpeg"
+    os.remove(thumbname)
+    assert f'<img src="/images/{book.sha1}"' in client.get(f"/bookadmin/{book.sha1}").text
 
 
 def test_thumbnail_state_errors(app, client, book):

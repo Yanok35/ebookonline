@@ -297,7 +297,8 @@ def test_thumbnail_info_cmyk(tmp_path):
     sof = b"\xff\xc0\x00\x11\x08" + (450).to_bytes(2, "big") + (300).to_bytes(2, "big") + b"\x04"
     with open(cache.get_thumbname(sha1), "wb") as f:
         f.write(b"\xff\xd8" + sof)
-    assert cache.thumbnail_info(sha1) == {"width": 300, "height": 450, "size": 12, "cmyk": True}
+    assert cache.thumbnail_info(sha1) == {"width": 300, "height": 450, "size": 12, "cmyk": True,
+                                          "mtime": os.path.getmtime(cache.get_thumbname(sha1))}
     write_jpeg(Path(cache.get_thumbname(sha1)), 30, 40)
     assert cache.thumbnail_info(sha1)["cmyk"] is False
 
