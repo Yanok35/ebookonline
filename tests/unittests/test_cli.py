@@ -1,5 +1,6 @@
 """ Command line interface (app/cli.py): flask thumbnails ... """
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -69,11 +70,15 @@ def test_regenerate(app, books, monkeypatch):
     assert "1 thumbnail(s) regenerated, 1 failed" in result.output
 
 
-def test_regenerate_for_real(app, books):
+def test_regenerate_for_real(app, books, tmp_path):
     """ The CMYK thumbnail is replaced by an RGB one """
+    # Skipped only when no backend can read a PDF file here: not on a
+    # failure of the code
+    pdffile = str(Path(app.config["BOOK_DIR"]) / "ok.pdf")
+    if not shutil.which("gs") and \
+            not app.cache._Cache__pdf2jpeg_wand_only(pdffile, str(tmp_path / "probe.jpg")):
+        pytest.skip("ImageMagick refuses the PDF files (security policy), no Ghostscript")
     result = run(app, "regenerate", "--cmyk")
-    if result.exit_code == 1:
-        pytest.skip("ImageMagick refuses the PDF files (security policy)")
     assert result.exit_code == 0, result.output
     info = app.cache.thumbnail_info(books["cmyk"].sha1)
     assert info["width"] == 300 and not info["cmyk"]
