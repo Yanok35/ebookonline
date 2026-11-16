@@ -34,6 +34,7 @@ watcher, thumbnail and analysis processes): they can run while the server
 runs. book.db is only read.
 """
 
+import inspect
 import logging
 import multiprocessing
 import os
@@ -46,6 +47,25 @@ from flask.cli import AppGroup
 
 from srcs.cache import BACKENDS, Cache, available_backends
 from srcs.logs import setup_logging
+
+
+class Command(click.Command):
+    """
+    A command whose list of commands (group help) shows the whole first
+    paragraph of its help, wrapped: click keeps its first sentence only,
+    cut with '...' to the width of the terminal.
+    """
+
+    def get_short_help_str(self, limit=45):
+        if self.short_help or not self.help:
+            return super().get_short_help_str(limit)
+        return " ".join(inspect.cleandoc(self.help).split("\n\n")[0].split())
+
+
+class Group(AppGroup):
+    """ A group of flask commands (AppGroup) made of Command """
+    command_class = Command
+
 
 def add_help_command(group):
     """ A 'help [COMMAND]' command in a group: its help, or the one of COMMAND """
@@ -71,7 +91,7 @@ def add_help_command(group):
     return help_
 
 
-thumbnails = AppGroup("thumbnails", help="Thumbnails of the books, in the cache directory.")
+thumbnails = Group("thumbnails", help="Thumbnails of the books, in the cache directory.")
 add_help_command(thumbnails)
 
 # States of a thumbnail, for the selection of the books
@@ -224,7 +244,7 @@ def regenerate(cmyk, missing, unreadable, all_, backend, jobs, dry_run, verbose,
 
 # --- metadata ---
 
-metadata = AppGroup("metadata", help="Metadata analysis of the PDF files (cache directory).")
+metadata = Group("metadata", help="Metadata analysis of the PDF files (cache directory).")
 add_help_command(metadata)
 
 

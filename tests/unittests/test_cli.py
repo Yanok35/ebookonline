@@ -111,6 +111,15 @@ def test_help(app):
     assert result.exit_code == 2 and "no such command: foo" in result.output
 
 
+def test_help_lists_the_whole_first_paragraph(app):
+    """ not its first sentence only, cut with '...' (click) """
+    output = " ".join(run(app, "help").output.split("Commands:")[1].split())
+    assert "..." not in output
+    assert "check Count the thumbnails of the books by state: ok, missing, unreadable " \
+           "(not a JPEG image), cmyk (colours wrong in the browsers: made by an older " \
+           "version, to regenerate). help" in output
+
+
 # --- metadata ---
 
 import json
