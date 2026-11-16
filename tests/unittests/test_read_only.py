@@ -108,6 +108,7 @@ def test_reader_state_is_kept_in_memory(book_dir_read_only_app):
     response = client.put("/api/reader/state", json=STATE)
     assert response.status_code == 200 and response.json["readOnly"]
     assert not Path(app.config["STATE_FILE"]).exists()
+    assert not Path(app.config["READER_EVENTS_FILE"]).exists()
     assert client.get("/api/reader/state/doc-1").json["pageNumber"] == 3
 
 

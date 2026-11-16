@@ -3,6 +3,7 @@ cache*/
 books*/
 book.db*
 reader_states.json
+reader_events.jsonl
 venv/
 instance/*
 !instance/*.example

@@ -1,3 +1,4 @@
+import datetime
 import json
 import math
 import os
@@ -6,7 +7,7 @@ import threading
 
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, session
 
 from app import is_read_only
 from app.auth import api_login_required
@@ -32,6 +33,33 @@ def state_file():
     return Path(current_app.config["STATE_FILE"])
 
 api = Blueprint('api', __name__)
+
+
+def log_reader_event(state):
+    """
+    Append a line to the journal of the reader events (READER_EVENTS_FILE):
+    {"t": time of the server (UTC, ISO 8601), "doc": documentId (the sha1
+    of the book), "page": pageNumber, "user": user name}. Nothing when the
+    setting is empty. A failure is logged, the state is still saved.
+
+    The reader saves its state 500 ms after each move (scroll, page, zoom)
+    and at the opening of a book: the journal is the base of a reading
+    history (sessions, reading time). Appended only, never rewritten.
+    """
+    events_file = current_app.config.get("READER_EVENTS_FILE")
+    if not events_file:
+        return
+    event = {
+        "t": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
+        "doc": state["documentId"],
+        "page": state["pageNumber"],
+        "user": session.get("username"),
+    }
+    try:
+        with open(events_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except OSError as e:
+        current_app.logger.warning("Reader event not logged in %s: %s", events_file, e)
 
 # Protège les lectures et écritures du fichier JSON
 # entre les requêtes traitées par ce processus Python.
@@ -261,6 +289,7 @@ def put_reader_state():
             states[state["documentId"]] = state
 
             save_states(states)
+            log_reader_event(state)
 
     except (OSError, ValueError, json.JSONDecodeError):
         current_app.logger.exception(

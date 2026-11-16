@@ -72,6 +72,9 @@ class Config:
     # Following are in current directory
     BOOK_DB = "book.db"
     STATE_FILE = "reader_states.json"
+    # Journal of the reader events: one JSON line per saved position (the
+    # base of the reading history: sessions, reading time). Empty: no journal.
+    READER_EVENTS_FILE = "reader_events.jsonl"
 
     # Largest request body, in bytes: the image of a cover page (20 MiB at
     # most, see srcs/pdfcover.py), with the other fields of its form
