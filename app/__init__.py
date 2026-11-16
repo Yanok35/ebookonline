@@ -183,6 +183,9 @@ def create_app(config_name):
     from .api import api as api_blueprint
     app.register_blueprint(api_blueprint)
 
+    from .timeline import timeline as timeline_blueprint
+    app.register_blueprint(timeline_blueprint)
+
     # Command line interface (flask --app ebookonline thumbnails|metadata ...)
     from .cli import metadata, thumbnails
     app.cli.add_command(thumbnails)

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>{{ titre }}</title>
+    <link rel="icon" href="{{ url_for('main.favicon') }}" />
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css" media="screen" />
+    <style>
+        /* Timeline of the books of interest */
+        .timeline-note {
+            font-size: small;
+            color: #666;
+            margin: 0 5px 5px 5px;
+        }
+        .timeline-empty {
+            margin: 2em 5px;
+        }
+
+        .timeline {
+            position: relative;
+            margin: 5px;
+            /* the time line goes from left to right, whatever the window */
+            min-width: 900px;
+        }
+        .timeline svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+        .timeline .axis {
+            stroke: #333;
+            stroke-width: 2.5;
+        }
+        .timeline .tick {
+            stroke: #333;
+            stroke-width: 1;
+        }
+        .timeline .tick-label {
+            font-size: 11px;
+            fill: #666;
+            font-variant: small-caps;
+        }
+        .timeline .connector {
+            stroke: #808080;
+            stroke-width: 1;
+            stroke-dasharray: 3 3;
+        }
+        .timeline .key-line {
+            stroke: darkred;
+            stroke-width: 1;
+            stroke-dasharray: 2 4;
+            opacity: 0.5;
+        }
+        .timeline .marker {
+            fill: #fff;
+            stroke: darkred;
+            stroke-width: 2.5;
+        }
+        .timeline .marker.peak {
+            fill: darkred;
+        }
+        .timeline .density {
+            fill: darkred;
+            opacity: 0.13;
+        }
+        .key-date {
+            position: absolute;
+            transform: translateX(-50%);
+            text-align: center;
+            font-variant: small-caps;
+            white-space: nowrap;
+            line-height: 1.2;
+            pointer-events: none;
+        }
+        .key-date .what {
+            font-size: 11px;
+            color: darkred;
+        }
+        .key-date .when {
+            font-weight: bold;
+        }
+
+        /* The books: the boxes of the library, smaller */
+        .timeline .book-box {
+            position: absolute;
+            margin: 0;
+            max-width: none;
+            max-height: none;
+        }
+        .timeline .book-box:hover {
+            z-index: 2;
+        }
+        .timeline .book-img img {
+            width: 100%;
+            max-width: none;
+            max-height: none;
+        }
+        .timeline .simple-caption .book-filename {
+            font-size: 10px;
+            margin: 6px;
+            overflow-wrap: anywhere;
+        }
+        .timeline .reading-time {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="titlebar">
+        <h1><a href="{{ url_for('main.index') }}">Mes lectures</a></h1>
+    </div>
+
+    <div class="actionbar">
+        <div class="linksbar">
+            <div><a href="{{ url_for('main.browser_lazy') }}">Bibliothèque</a></div>
+        </div>
+    </div>
+
+    {% if history %}
+    <p class="timeline-note">Les livres les plus lus, à leur semaine de plus grand
+        intérêt, et le temps de lecture par semaine le long de la flèche. Une session
+        de lecture réunit les actions dans le lecteur espacées de moins de
+        {{ session_gap }}&nbsp;minutes ; intérêt d'un livre : somme, sur ses sessions,
+        de 1&nbsp;+&nbsp;ln(1&nbsp;+&nbsp;minutes) ; badge : temps de lecture.</p>
+    <div class="timeline" id="timeline"></div>
+    {% elif journal %}
+    <p class="timeline-empty">Aucune lecture enregistrée pour l'instant : les livres
+        ouverts dans le lecteur apparaîtront ici.</p>
+    {% else %}
+    <p class="timeline-empty">Le journal des lectures est désactivé
+        (<code>READER_EVENTS_FILE</code>).</p>
+    {% endif %}
+
+    {% if history %}
+    <script>
+    (function () {
+        var HISTORY = {{ history | tojson }};
+        var DAY = 86400000;
+        // the time line covers two weeks at least
+        var MIN_SPAN = 14 * DAY;
+        var MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.",
+                      "août", "sept.", "oct.", "nov.", "déc."];
+        var SVGNS = "http://www.w3.org/2000/svg";
+
+        var root = document.getElementById("timeline");
+        var height = Math.max(700, window.innerHeight - 150);
+        root.style.height = height + "px";
+        var width = root.clientWidth;
+        var axisY = height / 2;
+        var margin = 90;
+
+        // --- data: the sessions of each book
+        var books = HISTORY.map(function (b) {
+            var sessions = b.sessions.map(function (s) {
+                return { t: new Date(s.start).getTime(), min: s.minutes };
+            });
+            return { sha1: b.sha1, name: b.name, url: b.url, image: b.image, sessions: sessions,
+                     times: sessions.map(function (s) { return s.t; }) };
+        });
+        var all = [];
+        books.forEach(function (b) { all = all.concat(b.times); });
+        all.sort(function (a, b) { return a - b; });
+        // first and last readings; a0: start of the time line
+        var t0 = all[0], t1 = all[all.length - 1];
+        var a0 = Math.min(t0, t1 - MIN_SPAN);
+        function x(t) { return margin + (t - a0) / (t1 - a0) * (width - 2 * margin); }
+        function fmt(t, withYear) {
+            var d = new Date(t);
+            return d.getDate() + " " + MONTHS[d.getMonth()] + (withYear ? " " + d.getFullYear() : "");
+        }
+        function duration(min) {
+            if (min < 60) { return Math.max(1, Math.round(min)) + "&nbsp;min"; }
+            var m = Math.round(min % 60);
+            return Math.floor(min / 60) + "&nbsp;h" + (m ? "&nbsp;" + (m < 10 ? "0" : "") + m : "");
+        }
+        // interest of a session: an opening counts, a long reading more,
+        // but 3 hours are not worth 30 short sessions
+        function interest(s) { return 1 + Math.log(1 + s.min); }
+        function sum(list, f) { return list.reduce(function (a, s) { return a + f(s); }, 0); }
+        function minutes(s) { return s.min; }
+        function week(t) { return Math.floor((t - a0) / (7 * DAY)); }
+
+        // reading time per week, from a0
+        var weeks = [];
+        for (var i = 0; i <= week(t1); i++) { weeks[i] = 0; }
+        books.forEach(function (b) {
+            b.sessions.forEach(function (s) { weeks[week(s.t)] += s.min; });
+        });
+
+        // key dates: first reading, the two busiest weeks (apart), latest
+        var span = weeks.length;
+        var first = week(t0);
+        var order = weeks.map(function (n, w) { return w; })
+                         .filter(function (w) { return weeks[w] > 0; })
+                         .sort(function (a, b) { return weeks[b] - weeks[a]; });
+        var peaks = [];
+        order.forEach(function (w) {
+            if (peaks.length >= 2) { return; }
+            var far = [first, span - 1].concat(peaks).every(function (p) { return Math.abs(p - w) > span / 5; });
+            if (far) { peaks.push(w); }
+        });
+        peaks.sort(function (a, b) { return a - b; });
+        var keys = [];
+        // (the first reading, unless too close to the last one)
+        if (x(t1) - x(t0) > 160) { keys.push({ what: "première lecture", t: t0 }); }
+        peaks.forEach(function (w) {
+            var from = a0 + w * 7 * DAY;
+            keys.push({ what: "pic de lecture", t: from + 3.5 * DAY, from: from, peak: true });
+        });
+        keys.push({ what: "dernière lecture", t: t1 });
+
+        // --- drawing helpers
+        var svg = document.createElementNS(SVGNS, "svg");
+        root.appendChild(svg);
+        function el(name, attrs, parent) {
+            var e = document.createElementNS(SVGNS, name);
+            for (var k in attrs) { e.setAttribute(k, attrs[k]); }
+            (parent || svg).appendChild(e);
+            return e;
+        }
+
+        function axis() {
+            var defs = el("defs", {});
+            var m = el("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5,
+                                   markerWidth: 8, markerHeight: 8, orient: "auto" }, defs);
+            el("path", { d: "M0,0 L10,5 L0,10 z", fill: "#333" }, m);
+            el("line", { x1: 20, y1: axisY, x2: width - 10, y2: axisY, "class": "axis",
+                         "marker-end": "url(#arrow)" });
+            // a tick on the first day of each month
+            var d = new Date(a0); d.setDate(1); d.setHours(0, 0, 0, 0);
+            for (d.setMonth(d.getMonth() + 1); d.getTime() < t1; d.setMonth(d.getMonth() + 1)) {
+                var tx = x(d.getTime());
+                el("line", { x1: tx, y1: axisY - 5, x2: tx, y2: axisY + 5, "class": "tick" });
+                var label = el("text", { x: tx + 4, y: axisY + 16, "class": "tick-label" });
+                label.textContent = MONTHS[d.getMonth()];
+            }
+        }
+
+        // minutesShown: the reading time shown by the badge
+        function bookBox(b, minutesShown, left, top, w, above) {
+            var box = document.createElement("div");
+            box.className = "book-box";
+            box.style.width = w + "px";
+            box.style.left = left + "px";
+            box.style.top = top + "px";
+            if (above) { box.style.transform = "translateY(-100%)"; }
+            var last = b.times[b.times.length - 1];
+            var n = b.sessions.length;
+            box.innerHTML =
+                '<span class="badge reading-time" title="temps de lecture">' + duration(minutesShown) + '</span>'
+                + '<a href="' + b.url + '"><div class="book-img"><img src="' + b.image + '" alt="" /></div></a>'
+                + '<div class="simple-caption"><div class="book-filename"><p>' + b.name.replace(/</g, "&lt;")
+                + '<br>' + n + ' session' + (n > 1 ? 's' : '') + ', ' + duration(sum(b.sessions, minutes))
+                + ' de lecture<br>dernière le ' + fmt(last) + '</p></div></div>';
+            root.appendChild(box);
+            return box;
+        }
+
+        // --- the flow of the readings: the reading time per week, mirrored
+        // around the axis
+        var max = Math.max.apply(null, weeks) || 1;
+        var amp = 46;
+        var pts = weeks.map(function (n, w) {
+            return [x(Math.min(t1, a0 + (w + 0.5) * 7 * DAY)), n / max * amp];
+        });
+        pts.unshift([x(a0), 0]);
+        pts.push([x(t1), 0]);
+        var d = "M" + pts.map(function (p) { return p[0] + "," + (axisY - p[1]); }).join(" L")
+              + " L" + pts.slice().reverse().map(function (p) { return p[0] + "," + (axisY + p[1]); }).join(" L") + " Z";
+        el("path", { d: d, "class": "density" });
+        axis();
+
+        // key dates: a light vertical line, the label at the top
+        keys.forEach(function (k) {
+            el("line", { x1: x(k.t), y1: 40, x2: x(k.t), y2: height - 10, "class": "key-line" });
+            el("circle", { cx: x(k.t), cy: axisY, r: 5, "class": k.peak ? "marker peak" : "marker" });
+            var div = document.createElement("div");
+            div.className = "key-date";
+            div.style.left = x(k.t) + "px";
+            div.style.top = "0px";
+            div.innerHTML = '<div class="what">' + k.what + '</div><div class="when">'
+                + (k.peak ? "semaine du " + fmt(k.from) : fmt(k.t, true)) + '</div>';
+            root.appendChild(div);
+        });
+
+        // the 14 books of most interest, at the middle of their week of
+        // most interest, in lanes above and below the axis
+        var ranked = books.map(function (b) {
+            var perWeek = {};
+            b.sessions.forEach(function (s) {
+                perWeek[week(s.t)] = (perWeek[week(s.t)] || 0) + interest(s);
+            });
+            var best = Object.keys(perWeek).sort(function (a, c) { return perWeek[c] - perWeek[a]; })[0];
+            return { b: b, n: sum(b.sessions, interest), min: sum(b.sessions, minutes),
+                     t: Math.min(t1, a0 + (Number(best) + 0.5) * 7 * DAY) };
+        }).sort(function (a, c) { return c.n - a.n; }).slice(0, 14);
+        var maxN = ranked[0].n, minN = ranked[ranked.length - 1].n;
+        var lanes = [
+            { above: true, y: axisY - amp - 12, boxes: [] },
+            { above: false, y: axisY + amp + 12, boxes: [] },
+            { above: true, y: axisY - amp - 12 - 175, boxes: [] },
+            { above: false, y: axisY + amp + 12 + 175, boxes: [] },
+        ];
+        ranked.forEach(function (r) {
+            var w = Math.round(64 + (r.n - minN) / Math.max(1, maxN - minN) * 56);
+            var cx = x(r.t);
+            var left = Math.min(Math.max(cx - w / 2, 4), width - w - 4);
+            // (an A4 cover: height = width × 1.414)
+            var h = w * 1.414;
+            var lane = lanes.find(function (l) {
+                // under the labels of the key dates, above the bottom
+                var fits = l.above ? l.y - h >= 48 : l.y + h <= height - 4;
+                return fits && l.boxes.every(function (o) { return left + w + 8 < o[0] || left > o[1] + 8; });
+            });
+            if (!lane) { return; }
+            lane.boxes.push([left, left + w]);
+            bookBox(r.b, r.min, left, lane.y, w, lane.above);
+            el("line", { x1: cx, y1: axisY, x2: left + w / 2, y2: lane.y, "class": "connector" });
+            el("circle", { cx: cx, cy: axisY, r: 2.5, fill: "#333" });
+        });
+    })();
+    </script>
+    {% endif %}
+</body>
+</html>
