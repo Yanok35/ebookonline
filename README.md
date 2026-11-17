@@ -92,6 +92,11 @@ kept in `CACHE_DIR`, next to the thumbnails. See `METADATA_ANALYSIS`,
 `METADATA_WORKERS` and `METADATA_NICE` in `config.py`, and
 `docs/technote-metadata-extract-&-analysis.md`.
 
+### Theme of the reader
+
+`READER_THEME`: `dark` (warm dark browns, the default) or `light` (the beige
+look of the other pages), e.g. `EBOOKONLINE_READER_THEME=light`.
+
 ## Configure Apache as an Https proxy
 
 TODO
