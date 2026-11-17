@@ -69,6 +69,10 @@ class Config:
     # is on the file names). See docs/technote-file-naming.md.
     FILENAME_PATTERN = "{title} {subtitle} - {author_sort}, {year}"
 
+    # Theme of the reader: "dark" (warm dark browns) or "light" (the beige
+    # look of the other pages); any other value is "dark".
+    READER_THEME = "dark"
+
     # Following are in current directory
     BOOK_DB = "book.db"
     STATE_FILE = "reader_states.json"
