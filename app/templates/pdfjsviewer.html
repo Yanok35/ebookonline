@@ -1196,6 +1196,15 @@
         const forwardHistory = [];
 
         /*
+         * Point de vue d'avant les sauts de la recherche en cours : ajouté
+         * à l'historique, comme un seul saut, quand la recherche est
+         * fermée (Échap, ✕), ou avant un autre saut de l'historique.
+         * Une promesse : la position est lue en asynchrone, les sauts
+         * de la recherche l'attendent avant de déplacer la vue.
+         */
+        let searchOrigin = null;
+
+        /*
          * État transmis au serveur.
          */
         const pdfReaderState = {
@@ -1236,8 +1245,30 @@
         }
 
         function updateHistoryButtons() {
-            backButton.disabled = backHistory.length === 0;
+            // (une recherche a déplacé la vue : retour à son point de départ)
+            backButton.disabled =
+                backHistory.length === 0 && !searchOrigin;
             forwardButton.disabled = forwardHistory.length === 0;
+        }
+
+        /*
+         * La recherche a déplacé la vue : son point de départ entre dans
+         * l'historique (une seule fois).
+         */
+        async function commitSearchOrigin() {
+            if (!searchOrigin) return;
+
+            const pending = searchOrigin;
+            searchOrigin = null;
+
+            const view = await pending;
+
+            if (view) {
+                backHistory.push(view);
+                forwardHistory.length = 0;
+            }
+
+            updateHistoryButtons();
         }
 
         // =====================================================
@@ -1798,6 +1829,10 @@
                  * de suivre le lien interne.
                  */
                 if (saveHistory) {
+                    // (un lien suivi pendant une recherche : son point
+                    // de départ d'abord)
+                    await commitSearchOrigin();
+
                     const current = await captureView();
 
                     if (current) {
@@ -2049,6 +2084,9 @@
     }
 
     async function goBack() {
+        // (pendant une recherche : retour d'abord à son point de départ)
+        await commitSearchOrigin();
+
         if (!backHistory.length) return;
 
         const current = await captureView();
@@ -2065,6 +2103,8 @@
     }
 
     async function goForward() {
+        await commitSearchOrigin();
+
         if (!forwardHistory.length) return;
 
         const current = await captureView();
@@ -3365,6 +3405,22 @@
                 searchResults.length +
                 " — page " + result.pageNumber;
 
+            // le point de vue d'avant le premier saut de la recherche,
+            // lu une seule fois (les sauts suivants attendent la lecture)
+            if (!searchOrigin) {
+                searchOrigin = captureView();
+                updateHistoryButtons();
+            }
+
+            await searchOrigin;
+
+            if (
+                destroyed ||
+                generation !== searchNavigationGeneration
+            ) {
+                return;
+            }
+
             await goToPage(result.pageNumber);
 
             if (
@@ -3536,6 +3592,9 @@
 
         function closeSearch() {
             searchbar.classList.remove("visible");
+
+            // la recherche est validée : ses sauts dans l'historique
+            commitSearchOrigin();
 
             clearSearch();
 
