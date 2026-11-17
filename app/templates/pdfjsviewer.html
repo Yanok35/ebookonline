@@ -570,6 +570,152 @@
         }
 
         /* =====================================
+           NOTES EN MARGE (MOCKUP)
+           ===================================== */
+
+        /* The margin: as wide as the sidebar, transparent; the notes are
+           bubbles, which scroll with the document */
+        #notes {
+            position: relative;
+            flex: 0 0 300px;
+            width: 300px;
+            overflow: hidden;
+            cursor: copy;
+        }
+
+        #workspace.notes-hidden #notes {
+            display: none;
+        }
+
+        #notes-hint {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            right: 24px;
+            color: #ffffff80;
+            font-size: 13px;
+            line-height: 1.4;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        #notes.has-notes #notes-hint {
+            display: none;
+        }
+
+        #notes-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            will-change: transform;
+        }
+
+        /* the anchor: a dot at the edge of the margin, at the height of
+           the annotated passage */
+        .note-anchor {
+            position: absolute;
+            left: 2px;
+            width: 9px;
+            height: 9px;
+            margin-top: -4px;
+            border-radius: 50%;
+            background: #f5c86a;
+            box-shadow: 0 0 0 2px #52565980;
+            pointer-events: none;
+        }
+
+        /* a line from the anchor to its bubble, when the bubble was moved
+           down by the ones above */
+        .note-link {
+            position: absolute;
+            left: 6px;
+            width: 0;
+            border-left: 1px dashed #f5c86acc;
+            pointer-events: none;
+        }
+
+        /* a bubble, as in a comic strip: its tail points to the document */
+        .note {
+            position: absolute;
+            left: 20px;
+            right: 14px;
+            padding: 6px 8px 8px;
+            border-radius: 12px;
+            background: #fffbe8;
+            color: #222;
+            box-shadow: 0 2px 6px #0006;
+            cursor: auto;
+            transition: box-shadow 150ms ease;
+        }
+
+        .note::before {
+            content: "";
+            position: absolute;
+            top: 10px;
+            left: -9px;
+            border-style: solid;
+            border-width: 7px 10px 7px 0;
+            border-color: transparent #fffbe8 transparent transparent;
+        }
+
+        .note:focus-within {
+            box-shadow: 0 0 0 2px #f5c86a, 0 2px 8px #0008;
+        }
+
+        .note-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 11px;
+            color: #8a6d3b;
+        }
+
+        .note-page {
+            border: 0;
+            padding: 0;
+            background: transparent;
+            color: inherit;
+            font-size: inherit;
+        }
+
+        .note-page:hover {
+            text-decoration: underline;
+        }
+
+        .note-delete {
+            border: 0;
+            padding: 0 2px;
+            background: transparent;
+            color: #999;
+            font-size: 13px;
+            line-height: 1;
+        }
+
+        .note-delete:hover {
+            color: darkred;
+        }
+
+        .note-text {
+            min-height: 1.4em;
+            font-size: 13px;
+            line-height: 1.4;
+            outline: none;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .note-text:empty::before {
+            content: "Votre note…";
+            color: #aaa;
+        }
+
+        #toolbar button#toggleNotes[aria-pressed="true"] {
+            background: #6b5a2e;
+        }
+
+        /* =====================================
            CONTENEUR DU PDF
            ===================================== */
 
@@ -757,6 +903,11 @@
 
             #reviewBadge .label {
                 display: none;
+            }
+
+            #notes {
+                flex-basis: 230px;
+                width: 230px;
             }
         }
         /* =====================================
@@ -1041,6 +1192,15 @@
                     </button>
                 </a>
 
+                <button
+                    id="toggleNotes"
+                    type="button"
+                    title="Afficher ou masquer les notes en marge"
+                    aria-pressed="false"
+                >
+                    🗨
+                </button>
+
                 <!-- touch screen only (see the end of the page): a computer has F11 -->
                 <button id="toggleFullscreen" type="button" hidden title="Plein écran">⛶</button>
             </div>
@@ -1145,6 +1305,12 @@
             <!-- the pages (scaled as a whole while pinched) -->
             <div id="pdf-pages"></div>
         </div>
+
+        <!-- MOCKUP: notes in the margin -->
+        <aside id="notes" aria-label="Notes en marge">
+            <div id="notes-hint">Cliquer dans la marge pour ajouter une note, en face du passage lu.</div>
+            <div id="notes-layer"></div>
+        </aside>
 
     </div>
 
@@ -4724,6 +4890,239 @@
 
         update();
         updateSidebar();
+    })();
+    </script>
+    <script>
+    /*
+     * MOCKUP: notes in the margin.
+     *
+     * A click in the margin (right of the document) opens a bubble, anchored
+     * to the page and the height of the click in it: the note follows the
+     * document (scroll, zoom). The bubbles are moved down so as not to
+     * overlap. The notes are kept in this browser only (localStorage),
+     * until they are saved by the server.
+     */
+    (() => {
+        "use strict";
+
+        const DOCUMENT_ID = {{ documentId | tojson }};
+        const STORE_KEY = "ebookonline.notes." + DOCUMENT_ID;
+        const SHOWN_KEY = "ebookonline.notes.shown";
+        // space between two bubbles; the tail is this far below their top (px)
+        const GAP = 8;
+        const TAIL = 17;
+
+        const workspace = document.getElementById("workspace");
+        const container = document.getElementById("pdf-container");
+        const margin = document.getElementById("notes");
+        const layer = document.getElementById("notes-layer");
+        const toggle = document.getElementById("toggleNotes");
+
+        // [{id, page, ratio (height in the page, 0..1), text}]
+        let notes = [];
+
+        function load() {
+            try {
+                notes = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+            } catch (_) {
+                notes = [];
+            }
+        }
+
+        function save() {
+            try {
+                const kept = notes.filter(n => n.text.trim());
+                if (kept.length) {
+                    localStorage.setItem(STORE_KEY, JSON.stringify(kept));
+                } else {
+                    localStorage.removeItem(STORE_KEY);
+                }
+            } catch (_) {}
+        }
+
+        function shell(page) {
+            return container.querySelector(`.pdf-page[data-page-number="${page}"]`);
+        }
+
+        // top of an element, in the coordinates of the scrolled document
+        function documentTop(element) {
+            return element.getBoundingClientRect().top
+                - container.getBoundingClientRect().top + container.scrollTop;
+        }
+
+        // the anchor of a click at clientY: the page under it, and the
+        // height in this page
+        function anchorAt(clientY) {
+            const y = clientY - container.getBoundingClientRect().top + container.scrollTop;
+            let best = null;
+            for (const page of container.querySelectorAll(".pdf-page")) {
+                const top = documentTop(page);
+                const bottom = top + page.offsetHeight;
+                // the page under the click, or else the closest one
+                const distance = y < top ? top - y : (y > bottom ? y - bottom : 0);
+                if (!best || distance < best.distance) {
+                    best = { distance, page: Number(page.dataset.pageNumber),
+                             ratio: Math.min(1, Math.max(0, (y - top) / page.offsetHeight)) };
+                }
+                if (distance === 0) {
+                    break;
+                }
+            }
+            return best;
+        }
+
+        function anchorY(note) {
+            const page = shell(note.page);
+            return page ? documentTop(page) + note.ratio * page.offsetHeight : null;
+        }
+
+        function goTo(note) {
+            const y = anchorY(note);
+            if (y !== null) {
+                container.scrollTo({ top: Math.max(0, y - container.clientHeight / 3), behavior: "smooth" });
+            }
+        }
+
+        // --- the bubbles
+        function element(note) {
+            const bubble = document.createElement("div");
+            bubble.className = "note";
+            bubble.innerHTML =
+                '<div class="note-header">'
+                + '<button type="button" class="note-page" title="Aller à ce passage"></button>'
+                + '<button type="button" class="note-delete" title="Supprimer la note" aria-label="Supprimer la note">✕</button>'
+                + '</div>'
+                + '<div class="note-text" spellcheck="true"></div>';
+            bubble.querySelector(".note-page").textContent = "p. " + note.page;
+            const text = bubble.querySelector(".note-text");
+            try {
+                // text only, no formatting
+                text.contentEditable = "plaintext-only";
+            } catch (_) {
+                // (older browsers)
+                text.contentEditable = "true";
+            }
+            text.textContent = note.text;
+            text.addEventListener("input", () => {
+                note.text = text.textContent;
+                save();
+                layout();
+            });
+            text.addEventListener("keydown", event => {
+                if (event.key === "Escape") {
+                    text.blur();
+                }
+                // (the keys of the reader, e.g. Ctrl+F, are not for the note)
+                event.stopPropagation();
+            });
+            text.addEventListener("blur", () => {
+                // an empty note is dropped
+                if (!note.text.trim()) {
+                    remove(note);
+                }
+            });
+            bubble.querySelector(".note-page").addEventListener("click", () => goTo(note));
+            bubble.querySelector(".note-delete").addEventListener("click", () => remove(note));
+
+            const anchor = document.createElement("div");
+            anchor.className = "note-anchor";
+            const link = document.createElement("div");
+            link.className = "note-link";
+            layer.append(link, anchor, bubble);
+            note.elements = { bubble, anchor, link, text };
+        }
+
+        function remove(note) {
+            notes = notes.filter(n => n !== note);
+            for (const e of ["bubble", "anchor", "link"]) {
+                note.elements[e].remove();
+            }
+            save();
+            layout();
+        }
+
+        // the bubbles in the order of their anchors, each one under the
+        // previous one when they would overlap
+        function layout() {
+            margin.classList.toggle("has-notes", notes.length > 0);
+            let bottom = -Infinity;
+            const placed = notes
+                .map(note => ({ note, y: anchorY(note) }))
+                .filter(p => p.y !== null)
+                .sort((a, b) => a.y - b.y);
+            for (const { note, y } of placed) {
+                const { bubble, anchor, link } = note.elements;
+                const top = Math.max(y - TAIL, bottom + GAP);
+                bubble.style.top = top + "px";
+                anchor.style.top = y + "px";
+                link.style.top = y + "px";
+                link.style.height = Math.max(0, top + TAIL - y) + "px";
+                bottom = top + bubble.offsetHeight;
+            }
+            scrolled();
+        }
+
+        // the layer follows the scroll of the document
+        function scrolled() {
+            layer.style.transform = `translateY(${-container.scrollTop}px)`;
+        }
+
+        // --- events
+        margin.addEventListener("click", event => {
+            if (event.target !== margin && event.target !== layer) {
+                return;
+            }
+            const anchor = anchorAt(event.clientY);
+            if (!anchor) {
+                return;
+            }
+            const note = { id: Date.now(), page: anchor.page, ratio: anchor.ratio, text: "" };
+            notes.push(note);
+            element(note);
+            layout();
+            note.elements.text.focus();
+        });
+
+        // zoom, window size, pages rendered: the pages change of size,
+        // the bubbles are placed again (once per frame at most)
+        let pending = false;
+        function layoutSoon() {
+            if (!pending && notes.length) {
+                pending = true;
+                requestAnimationFrame(() => {
+                    pending = false;
+                    layout();
+                });
+            }
+        }
+
+        container.addEventListener("scroll", scrolled, { passive: true });
+        new ResizeObserver(layoutSoon).observe(container);
+        new MutationObserver(layoutSoon)
+            .observe(container, { subtree: true, attributes: true, attributeFilter: ["style"] });
+
+        function show(shown) {
+            workspace.classList.toggle("notes-hidden", !shown);
+            toggle.setAttribute("aria-pressed", String(shown));
+            try {
+                localStorage.setItem(SHOWN_KEY, shown ? "1" : "0");
+            } catch (_) {}
+            if (shown) {
+                layout();
+            }
+        }
+
+        toggle.addEventListener("click", () => {
+            show(workspace.classList.contains("notes-hidden"));
+        });
+
+        load();
+        notes.forEach(element);
+        let shown = true;
+        try {
+            shown = localStorage.getItem(SHOWN_KEY) !== "0";
+        } catch (_) {}
+        show(shown);
     })();
     </script>
 </body>
