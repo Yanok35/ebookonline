@@ -602,16 +602,16 @@
         #notes-nav button {
             width: 36px;
             height: 36px;
-            border: 1px solid #777;
+            border: 1px solid #8a7b69;
             border-radius: 50%;
-            background: #44484c;
+            background: #4a4037;
             color: white;
             font-size: 14px;
             box-shadow: 0 2px 6px #0006;
         }
 
         #notes-nav button:hover:not(:disabled) {
-            background: #555b60;
+            background: #5c5044;
         }
 
         /* the note reached with the buttons */
@@ -1068,6 +1068,72 @@
 
             #loading {
                 color: #222;
+            }
+        }
+
+        /* MOCKUP: the notes in the light theme: white bubbles framed as the
+           boxes of the library, dark red anchors */
+        html.light {
+            #notes-hint {
+                color: #666;
+                font-variant: small-caps;
+            }
+
+            #notes-nav button {
+                border: 1px solid #00000080;
+                background: #fff;
+                color: #222;
+                box-shadow: 1px 1px 3px #80808080;
+            }
+
+            #notes-nav button:hover:not(:disabled) {
+                background: #f9e3b0;
+            }
+
+            #toolbar button#toggleNotes[aria-pressed="true"] {
+                background: #f9e3b0;
+                border-color: darkred;
+            }
+
+            .note {
+                background: #fff;
+                border: 1px solid #00000080;
+                border-radius: 10px;
+                box-shadow: 1px 1px 5px 1px #808080;
+            }
+
+            .note::before {
+                border-color: transparent #fff transparent transparent;
+            }
+
+            .note:focus-within {
+                box-shadow: 0 0 0 2px #f9e3b0, 1px 1px 5px 1px #808080;
+            }
+
+            .note.reached {
+                box-shadow: 0 0 0 3px darkred, 1px 1px 5px 1px #808080;
+            }
+
+            .note-header {
+                font-variant: small-caps;
+            }
+
+            .note-text {
+                font-size: 14px;
+            }
+
+            .note-quote {
+                border-left-color: #8a6d3b;
+                font-size: 13px;
+            }
+
+            .note-anchor {
+                background: darkred;
+                box-shadow: 0 0 0 2px #e9e6e2;
+            }
+
+            .note-link {
+                border-left-color: #8b000080;
             }
         }
     </style>
