@@ -573,25 +573,42 @@
            NOTES EN MARGE (MOCKUP)
            ===================================== */
 
-        /* The margin: as wide as the sidebar, transparent; the notes are
-           bubbles, which scroll with the document */
-        #notes {
+        /* The margin: as wide as the sidebar, transparent, in the scrolled
+           container (its scrollbar on the right of the margin, the wheel
+           over the margin scrolls the document); the notes are bubbles */
+        #workspace {
             position: relative;
-            flex: 0 0 300px;
-            width: 300px;
-            overflow: hidden;
+        }
+
+        #pdf-container {
+            position: relative;
+        }
+
+        #workspace:not(.notes-hidden) #pdf-container {
+            padding-right: calc(var(--notes-width) + 12px);
+        }
+
+        :root {
+            --notes-width: 300px;
+        }
+
+        #notes {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: var(--notes-width);
             cursor: copy;
         }
 
-        #workspace.notes-hidden #notes {
+        #workspace.notes-hidden #notes,
+        #workspace.notes-hidden #notes-nav {
             display: none;
         }
 
         #notes-hint {
-            position: absolute;
+            position: sticky;
             top: 24px;
-            left: 24px;
-            right: 24px;
+            margin: 24px;
             color: #ffffff80;
             font-size: 13px;
             line-height: 1.4;
@@ -608,11 +625,39 @@
             top: 0;
             left: 0;
             right: 0;
-            will-change: transform;
         }
 
-        /* the anchor: a dot at the edge of the margin, at the height of
-           the annotated passage */
+        /* to the previous / next note: at the bottom right of the margin,
+           left of the scrollbar */
+        #notes-nav {
+            position: absolute;
+            bottom: 16px;
+            right: calc(var(--scrollbar-width, 0px) + 14px);
+            display: flex;
+            gap: 8px;
+            z-index: 5;
+        }
+
+        #notes-nav button {
+            width: 36px;
+            height: 36px;
+            border: 1px solid #777;
+            border-radius: 50%;
+            background: #44484c;
+            color: white;
+            font-size: 14px;
+            box-shadow: 0 2px 6px #0006;
+        }
+
+        #notes-nav button:hover:not(:disabled) {
+            background: #555b60;
+        }
+
+        /* the note reached with the buttons */
+        .note.reached {
+            box-shadow: 0 0 0 3px #f5c86a, 0 2px 8px #0008;
+        }
+
         .note-anchor {
             position: absolute;
             left: 2px;
@@ -695,6 +740,18 @@
 
         .note-delete:hover {
             color: darkred;
+        }
+
+        /* the selected text of the document, quoted */
+        .note-quote {
+            margin: 2px 0 6px;
+            padding-left: 7px;
+            border-left: 3px solid #f5c86a;
+            color: #555;
+            font-size: 12px;
+            font-style: italic;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
         }
 
         .note-text {
@@ -905,9 +962,8 @@
                 display: none;
             }
 
-            #notes {
-                flex-basis: 230px;
-                width: 230px;
+            :root {
+                --notes-width: 230px;
             }
         }
         /* =====================================
@@ -1299,6 +1355,13 @@
         </aside>
 
         <div id="pdf-container" tabindex="0">
+            <!-- MOCKUP: notes in the margin, scrolled with the document -->
+            <aside id="notes" aria-label="Notes en marge">
+                <div id="notes-hint">Cliquer dans la marge pour ajouter une note, en face
+                    du passage lu (avec le texte sélectionné, cité).</div>
+                <div id="notes-layer"></div>
+            </aside>
+
             <div id="loading">
                 Chargement du document PDF...
             </div>
@@ -1306,11 +1369,11 @@
             <div id="pdf-pages"></div>
         </div>
 
-        <!-- MOCKUP: notes in the margin -->
-        <aside id="notes" aria-label="Notes en marge">
-            <div id="notes-hint">Cliquer dans la marge pour ajouter une note, en face du passage lu.</div>
-            <div id="notes-layer"></div>
-        </aside>
+        <!-- MOCKUP: to the previous / next note -->
+        <div id="notes-nav">
+            <button id="previousNote" type="button" title="Note précédente" aria-label="Note précédente">▲</button>
+            <button id="nextNote" type="button" title="Note suivante" aria-label="Note suivante">▼</button>
+        </div>
 
     </div>
 
@@ -4191,8 +4254,12 @@
 
                 await loadPageMetadata(referencePage);
 
+                // (without the padding: the margin of the notes, when shown)
+                const containerStyle = getComputedStyle(container);
                 const availableWidth =
-                    container.clientWidth - 24;
+                    container.clientWidth
+                    - parseFloat(containerStyle.paddingLeft)
+                    - parseFloat(containerStyle.paddingRight);
 
                 if (availableWidth <= 0) return;
 
@@ -4897,10 +4964,11 @@
      * MOCKUP: notes in the margin.
      *
      * A click in the margin (right of the document) opens a bubble, anchored
-     * to the page and the height of the click in it: the note follows the
-     * document (scroll, zoom). The bubbles are moved down so as not to
-     * overlap. The notes are kept in this browser only (localStorage),
-     * until they are saved by the server.
+     * to the page and the height of the click in it (or of the selected
+     * text, quoted in the note): the note follows the document (scroll,
+     * zoom). The bubbles are moved down so as not to overlap. Two buttons
+     * go to the previous / next note. The notes are kept in this browser
+     * only (localStorage), until they are saved by the server.
      */
     (() => {
         "use strict";
@@ -4911,15 +4979,25 @@
         // space between two bubbles; the tail is this far below their top (px)
         const GAP = 8;
         const TAIL = 17;
+        // longest quotation of the selected text, in characters
+        const MAX_QUOTE = 256;
 
         const workspace = document.getElementById("workspace");
         const container = document.getElementById("pdf-container");
         const margin = document.getElementById("notes");
         const layer = document.getElementById("notes-layer");
         const toggle = document.getElementById("toggleNotes");
+        const previousButton = document.getElementById("previousNote");
+        const nextButton = document.getElementById("nextNote");
 
-        // [{id, page, ratio (height in the page, 0..1), text}]
+        // [{id, page, ratio (height in the page, 0..1), quote (selected
+        // text, or empty), text}]
         let notes = [];
+
+        // a note with a quotation, or a text
+        function filled(note) {
+            return Boolean(note.quote || note.text.trim());
+        }
 
         function load() {
             try {
@@ -4931,7 +5009,8 @@
 
         function save() {
             try {
-                const kept = notes.filter(n => n.text.trim());
+                const kept = notes.filter(filled)
+                    .map(({ id, page, ratio, quote, text }) => ({ id, page, ratio, quote, text }));
                 if (kept.length) {
                     localStorage.setItem(STORE_KEY, JSON.stringify(kept));
                 } else {
@@ -4940,25 +5019,27 @@
             } catch (_) {}
         }
 
+        // --- positions, in the coordinates of the scrolled document
+        function documentY(clientY) {
+            return clientY - container.getBoundingClientRect().top + container.scrollTop;
+        }
+
+        function documentTop(element) {
+            return documentY(element.getBoundingClientRect().top);
+        }
+
         function shell(page) {
             return container.querySelector(`.pdf-page[data-page-number="${page}"]`);
         }
 
-        // top of an element, in the coordinates of the scrolled document
-        function documentTop(element) {
-            return element.getBoundingClientRect().top
-                - container.getBoundingClientRect().top + container.scrollTop;
-        }
-
-        // the anchor of a click at clientY: the page under it, and the
-        // height in this page
+        // the anchor of a point at clientY: the page under it (or the
+        // closest one), and the height in this page
         function anchorAt(clientY) {
-            const y = clientY - container.getBoundingClientRect().top + container.scrollTop;
+            const y = documentY(clientY);
             let best = null;
             for (const page of container.querySelectorAll(".pdf-page")) {
                 const top = documentTop(page);
                 const bottom = top + page.offsetHeight;
-                // the page under the click, or else the closest one
                 const distance = y < top ? top - y : (y > bottom ? y - bottom : 0);
                 if (!best || distance < best.distance) {
                     best = { distance, page: Number(page.dataset.pageNumber),
@@ -4976,11 +5057,27 @@
             return page ? documentTop(page) + note.ratio * page.offsetHeight : null;
         }
 
-        function goTo(note) {
-            const y = anchorY(note);
-            if (y !== null) {
-                container.scrollTo({ top: Math.max(0, y - container.clientHeight / 3), behavior: "smooth" });
+        // --- the selected text of the document, quoted in a new note
+        function selectedQuote() {
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed || !selection.rangeCount) {
+                return null;
             }
+            const range = selection.getRangeAt(0);
+            const node = range.commonAncestorContainer;
+            const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+            // in the document only, not in a note
+            if (!container.contains(element) || margin.contains(element)) {
+                return null;
+            }
+            let text = selection.toString().replace(/\s+/g, " ").trim();
+            if (!text) {
+                return null;
+            }
+            if (text.length > MAX_QUOTE) {
+                text = text.slice(0, MAX_QUOTE - 1).trimEnd() + "…";
+            }
+            return { text, clientY: range.getBoundingClientRect().top };
         }
 
         // --- the bubbles
@@ -4992,8 +5089,12 @@
                 + '<button type="button" class="note-page" title="Aller à ce passage"></button>'
                 + '<button type="button" class="note-delete" title="Supprimer la note" aria-label="Supprimer la note">✕</button>'
                 + '</div>'
+                + (note.quote ? '<div class="note-quote"></div>' : '')
                 + '<div class="note-text" spellcheck="true"></div>';
             bubble.querySelector(".note-page").textContent = "p. " + note.page;
+            if (note.quote) {
+                bubble.querySelector(".note-quote").textContent = `« ${note.quote} »`;
+            }
             const text = bubble.querySelector(".note-text");
             try {
                 // text only, no formatting
@@ -5004,7 +5105,7 @@
             }
             text.textContent = note.text;
             text.addEventListener("input", () => {
-                note.text = text.textContent;
+                note.text = text.innerText;
                 save();
                 layout();
             });
@@ -5017,7 +5118,7 @@
             });
             text.addEventListener("blur", () => {
                 // an empty note is dropped
-                if (!note.text.trim()) {
+                if (!filled(note)) {
                     remove(note);
                 }
             });
@@ -5042,9 +5143,13 @@
         }
 
         // the bubbles in the order of their anchors, each one under the
-        // previous one when they would overlap
+        // previous one when they would overlap; the margin as high as the
+        // document (or the last bubble)
         function layout() {
             margin.classList.toggle("has-notes", notes.length > 0);
+            const pages = container.querySelectorAll(".pdf-page");
+            const last = pages[pages.length - 1];
+            let height = last ? documentTop(last) + last.offsetHeight : container.clientHeight;
             let bottom = -Infinity;
             const placed = notes
                 .map(note => ({ note, y: anchorY(note) }))
@@ -5059,27 +5164,90 @@
                 link.style.height = Math.max(0, top + TAIL - y) + "px";
                 bottom = top + bubble.offsetHeight;
             }
-            scrolled();
+            margin.style.height = Math.max(height, bottom + GAP) + "px";
+            // the buttons left of the scrollbar
+            workspace.style.setProperty("--scrollbar-width",
+                (container.offsetWidth - container.clientWidth) + "px");
+            updateButtons();
         }
 
-        // the layer follows the scroll of the document
-        function scrolled() {
-            layer.style.transform = `translateY(${-container.scrollTop}px)`;
+        // --- to the previous / next note
+        // the reading position: a third of the view (where a note goes)
+        function readingY() {
+            return container.scrollTop + container.clientHeight / 3;
         }
 
-        // --- events
+        function sortedNotes() {
+            return notes
+                .map(note => ({ note, y: anchorY(note) }))
+                .filter(p => p.y !== null && filled(p.note))
+                .sort((a, b) => a.y - b.y);
+        }
+
+        function neighbour(direction) {
+            const y = readingY();
+            const sorted = sortedNotes();
+            if (direction < 0) {
+                return sorted.filter(p => p.y < y - 2).pop();
+            }
+            return sorted.find(p => p.y > y + 2);
+        }
+
+        function updateButtons() {
+            previousButton.disabled = !neighbour(-1);
+            nextButton.disabled = !neighbour(1);
+        }
+
+        function goTo(note) {
+            const y = anchorY(note);
+            if (y === null) {
+                return;
+            }
+            container.scrollTo({ top: Math.max(0, y - container.clientHeight / 3), behavior: "smooth" });
+            const bubble = note.elements.bubble;
+            bubble.classList.add("reached");
+            setTimeout(() => bubble.classList.remove("reached"), 1200);
+        }
+
+        previousButton.addEventListener("click", () => {
+            const p = neighbour(-1);
+            if (p) {
+                goTo(p.note);
+            }
+        });
+
+        nextButton.addEventListener("click", () => {
+            const p = neighbour(1);
+            if (p) {
+                goTo(p.note);
+            }
+        });
+
+        // --- a new note
+        // (the selection is read when the button is pressed: the click
+        // then clears it)
+        let quote = null;
+        margin.addEventListener("pointerdown", event => {
+            quote = event.target === margin || event.target === layer ? selectedQuote() : null;
+        });
+
         margin.addEventListener("click", event => {
             if (event.target !== margin && event.target !== layer) {
                 return;
             }
-            const anchor = anchorAt(event.clientY);
+            // anchored to the selected text, or to the click
+            const anchor = anchorAt(quote ? quote.clientY : event.clientY);
             if (!anchor) {
                 return;
             }
-            const note = { id: Date.now(), page: anchor.page, ratio: anchor.ratio, text: "" };
+            const note = { id: Date.now(), page: anchor.page, ratio: anchor.ratio,
+                           quote: quote ? quote.text : "", text: "" };
+            quote = null;
             notes.push(note);
             element(note);
             layout();
+            save();
+            // (the cursor in the text, under the quotation)
             note.elements.text.focus();
         });
 
@@ -5087,7 +5255,7 @@
         // the bubbles are placed again (once per frame at most)
         let pending = false;
         function layoutSoon() {
-            if (!pending && notes.length) {
+            if (!pending) {
                 pending = true;
                 requestAnimationFrame(() => {
                     pending = false;
@@ -5096,10 +5264,14 @@
             }
         }
 
-        container.addEventListener("scroll", scrolled, { passive: true });
+        container.addEventListener("scroll", () => requestAnimationFrame(updateButtons), { passive: true });
         new ResizeObserver(layoutSoon).observe(container);
-        new MutationObserver(layoutSoon)
-            .observe(container, { subtree: true, attributes: true, attributeFilter: ["style"] });
+        // (the changes of the bubbles themselves are not of the pages)
+        new MutationObserver(mutations => {
+            if (mutations.some(m => !margin.contains(m.target))) {
+                layoutSoon();
+            }
+        }).observe(container, { subtree: true, attributes: true, attributeFilter: ["style"] });
 
         function show(shown) {
             workspace.classList.toggle("notes-hidden", !shown);
@@ -5107,9 +5279,7 @@
             try {
                 localStorage.setItem(SHOWN_KEY, shown ? "1" : "0");
             } catch (_) {}
-            if (shown) {
-                layout();
-            }
+            layoutSoon();
         }
 
         toggle.addEventListener("click", () => {
