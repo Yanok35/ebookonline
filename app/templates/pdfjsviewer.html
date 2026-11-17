@@ -150,6 +150,33 @@
             background: #555b60;
         }
 
+        /* The rectangular buttons and the fields, as high as each other
+           (an emoji is taller than a letter: centred, not higher) */
+        #toolbar button:not(.round),
+        #currentPage,
+        #zoomLevel {
+            height: 32px;
+        }
+
+        #toolbar button:not(.round) {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        /* The groups of tools (page, zoom, search and points of view):
+           more space between them than in them */
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toolbar-group + .toolbar-group {
+            margin-left: 16px;
+        }
+
         /* Round buttons with an icon (search, previous / next point of
            view): the label in their tooltip */
         #toolbar button.round {
@@ -195,7 +222,7 @@
            when the line is full */
         #docInfo {
             display: flex;
-            align-items: stretch;
+            align-items: center;
             gap: 8px;
             flex: 0 1 auto;
             min-width: 50px;
@@ -662,77 +689,85 @@
 
         <div id="filler"></div>
 
-        <button
-            id="toggleSearch"
-            class="round"
-            type="button"
-            title="Rechercher dans le PDF (Ctrl+F)"
-            aria-label="Rechercher dans le PDF"
-        >🔎</button>
 
-        <button
-            id="goBack"
-            class="round"
-            type="button"
-            disabled
-            title="Revenir au point de vue précédent"
-            aria-label="Revenir au point de vue précédent"
-        >◀</button>
 
-        <button
-            id="goForward"
-            class="round"
-            type="button"
-            disabled
-            title="Avancer au point de vue suivant"
-            aria-label="Avancer au point de vue suivant"
-        >▶</button>
+        <!-- Groups of tools: the page, the zoom, the search and the
+             points of view -->
+        <div class="toolbar-group" id="pageGroup">
+            <label for="currentPage">Page :</label>
 
-        <div id="filler"></div>
+            <input
+                id="currentPage"
+                type="number"
+                min="1"
+                value="1"
+                disabled
+            >
 
-        <label for="currentPage">Page :</label>
+            <span id="pageCount">/ ...</span>
+        </div>
 
-        <input
-            id="currentPage"
-            type="number"
-            min="1"
-            value="1"
-            disabled
-        >
+        <div class="toolbar-group" id="zoomGroup">
+            <button id="zoomOut" type="button" disabled>
+                −
+            </button>
 
-        <span id="pageCount">/ ...</span>
+            <!-- Warning: 'value' field should match 'INITIAL_SCALE' JS variable -->
+            <input
+                id="zoomLevel"
+                type="number"
+                min="40"
+                max="250"
+                step="1"
+                value="150"
+                disabled
+                title="Zoom en pourcentage"
+                aria-label="Zoom en pourcentage"
+            >
 
-        <button id="zoomOut" type="button" disabled>
-            −
-        </button>
+            <span style="color:white">%</span>
 
-        <!-- Warning: 'value' field should match 'INITIAL_SCALE' JS variable -->
-        <input
-            id="zoomLevel"
-            type="number"
-            min="40"
-            max="250"
-            step="1"
-            value="150"
-            disabled
-            title="Zoom en pourcentage"
-            aria-label="Zoom en pourcentage"
-        >
+            <button id="zoomIn" type="button" disabled>
+                +
+            </button>
 
-        <span style="color:white">%</span>
+            <button
+                id="fitWidth"
+                type="button"
+                disabled
+                title="Adapter la largeur de la page"
+            >
+                ↔ Largeur page
+            </button>
+        </div>
 
-        <button id="zoomIn" type="button" disabled>
-            +
-        </button>
+        <div class="toolbar-group" id="navGroup">
+            <button
+                id="toggleSearch"
+                class="round"
+                type="button"
+                title="Rechercher dans le PDF (Ctrl+F)"
+                aria-label="Rechercher dans le PDF"
+            >🔎</button>
 
-        <button
-            id="fitWidth"
-            type="button"
-            disabled
-            title="Adapter la largeur de la page"
-        >
-            ↔ Largeur page
-        </button>
+            <button
+                id="goBack"
+                class="round"
+                type="button"
+                disabled
+                title="Revenir au point de vue précédent"
+                aria-label="Revenir au point de vue précédent"
+            >◀</button>
+
+            <button
+                id="goForward"
+                class="round"
+                type="button"
+                disabled
+                title="Avancer au point de vue suivant"
+                aria-label="Avancer au point de vue suivant"
+            >▶</button>
+        </div>
 
         <div id="filler"></div>
 
