@@ -150,6 +150,25 @@
             background: #555b60;
         }
 
+        /* Round buttons with an icon (search, previous / next point of
+           view): the label in their tooltip */
+        #toolbar button.round {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 50%;
+            font-size: 15px;
+            line-height: 1;
+            box-shadow: 0 2px 6px #0006;
+        }
+
+        #toolbar button.round:disabled {
+            box-shadow: none;
+        }
+
         #currentPage,
         #zoomLevel {
             padding: 6px;
@@ -645,29 +664,29 @@
 
         <button
             id="toggleSearch"
+            class="round"
             type="button"
             title="Rechercher dans le PDF (Ctrl+F)"
-        >
-            🔎 Rechercher
-        </button>
+            aria-label="Rechercher dans le PDF"
+        >🔎</button>
 
         <button
             id="goBack"
+            class="round"
             type="button"
             disabled
             title="Revenir au point de vue précédent"
-        >
-            ← Précédent
-        </button>
+            aria-label="Revenir au point de vue précédent"
+        >◀</button>
 
         <button
             id="goForward"
+            class="round"
             type="button"
             disabled
             title="Avancer au point de vue suivant"
-        >
-            Suivant →
-        </button>
+            aria-label="Avancer au point de vue suivant"
+        >▶</button>
 
         <div id="filler"></div>
 
