@@ -136,3 +136,14 @@ def test_book_reader_review_badge(client, book):
 def test_deprecated_reader_has_no_review_badge(client, book):
     html = client.get(f"/pdfjsviewer/{book.sha1}/{book.filename}").text
     assert 'id="reviewBadge"' not in html
+
+
+def test_book_reader_theme(app, client, book):
+    """ READER_THEME: dark by default, light with the class of the page """
+    html = client.get(f"/reader/{book.sha1}").text
+    assert '<html lang="fr">' in html
+    app.config["READER_THEME"] = "light"
+    html = client.get(f"/reader/{book.sha1}").text
+    assert '<html lang="fr" class="light">' in html and "html.light {" in html
+    app.config["READER_THEME"] = "pink"
+    assert '<html lang="fr">' in client.get(f"/reader/{book.sha1}").text
