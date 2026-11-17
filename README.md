@@ -209,6 +209,13 @@ sudo systemd-run --pty --wait --collect -p User=ebookonline -p Nice=10 \
     /opt/ebookonline/venv/bin/flask --app ebookonline thumbnails check --list
 ```
 
+Alternative command:
+
+```bash
+cd /opt/ebookonline
+sudo -u nobody venv/bin/flask --app ebookonline thumbnails --help
+```
+
 ## fail2ban configuration
 
 The application logs, as warnings of its `app` logger:

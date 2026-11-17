@@ -13,6 +13,7 @@
  - Ability to sort books per user's current interest (most recent open, to oldest)
  - Add ability to give a score (5x star like  style maybe)
  - Add ability to take some notes on a book
+ - Droit a l'oubli 30j après un livre lu non consulté et qui n'est plus dans la base.
 
 # User admin
  - Make user dynamics ? add/remove, change passwd ? or keep this using file editions.
@@ -49,3 +50,7 @@
    copy, as for the cover page
  - Local file of publishers (e.g. in instance/, set by a config key), which
    extends srcs/metadata/publishers.json without changing the repository
+
+# Licences
+ - Check licences of all requirements/dependencies. PyMuPdf is AGPLV3 ? to check
+   impact.
