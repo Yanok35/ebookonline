@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr"{% if config.READER_THEME == "light" %} class="light"{% endif %}>
 
 <head>
     <meta charset="UTF-8">
@@ -705,6 +705,139 @@
                 display: none;
             }
         }
+        /* =====================================
+           THÈME CLAIR (READER_THEME = "light", <html class="light">)
+           The look of the other pages (static/style.css): beige
+           background, serif font, small caps, white boxes with a grey
+           shadow, golden hover, dark red accents. The PDF pages are not
+           changed. Nested rules: they win over the ones above (the dark
+           theme, by default).
+           ===================================== */
+
+        html.light {
+
+            body {
+                font-family: serif;
+                background: #e9e6e2;
+            }
+
+            #toolbar {
+                color: #222;
+                background: #f4f2ef;
+                border-bottom: 1px solid #00000040;
+                box-shadow: 0 1px 5px #80808080;
+            }
+
+            #docName {
+                color: #222;
+                font-size: 14px;
+                font-weight: bold;
+            }
+
+            #toolbar-row,
+            #searchbar {
+                font-size: 14px;
+            }
+
+            #toolbar label,
+            #pageCount,
+            #status,
+            #searchbar label,
+            #searchStatus,
+            #sidebar-header h2 {
+                font-variant: small-caps;
+            }
+
+            #status,
+            #searchStatus {
+                color: #666;
+            }
+
+            #toolbar button,
+            #searchbar button,
+            #sidebar-header button {
+                border: 1px solid #00000080;
+                background: #fff;
+                color: #222;
+                box-shadow: 1px 1px 3px #80808080;
+            }
+
+            #toolbar button:hover:not(:disabled),
+            #searchbar button:hover,
+            #sidebar-header button:hover,
+            #homeLink:hover,
+            #homeLink:focus-visible {
+                background: #f9e3b0;
+            }
+
+            #currentPage,
+            #zoomLevel,
+            #searchInput {
+                border: 1px solid #00000080;
+            }
+
+            #reviewBadge {
+                border-radius: 0.3em;
+                background: #8a6d3b;
+                font-variant: small-caps;
+            }
+
+            #reviewBadge:hover,
+            #reviewBadge:focus-visible {
+                background: darkred;
+            }
+
+            #searchbar {
+                background: #f4f2ef;
+                border-bottom: 1px solid #00000040;
+                box-shadow: none;
+            }
+
+            #sidebar {
+                background: #f4f2ef;
+                border-right: 1px solid #00000040;
+            }
+
+            #sidebar-header {
+                background: #e9e6e2;
+                border-bottom: 1px solid #00000040;
+            }
+
+            #sidebar-header h2 {
+                font-size: 16px;
+            }
+
+            .outline-link {
+                font-family: serif;
+                font-size: 15px;
+            }
+
+            .outline-row:hover {
+                background: #f9e3b040;
+            }
+
+            .outline-row.active {
+                background: #f9e3b0;
+            }
+
+            .outline-row.active .outline-page {
+                color: darkred;
+            }
+
+            #pdf-container {
+                background: #e9e6e2;
+            }
+
+            /* the pages as the boxes of the library */
+            .pdf-page {
+                box-shadow: 1px 1px 5px 1px #808080;
+                outline: 1px solid #00000080;
+            }
+
+            #loading {
+                color: #222;
+            }
+        }
     </style>
 </head>
 
@@ -776,7 +909,7 @@
                 aria-label="Zoom en pourcentage"
             >
 
-            <span style="color:white">%</span>
+            <span id="zoomUnit">%</span>
 
             <button id="zoomIn" type="button" disabled>
                 +
