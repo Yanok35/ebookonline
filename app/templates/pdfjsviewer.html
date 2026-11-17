@@ -313,12 +313,14 @@
            RECHERCHE
            ===================================== */
 
+        /* the sizes of the toolbar: texts of 13 px, controls of 28 px */
         #searchbar {
             display: none;
             align-items: center;
             flex-wrap: wrap;
             gap: 9px;
-            padding: 10px 14px;
+            padding: 6px 14px;
+            font-size: 13px;
             background: #f1f3f4;
             border-bottom: 1px solid #bbb;
             box-shadow: 0 2px 4px #0002;
@@ -333,13 +335,19 @@
             flex: 1 1 220px;
             max-width: 460px;
             min-width: 120px;
-            padding: 8px;
+            height: 28px;
+            padding: 0 8px;
             border: 1px solid #aaa;
             border-radius: 3px;
         }
 
         #searchbar button {
-            padding: 7px 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 28px;
+            padding: 0 9px;
+            line-height: 1;
             border: 1px solid #bbb;
             border-radius: 3px;
             background: white;
@@ -480,9 +488,9 @@
 
         .outline-page {
             flex: 0 0 auto;
-            padding-top: 2px;
+            padding-top: 1px;
             color: #777;
-            font-size: 11px;
+            font-size: 14px;
         }
 
         .outline-children.collapsed {
