@@ -55,17 +55,78 @@
            BARRE D'OUTILS
            ===================================== */
 
+        /* The home link, as high as the two lines on its right: the title
+           of the document, centred, above the tools */
         #toolbar {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            padding: 5px 9px 7px;
+            color: white;
+            background: #323639;
+            z-index: 10;
+        }
+
+        #toolbar-main {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        #toolbar-title {
+            text-align: center;
+            line-height: 1.3;
+            min-width: 0;
+        }
+
+        #docName {
+            display: block;
+            font-size: 13px;
+            color: #ddd;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* the texts of the tools as large as the title */
+        #toolbar-row {
             display: flex;
             align-items: center;
             justify-content: center;
             flex-wrap: wrap;
             gap: 8px;
-            padding: 9px;
-            min-height: 52px;
-            color: white;
-            background: #323639;
-            z-index: 10;
+            min-height: 30px;
+            font-size: 13px;
+        }
+
+        /* Full screen (F11, or the Fullscreen API): the toolbar is over the
+           document, hidden until the reader scrolls up, or the pointer
+           comes near the top of the screen */
+        body.fullscreen #toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            box-shadow: 0 2px 6px #0006;
+            transition: transform 200ms ease, box-shadow 200ms ease;
+        }
+
+        body.fullscreen.toolbar-hidden #toolbar {
+            transform: translateY(-100%);
+            box-shadow: none;
+        }
+
+        /* the search bar under the toolbar (shown while searching) */
+        body.fullscreen #searchbar.visible {
+            margin-top: var(--toolbar-height, 0px);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            body.fullscreen #toolbar {
+                transition: none;
+            }
         }
 
         #filler {
@@ -75,6 +136,7 @@
         #homeLink {
             display: flex;
             align-items: center;
+            flex-shrink: 0;
             padding: 2px;
             border-radius: 3px;
         }
@@ -84,12 +146,16 @@
             background: #555b60;
         }
 
+        /* (the icon is 46 px: not larger) */
         #homeLink img {
             display: block;
+            height: 100%;
+            max-height: 46px;
+            width: auto;
         }
 
         #toolbar button {
-            padding: 6px 10px;
+            padding: 0 9px;
             border: 1px solid #777;
             border-radius: 3px;
             background: #44484c;
@@ -100,9 +166,58 @@
             background: #555b60;
         }
 
+        /* The rectangular buttons and the fields, as high as each other
+           (an emoji is taller than a letter: centred, not higher) */
+        #toolbar button:not(.round),
         #currentPage,
         #zoomLevel {
-            padding: 6px;
+            height: 28px;
+        }
+
+        #toolbar button:not(.round) {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        /* The groups of tools (page, zoom, search and points of view):
+           more space between them than in them */
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* the groups as far apart from each other: the space left is
+           shared between them */
+        #toolbar-row {
+            justify-content: space-between;
+            column-gap: 32px;
+        }
+
+        /* Round buttons with an icon (search, previous / next point of
+           view): the label in their tooltip */
+        #toolbar button.round {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border-radius: 50%;
+            font-size: 13px;
+            line-height: 1;
+            box-shadow: 0 2px 6px #0006;
+        }
+
+        #toolbar button.round:disabled {
+            box-shadow: none;
+        }
+
+        #currentPage,
+        #zoomLevel {
+            padding: 0 6px;
             text-align: center;
             border: 1px solid #aaa;
             border-radius: 2px;
@@ -122,27 +237,31 @@
             white-space: nowrap;
         }
 
-        /* Name of the document above the status (page position), the two
-           lines as high as the download button next to them */
-        /* shrinks when the line is full: a long name is cut (full name in
-           its tooltip) */
+        /* the group of the status: shrinks when the line is full */
+        #infoGroup {
+            flex: 0 1 auto;
+            min-width: 0;
+        }
+
+        /* The status (page position) next to the download button; shrinks
+           when the line is full */
         #docInfo {
             display: flex;
-            align-items: stretch;
+            align-items: center;
             gap: 8px;
             flex: 0 1 auto;
             min-width: 50px;
             max-width: 100%;
         }
 
-        /* wide screen: the toolbar on a single line, the name gets the
+        /* wide screen: the tools on a single line, the status gets the
            space left */
         @media (min-width: 1100px) {
-            #toolbar {
+            #toolbar-row {
                 flex-wrap: nowrap;
             }
 
-            #toolbar > *:not(#docInfo) {
+            #toolbar-row > *:not(#infoGroup) {
                 flex-shrink: 0;
                 white-space: nowrap;
             }
@@ -155,12 +274,11 @@
         #docText {
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
             align-items: flex-end;
             min-width: 0;
         }
 
-        #docName,
         #status {
             font-size: 12px;
             line-height: 1.2;
@@ -195,12 +313,14 @@
            RECHERCHE
            ===================================== */
 
+        /* the sizes of the toolbar: texts of 13 px, controls of 28 px */
         #searchbar {
             display: none;
             align-items: center;
             flex-wrap: wrap;
             gap: 9px;
-            padding: 10px 14px;
+            padding: 6px 14px;
+            font-size: 13px;
             background: #f1f3f4;
             border-bottom: 1px solid #bbb;
             box-shadow: 0 2px 4px #0002;
@@ -215,13 +335,19 @@
             flex: 1 1 220px;
             max-width: 460px;
             min-width: 120px;
-            padding: 8px;
+            height: 28px;
+            padding: 0 8px;
             border: 1px solid #aaa;
             border-radius: 3px;
         }
 
         #searchbar button {
-            padding: 7px 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 28px;
+            padding: 0 9px;
+            line-height: 1;
             border: 1px solid #bbb;
             border-radius: 3px;
             background: white;
@@ -362,9 +488,9 @@
 
         .outline-page {
             flex: 0 0 auto;
-            padding-top: 2px;
+            padding-top: 1px;
             color: #777;
-            font-size: 11px;
+            font-size: 14px;
         }
 
         .outline-children.collapsed {
@@ -550,7 +676,7 @@
                 width: 230px;
             }
 
-            #toolbar {
+            #toolbar-row {
                 justify-content: flex-start;
             }
 
@@ -573,116 +699,134 @@
 
     <div id="toolbar">
 
+        <!-- Home: as high as the two lines -->
         <a
             id="homeLink"
             href="{{ url_for('.index') }}"
             title="Retour à la liste des livres"
             aria-label="Retour à la liste des livres"
         >
-            <img src="{{ url_for('.favicon') }}" alt="" width="26" height="26">
+            <img src="{{ url_for('.favicon') }}" alt="" width="46" height="46">
         </a>
 
-        <button id="toggleSidebar" type="button">
-            ☰ Signets
-        </button>
+        <div id="toolbar-main">
 
-        <div id="filler"></div>
+        <!-- Line of the title: the name of the document, centred -->
+        <div id="toolbar-title">
+            <span id="docName" title="{{ documentName }}">{{ documentName }}</span>
+        </div>
 
-        <button
-            id="toggleSearch"
-            type="button"
-            title="Rechercher dans le PDF (Ctrl+F)"
-        >
-            🔎 Rechercher
-        </button>
+        <!-- Line of the tools -->
+        <div id="toolbar-row">
 
-        <button
-            id="goBack"
-            type="button"
-            disabled
-            title="Revenir au point de vue précédent"
-        >
-            ← Précédent
-        </button>
+        <div class="toolbar-group" id="homeGroup">
+            <button id="toggleSidebar" type="button">
+                ☰ Signets
+            </button>
+        </div>
 
-        <button
-            id="goForward"
-            type="button"
-            disabled
-            title="Avancer au point de vue suivant"
-        >
-            Suivant →
-        </button>
+        <!-- Groups of tools: the page, the zoom, the search and the
+             points of view -->
+        <div class="toolbar-group" id="pageGroup">
+            <label for="currentPage">Page :</label>
 
-        <div id="filler"></div>
+            <input
+                id="currentPage"
+                type="number"
+                min="1"
+                value="1"
+                disabled
+            >
 
-        <label for="currentPage">Page :</label>
+            <span id="pageCount">/ ...</span>
+        </div>
 
-        <input
-            id="currentPage"
-            type="number"
-            min="1"
-            value="1"
-            disabled
-        >
+        <div class="toolbar-group" id="zoomGroup">
+            <button id="zoomOut" type="button" disabled>
+                −
+            </button>
 
-        <span id="pageCount">/ ...</span>
+            <!-- Warning: 'value' field should match 'INITIAL_SCALE' JS variable -->
+            <input
+                id="zoomLevel"
+                type="number"
+                min="40"
+                max="250"
+                step="1"
+                value="150"
+                disabled
+                title="Zoom en pourcentage"
+                aria-label="Zoom en pourcentage"
+            >
 
-        <button id="zoomOut" type="button" disabled>
-            −
-        </button>
+            <span style="color:white">%</span>
 
-        <!-- Warning: 'value' field should match 'INITIAL_SCALE' JS variable -->
-        <input
-            id="zoomLevel"
-            type="number"
-            min="40"
-            max="250"
-            step="1"
-            value="150"
-            disabled
-            title="Zoom en pourcentage"
-            aria-label="Zoom en pourcentage"
-        >
+            <button id="zoomIn" type="button" disabled>
+                +
+            </button>
 
-        <span style="color:white">%</span>
+            <button
+                id="fitWidth"
+                type="button"
+                disabled
+                title="Adapter la largeur de la page"
+                aria-label="Adapter la largeur de la page"
+            >↔</button>
+        </div>
 
-        <button id="zoomIn" type="button" disabled>
-            +
-        </button>
+        <div class="toolbar-group" id="navGroup">
+            <button
+                id="toggleSearch"
+                class="round"
+                type="button"
+                title="Rechercher dans le PDF (Ctrl+F)"
+                aria-label="Rechercher dans le PDF"
+            >🔎</button>
 
-        <button
-            id="fitWidth"
-            type="button"
-            disabled
-            title="Adapter la largeur de la page"
-        >
-            ↔ Largeur page
-        </button>
+            <button
+                id="goBack"
+                class="round"
+                type="button"
+                disabled
+                title="Revenir au point de vue précédent"
+                aria-label="Revenir au point de vue précédent"
+            >◀</button>
 
-        <div id="filler"></div>
+            <button
+                id="goForward"
+                class="round"
+                type="button"
+                disabled
+                title="Avancer au point de vue suivant"
+                aria-label="Avancer au point de vue suivant"
+            >▶</button>
+        </div>
 
-        {% if reviewUrl %}
-        <a
-            id="reviewBadge"
-            href="{{ reviewUrl }}"
-            target="_blank"
-            rel="noopener"
-            title="Métadonnées du livre à relire : ouvrir sa fiche (nouvel onglet)"
-        >📝<span class="label">À relire</span></a>
-        {% endif %}
+        <div class="toolbar-group" id="infoGroup">
+            {% if reviewUrl %}
+            <a
+                id="reviewBadge"
+                href="{{ reviewUrl }}"
+                target="_blank"
+                rel="noopener"
+                title="Métadonnées du livre à relire : ouvrir sa fiche (nouvel onglet)"
+            >📝<span class="label">À relire</span></a>
+            {% endif %}
 
-        <div id="docInfo">
-            <div id="docText">
-                <span id="docName" title="{{ documentName }}">{{ documentName }}</span>
-                <span id="status">Initialisation...</span>
+            <div id="docInfo">
+                <div id="docText">
+                    <span id="status">Initialisation...</span>
+                </div>
+
+                <a href="{{ pdfurl }}">
+                    <button id="downloadPdf" type="button" disabled title="Télécharger le PDF">
+                        💾
+                    </button>
+                </a>
             </div>
+        </div>
 
-            <a href="{{ pdfurl }}">
-                <button id="downloadPdf" type="button" disabled title="Télécharger le PDF">
-                    💾
-                </button>
-            </a>
+        </div>
         </div>
     </div>
 
@@ -3883,5 +4027,131 @@
     })();
     </script>
 
+    <script>
+    /*
+     * Full screen (F11, or the Fullscreen API): the toolbar hides itself,
+     * and shows again when the reader scrolls up (also on a tablet), or
+     * when the pointer comes near the top of the screen. It stays while
+     * it is used (pointer over it, focus in it) or while searching.
+     */
+    (() => {
+        "use strict";
+
+        const body = document.body;
+        const toolbar = document.getElementById("toolbar");
+        const searchbar = document.getElementById("searchbar");
+        const container = document.getElementById("pdf-container");
+
+        // pointer closer to the top than this: the toolbar shows (px)
+        const REVEAL_ZONE = 40;
+        // scrolled by more than this: the toolbar shows or hides (px)
+        const SCROLL_STEP = 40;
+        // delay before hiding, after entering full screen or leaving the toolbar (ms)
+        const HIDE_DELAY = 1200;
+
+        let lastScrollTop = container.scrollTop;
+        let hideTimer = null;
+        // shown by the pointer: hidden again when it goes away
+        let shownByPointer = false;
+
+        function isFullscreen() {
+            // F11 is not seen by the Fullscreen API: the window then fills
+            // the screen
+            return Boolean(document.fullscreenElement)
+                || window.matchMedia("(display-mode: fullscreen)").matches
+                || (window.innerHeight >= screen.height - 1
+                    && window.innerWidth >= screen.width - 1);
+        }
+
+        function inUse() {
+            return toolbar.matches(":hover, :focus-within")
+                || searchbar.classList.contains("visible");
+        }
+
+        function show(byPointer = false) {
+            clearTimeout(hideTimer);
+            shownByPointer = byPointer;
+            body.classList.remove("toolbar-hidden");
+        }
+
+        function hide() {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+            if (body.classList.contains("fullscreen") && !inUse()) {
+                body.classList.add("toolbar-hidden");
+                shownByPointer = false;
+            }
+        }
+
+        function hideLater() {
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => {
+                hideTimer = null;
+                hide();
+            }, HIDE_DELAY);
+        }
+
+        function update() {
+            const fullscreen = isFullscreen();
+            if (fullscreen === body.classList.contains("fullscreen")) {
+                return;
+            }
+            body.classList.toggle("fullscreen", fullscreen);
+            if (fullscreen) {
+                hideLater();
+            } else {
+                show();
+            }
+        }
+
+        // the search bar goes under the toolbar, as high as it
+        new ResizeObserver(() => {
+            body.style.setProperty("--toolbar-height", toolbar.offsetHeight + "px");
+        }).observe(toolbar);
+
+        window.addEventListener("resize", update);
+        document.addEventListener("fullscreenchange", update);
+
+        container.addEventListener("scroll", () => {
+            const top = container.scrollTop;
+            const delta = top - lastScrollTop;
+            if (Math.abs(delta) < SCROLL_STEP) {
+                return;
+            }
+            lastScrollTop = top;
+            if (body.classList.contains("fullscreen")) {
+                if (delta < 0) {
+                    show();
+                } else {
+                    hide();
+                }
+            }
+        }, { passive: true });
+
+        // (the toolbar comes under a still pointer: no mouseenter nor
+        // mouseleave, the distance to the top of the screen is used)
+        document.addEventListener("mousemove", event => {
+            if (!body.classList.contains("fullscreen")) {
+                return;
+            }
+            if (body.classList.contains("toolbar-hidden")) {
+                if (event.clientY <= REVEAL_ZONE) {
+                    show(true);
+                }
+            } else if (shownByPointer) {
+                if (event.clientY > toolbar.offsetHeight + REVEAL_ZONE) {
+                    if (!hideTimer) {
+                        hideLater();
+                    }
+                } else {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+            }
+        });
+
+        update();
+    })();
+    </script>
 </body>
 </html>

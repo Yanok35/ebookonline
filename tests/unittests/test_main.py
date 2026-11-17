@@ -111,11 +111,16 @@ def test_deprecated_readpdf_stays_in_the_book_directory(app, client, book):
     assert client.get("/readpdf/%2Fetc%2Fpasswd", follow_redirects=True).status_code == 404
 
 
-def test_book_reader_shows_the_name_above_the_status(client, book):
+def test_book_reader_shows_the_name_above_the_tools(client, book):
+    """ two lines: the name of the document, then the tools with the status """
     html = client.get(f"/reader/{book.sha1}").text
-    assert re.search(r'<div id="docText">\s*'
+    # the home link left of both lines
+    assert re.search(r'<div id="toolbar">\s*(<!--.*?-->\s*)?<a\s+id="homeLink".*?</a>\s*'
+                     r'<div id="toolbar-main">', html, re.S)
+    assert re.search(r'<div id="toolbar-main">\s*(<!--.*?-->\s*)?<div id="toolbar-title">\s*'
                      r'<span id="docName" title="Élève O&#39;Reilly.pdf">Élève O&#39;Reilly.pdf</span>\s*'
-                     r'<span id="status">', html)
+                     r'</div>\s*(<!--.*?-->\s*)?<div id="toolbar-row">', html)
+    assert re.search(r'<div id="docText">\s*<span id="status">', html)
 
 
 def test_book_reader_review_badge(client, book):
