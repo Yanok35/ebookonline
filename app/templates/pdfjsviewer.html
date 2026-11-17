@@ -173,8 +173,11 @@
             gap: 8px;
         }
 
-        .toolbar-group + .toolbar-group {
-            margin-left: 16px;
+        /* the groups as far apart from each other: the space left is
+           shared between them */
+        #toolbar-row {
+            justify-content: space-between;
+            column-gap: 32px;
         }
 
         /* Round buttons with an icon (search, previous / next point of
@@ -218,6 +221,12 @@
             white-space: nowrap;
         }
 
+        /* the group of the status: shrinks when the line is full */
+        #infoGroup {
+            flex: 0 1 auto;
+            min-width: 0;
+        }
+
         /* The status (page position) next to the download button; shrinks
            when the line is full */
         #docInfo {
@@ -236,7 +245,7 @@
                 flex-wrap: nowrap;
             }
 
-            #toolbar-row > *:not(#docInfo) {
+            #toolbar-row > *:not(#infoGroup) {
                 flex-shrink: 0;
                 white-space: nowrap;
             }
@@ -674,22 +683,20 @@
         <!-- Line of the tools -->
         <div id="toolbar-row">
 
-        <a
-            id="homeLink"
-            href="{{ url_for('.index') }}"
-            title="Retour à la liste des livres"
-            aria-label="Retour à la liste des livres"
-        >
-            <img src="{{ url_for('.favicon') }}" alt="" width="26" height="26">
-        </a>
+        <div class="toolbar-group" id="homeGroup">
+            <a
+                id="homeLink"
+                href="{{ url_for('.index') }}"
+                title="Retour à la liste des livres"
+                aria-label="Retour à la liste des livres"
+            >
+                <img src="{{ url_for('.favicon') }}" alt="" width="26" height="26">
+            </a>
 
-        <button id="toggleSidebar" type="button">
-            ☰ Signets
-        </button>
-
-        <div id="filler"></div>
-
-
+            <button id="toggleSidebar" type="button">
+                ☰ Signets
+            </button>
+        </div>
 
         <!-- Groups of tools: the page, the zoom, the search and the
              points of view -->
@@ -769,28 +776,28 @@
             >▶</button>
         </div>
 
-        <div id="filler"></div>
+        <div class="toolbar-group" id="infoGroup">
+            {% if reviewUrl %}
+            <a
+                id="reviewBadge"
+                href="{{ reviewUrl }}"
+                target="_blank"
+                rel="noopener"
+                title="Métadonnées du livre à relire : ouvrir sa fiche (nouvel onglet)"
+            >📝<span class="label">À relire</span></a>
+            {% endif %}
 
-        {% if reviewUrl %}
-        <a
-            id="reviewBadge"
-            href="{{ reviewUrl }}"
-            target="_blank"
-            rel="noopener"
-            title="Métadonnées du livre à relire : ouvrir sa fiche (nouvel onglet)"
-        >📝<span class="label">À relire</span></a>
-        {% endif %}
+            <div id="docInfo">
+                <div id="docText">
+                    <span id="status">Initialisation...</span>
+                </div>
 
-        <div id="docInfo">
-            <div id="docText">
-                <span id="status">Initialisation...</span>
+                <a href="{{ pdfurl }}">
+                    <button id="downloadPdf" type="button" disabled title="Télécharger le PDF">
+                        💾
+                    </button>
+                </a>
             </div>
-
-            <a href="{{ pdfurl }}">
-                <button id="downloadPdf" type="button" disabled title="Télécharger le PDF">
-                    💾
-                </button>
-            </a>
         </div>
 
         </div>
