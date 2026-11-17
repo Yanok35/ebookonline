@@ -221,14 +221,26 @@
             box-shadow: none;
         }
 
+        /* the fields as the buttons of the toolbar (dark theme) */
         #currentPage,
         #zoomLevel {
             padding: 0 6px;
             text-align: center;
-            border: 1px solid #aaa;
-            border-radius: 2px;
-            background: white;
-            color: #222;
+            border: 1px solid #8a7b69;
+            border-radius: 3px;
+            background: #4a4037;
+            color: white;
+            caret-color: white;
+        }
+
+        #currentPage:focus,
+        #zoomLevel:focus {
+            outline: 1px solid #e9e6e2;
+        }
+
+        #currentPage:disabled,
+        #zoomLevel:disabled {
+            opacity: .45;
         }
 
         #currentPage {
@@ -774,6 +786,19 @@
             #zoomLevel,
             #searchInput {
                 border: 1px solid #00000080;
+            }
+
+            /* (white fields, as the buttons of this theme) */
+            #currentPage,
+            #zoomLevel {
+                background: #fff;
+                color: #222;
+                caret-color: auto;
+            }
+
+            #currentPage:focus,
+            #zoomLevel:focus {
+                outline: revert;
             }
 
             #reviewBadge {
