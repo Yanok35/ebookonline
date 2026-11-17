@@ -3219,6 +3219,44 @@
         let searchInProgress = false;
         let searchNavigationGeneration = 0;
 
+        // pages analysed by the search in progress
+        let searchScannedPages = 0;
+
+        /*
+         * Statut de la recherche, d'après son état : les résultats sont
+         * montrés pendant l'analyse ("2/12… — page 5 — analyse
+         * 150/280"), leur nombre est final à la fin ("2/37 — page 5").
+         */
+        function updateSearchStatus() {
+            const count = searchResults.length;
+            const analysis = searchInProgress
+                ? "analyse " + searchScannedPages + "/" + pages.length
+                : "";
+
+            if (!count) {
+                searchStatus.textContent = searchInProgress
+                    ? "Recherche… — " + analysis
+                    : "Aucun résultat";
+                return;
+            }
+
+            const total = count + (searchInProgress ? "…" : "");
+            const parts = [];
+
+            if (selectedResultIndex >= 0) {
+                parts.push((selectedResultIndex + 1) + "/" + total);
+                parts.push("page " + searchResults[selectedResultIndex].pageNumber);
+            } else {
+                parts.push(total + (count > 1 ? " occurrences" : " occurrence"));
+            }
+
+            if (analysis) {
+                parts.push(analysis);
+            }
+
+            searchStatus.textContent = parts.join(" — ");
+        }
+
         async function performSearch() {
             const generation = ++searchGeneration;
 
@@ -3239,7 +3277,8 @@
             }
 
             searchInProgress = true;
-            searchStatus.textContent = "Recherche...";
+            searchScannedPages = 0;
+            updateSearchStatus();
 
             const options = {
                 matchCase: matchCaseCheckbox.checked,
@@ -3266,6 +3305,8 @@
                         return;
                     }
 
+                    const found = searchResults.length;
+
                     for (
                         let itemIndex = 0;
                         itemIndex < items.length;
@@ -3289,13 +3330,26 @@
                         }
                     }
 
+                    searchScannedPages = i + 1;
+
+                    if (searchResults.length > found) {
+                        // a page already shown: its results highlighted
+                        // (the other ones are when they are rendered)
+                        drawHighlights(info);
+
+                        // the first result: shown at once, the analysis
+                        // goes on (unless the user already moved)
+                        if (selectedResultIndex < 0) {
+                            selectSearchResult(0);
+                        }
+                    }
+
                     if (
+                        searchResults.length > found ||
                         i % 10 === 0 ||
                         i === pages.length - 1
                     ) {
-                        searchStatus.textContent =
-                            "Analyse : " +
-                            (i + 1) + "/" + pages.length;
+                        updateSearchStatus();
 
                         await new Promise(resolve =>
                             setTimeout(resolve, 0)
@@ -3312,22 +3366,7 @@
 
                 searchInProgress = false;
 
-                if (!searchResults.length) {
-                    searchStatus.textContent =
-                        "Aucun résultat";
-
-                    return;
-                }
-
-                searchStatus.textContent =
-                    searchResults.length +
-                    (
-                        searchResults.length > 1
-                            ? " occurrences"
-                            : " occurrence"
-                    );
-
-                await selectSearchResult(0);
+                updateSearchStatus();
 
             } catch (error) {
                 console.error(
@@ -3351,35 +3390,43 @@
             );
         }
 
+        /*
+         * Résultat suivant / précédent, parmi ceux déjà trouvés : pendant
+         * l'analyse, on ne fait pas le tour (d'autres résultats peuvent
+         * encore venir après le dernier).
+         */
         async function navigateSearch(direction) {
-            if (searchInProgress) return;
-
             if (!searchResults.length) {
-                if (searchInput.value.trim()) {
+                if (!searchInProgress && searchInput.value.trim()) {
                     await performSearch();
                 }
 
                 return;
             }
 
+            const last = searchResults.length - 1;
             let nextIndex;
 
             if (selectedResultIndex < 0) {
-                nextIndex = direction > 0
+                nextIndex = direction > 0 || searchInProgress
                     ? 0
-                    : searchResults.length - 1;
+                    : last;
 
             } else {
                 nextIndex =
                     selectedResultIndex + direction;
 
-                if (nextIndex >= searchResults.length) {
-                    nextIndex = 0;
+                if (nextIndex > last) {
+                    nextIndex = searchInProgress ? last : 0;
                 }
 
                 if (nextIndex < 0) {
-                    nextIndex = searchResults.length - 1;
+                    nextIndex = searchInProgress ? 0 : last;
                 }
+            }
+
+            if (nextIndex === selectedResultIndex) {
+                return;
             }
 
             await selectSearchResult(nextIndex);
@@ -3400,10 +3447,7 @@
 
             const result = searchResults[index];
 
-            searchStatus.textContent =
-                (index + 1) + "/" +
-                searchResults.length +
-                " — page " + result.pageNumber;
+            updateSearchStatus();
 
             // le point de vue d'avant le premier saut de la recherche,
             // lu une seule fois (les sauts suivants attendent la lecture)
