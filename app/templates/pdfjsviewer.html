@@ -55,15 +55,24 @@
            BARRE D'OUTILS
            ===================================== */
 
-        /* Two lines: the title of the document, centred, above the tools */
+        /* The home link, as high as the two lines on its right: the title
+           of the document, centred, above the tools */
         #toolbar {
             display: flex;
-            flex-direction: column;
-            gap: 5px;
-            padding: 5px 9px 8px;
+            align-items: stretch;
+            gap: 10px;
+            padding: 5px 9px 7px;
             color: white;
             background: #323639;
             z-index: 10;
+        }
+
+        #toolbar-main {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 0;
         }
 
         #toolbar-title {
@@ -81,13 +90,15 @@
             white-space: nowrap;
         }
 
+        /* the texts of the tools as large as the title */
         #toolbar-row {
             display: flex;
             align-items: center;
             justify-content: center;
             flex-wrap: wrap;
             gap: 8px;
-            min-height: 34px;
+            min-height: 30px;
+            font-size: 13px;
         }
 
         /* Full screen (F11, or the Fullscreen API): the toolbar is over the
@@ -125,6 +136,7 @@
         #homeLink {
             display: flex;
             align-items: center;
+            flex-shrink: 0;
             padding: 2px;
             border-radius: 3px;
         }
@@ -134,12 +146,16 @@
             background: #555b60;
         }
 
+        /* (the icon is 46 px: not larger) */
         #homeLink img {
             display: block;
+            height: 100%;
+            max-height: 46px;
+            width: auto;
         }
 
         #toolbar button {
-            padding: 6px 10px;
+            padding: 0 9px;
             border: 1px solid #777;
             border-radius: 3px;
             background: #44484c;
@@ -155,7 +171,7 @@
         #toolbar button:not(.round),
         #currentPage,
         #zoomLevel {
-            height: 32px;
+            height: 28px;
         }
 
         #toolbar button:not(.round) {
@@ -186,11 +202,11 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 36px;
-            height: 36px;
+            width: 30px;
+            height: 30px;
             padding: 0;
             border-radius: 50%;
-            font-size: 15px;
+            font-size: 13px;
             line-height: 1;
             box-shadow: 0 2px 6px #0006;
         }
@@ -201,7 +217,7 @@
 
         #currentPage,
         #zoomLevel {
-            padding: 6px;
+            padding: 0 6px;
             text-align: center;
             border: 1px solid #aaa;
             border-radius: 2px;
@@ -675,6 +691,18 @@
 
     <div id="toolbar">
 
+        <!-- Home: as high as the two lines -->
+        <a
+            id="homeLink"
+            href="{{ url_for('.index') }}"
+            title="Retour à la liste des livres"
+            aria-label="Retour à la liste des livres"
+        >
+            <img src="{{ url_for('.favicon') }}" alt="" width="46" height="46">
+        </a>
+
+        <div id="toolbar-main">
+
         <!-- Line of the title: the name of the document, centred -->
         <div id="toolbar-title">
             <span id="docName" title="{{ documentName }}">{{ documentName }}</span>
@@ -684,15 +712,6 @@
         <div id="toolbar-row">
 
         <div class="toolbar-group" id="homeGroup">
-            <a
-                id="homeLink"
-                href="{{ url_for('.index') }}"
-                title="Retour à la liste des livres"
-                aria-label="Retour à la liste des livres"
-            >
-                <img src="{{ url_for('.favicon') }}" alt="" width="26" height="26">
-            </a>
-
             <button id="toggleSidebar" type="button">
                 ☰ Signets
             </button>
@@ -799,6 +818,7 @@
             </div>
         </div>
 
+        </div>
         </div>
     </div>
 
