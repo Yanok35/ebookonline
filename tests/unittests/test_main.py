@@ -147,3 +147,12 @@ def test_book_reader_theme(app, client, book):
     assert '<html lang="fr" class="light">' in html and "html.light {" in html
     app.config["READER_THEME"] = "pink"
     assert '<html lang="fr">' in client.get(f"/reader/{book.sha1}").text
+
+
+def test_book_reader_notes_mockup(client, book):
+    """ MOCKUP: the margin of the notes, and its button next to the download one """
+    html = client.get(f"/reader/{book.sha1}").text
+    assert re.search(r'id="downloadPdf".*?</a>\s*<button\s+id="toggleNotes"', html, re.S)
+    assert '<aside id="notes"' in html
+    # the notes of this document
+    assert f'const DOCUMENT_ID = "{book.sha1}";' in html
