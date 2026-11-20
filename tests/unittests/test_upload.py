@@ -81,7 +81,7 @@ def test_upload(app, client, tmp_path):
     response = upload(client, pdf_bytes(tmp_path, "Dune"))
     assert response.status_code == 200
     book = app.bookdir.find_book_by_filename("Incoming/Dune.pdf")
-    assert response.json == {"filename": "Incoming/Dune.pdf", "sha1": book.sha1}
+    assert response.json == {"filename": "Incoming/Dune.pdf", "sha1": book.sha1, "books": 1}
 
 
 def test_upload_of_a_known_book(app, client, tmp_path):
@@ -90,7 +90,7 @@ def test_upload_of_a_known_book(app, client, tmp_path):
     make_pdf(Path(app.config["BOOK_DIR"]) / "Dune.pdf", title="Dune")
     app.bookdir.rescan()
     response = upload(client, data)
-    assert response.json == {"filename": "Incoming/Dune.pdf", "sha1": None}
+    assert response.json == {"filename": "Incoming/Dune.pdf", "sha1": None, "books": 1}
 
 
 def test_upload_errors(app, client, tmp_path):
@@ -119,3 +119,5 @@ def test_upload_larger_than_max_content_length(app, client, tmp_path):
 def test_drop_zone_in_the_library(client):
     html = client.get("/browser_lazy").text
     assert 'id="drop-zone"' in html and "« Incoming »" in html
+    # the number of books, put forward after an upload
+    assert '<a id="book-count" href="/bookadmin/">0 livres</a>' in html
