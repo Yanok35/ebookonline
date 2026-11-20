@@ -203,3 +203,13 @@ def test_cover_form_is_disabled(book_dir_read_only_app):
     html = logged_in(app).get(f"/bookadmin/{book.sha1}").text
     assert re.search(r'<input accept="image/jpeg,image/png" disabled id="cover-image"', html)
     assert re.search(r'<input disabled id="cover-submit"', html)
+
+
+def test_upload_is_refused(book_dir_read_only_app):
+    app = book_dir_read_only_app
+    client = logged_in(app)
+    html = client.get("/browser_lazy").text
+    # no drop zone
+    assert 'id="drop-zone"' not in html
+    response = client.post("/upload")
+    assert response.status_code == 403 and "lecture seule" in response.json["error"]
