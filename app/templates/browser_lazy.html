@@ -6,6 +6,88 @@
         <title>{{ titre }}</title>
         <link href="static/style.css" rel="stylesheet" type="text/css" media="screen" />
         <style>
+        /* Drag and drop of books: a veil over the page, a drop zone with a
+           circled plus, which turns while the book is sent */
+        /* (shown and hidden as the captions of the books: 200 ms) */
+        #drop-overlay {
+            display: flex;
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.32);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 200ms cubic-bezier(.25,.46,.45,.94),
+                        visibility 0s linear 200ms;
+        }
+        #drop-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+            transition-delay: 0s;
+        }
+        #drop-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            width: min(70vw, 900px);
+            height: min(60vh, 560px);
+            border: 3px dashed #8a6d3b;
+            border-radius: 28px;
+            background: #f4f2ef99;
+            box-shadow: 1px 1px 12px 2px #808080;
+            transition: background 150ms ease, border-color 150ms ease;
+        }
+        #drop-zone.hover {
+            border-color: darkred;
+            background: #f9e3b0b3;
+        }
+        #drop-zone svg {
+            width: 120px;
+            height: 120px;
+            color: #8a6d3b;
+        }
+        #drop-zone.hover svg {
+            color: darkred;
+        }
+        #drop-overlay.uploading svg {
+            color: darkred;
+            animation: drop-spin 1.2s linear infinite;
+        }
+        @keyframes drop-spin {
+            to { transform: rotate(360deg); }
+        }
+        #drop-message {
+            font-variant: small-caps;
+            font-size: 1.2em;
+            color: #444;
+            text-align: center;
+        }
+        #drop-overlay.error #drop-message {
+            color: darkred;
+        }
+        /* the number of books, when it changed (an upload) */
+        #book-count {
+            border-radius: 0.3em;
+            transition: background-color 200ms cubic-bezier(.25,.46,.45,.94),
+                        color 200ms cubic-bezier(.25,.46,.45,.94);
+        }
+        #book-count.changed {
+            background-color: #f9e3b0;
+            color: darkred;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #drop-overlay.uploading svg {
+                animation-duration: 4s;
+            }
+            #drop-overlay,
+            #book-count {
+                transition: none;
+            }
+        }
         </style>
     <script>
         var nextSubset=0;
@@ -170,7 +252,7 @@
             <div class="linksbar">
                 <div><a href="{{ url_for('.logout') }}">Logout</a> |
                     <a href="{{ url_for('timeline.timeline_page') }}">Mes lectures</a> |
-                    La librairie contient <a href="{{ url_for('admin.book_list') }}">{{ nbBooklist }} livres</a>
+                    La librairie contient <a id="book-count" href="{{ url_for('admin.book_list') }}">{{ nbBooklist }} livres</a>
                     <input type="checkbox" id="display-sorted">ajouts récents</input>
                     |
                 </div>
@@ -188,6 +270,190 @@
         <div class="book-view" id="main-book-view">
             <!-- This is part is fulfilled by AJAX -->
         </div>
+
+        {% if not read_only %}
+        <!-- Drag and drop of books: shown while files are dragged over the page -->
+        <div id="drop-overlay" aria-hidden="true">
+            <div id="drop-zone">
+                <svg viewBox="0 0 100 100" aria-hidden="true">
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" stroke-width="6"/>
+                    <path d="M50 28 V72 M28 50 H72" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
+                </svg>
+                <div id="drop-message">Déposer ici un livre (PDF) pour l'ajouter à la bibliothèque, dans « {{ incoming_dir }} »</div>
+            </div>
+        </div>
+
+        <script>
+        /*
+         * Drag and drop of books: files dragged over the page show the drop
+         * zone; dropped in it, the PDF files are sent one after the other
+         * (POST /upload), the circled plus turns meanwhile. Leaving the page,
+         * or dropping out of the zone, cancels.
+         */
+        (function () {
+            var UPLOAD_URL = {{ url_for('.upload') | tojson }};
+            var TOKEN = {{ upload_token | tojson }};
+            var MAX_SIZE = {{ upload_max_size | tojson }};
+
+            var overlay = document.getElementById("drop-overlay");
+            var zone = document.getElementById("drop-zone");
+            var message = document.getElementById("drop-message");
+            var idleMessage = message.textContent;
+            // dragenter / dragleave of the elements of the page: shown
+            // while more entered than left
+            var depth = 0;
+            var uploading = false;
+
+            function dragsFiles(event) {
+                var types = event.dataTransfer && event.dataTransfer.types;
+                return types && Array.prototype.indexOf.call(types, "Files") >= 0;
+            }
+
+            function show() {
+                overlay.classList.add("visible");
+            }
+
+            function hide() {
+                depth = 0;
+                overlay.classList.remove("visible", "uploading", "error");
+                zone.classList.remove("hover");
+                message.textContent = idleMessage;
+            }
+
+            function inZone(event) {
+                return zone.contains(event.target);
+            }
+
+            window.addEventListener("dragenter", function (event) {
+                if (uploading || !dragsFiles(event)) return;
+                depth++;
+                show();
+            });
+
+            window.addEventListener("dragleave", function (event) {
+                if (uploading || !dragsFiles(event)) return;
+                depth--;
+                // (out of the window: no element entered after it)
+                if (depth <= 0) {
+                    hide();
+                }
+            });
+
+            window.addEventListener("dragover", function (event) {
+                if (!dragsFiles(event)) return;
+                // the browser would open the file
+                event.preventDefault();
+                var inside = !uploading && inZone(event);
+                event.dataTransfer.dropEffect = inside ? "copy" : "none";
+                zone.classList.toggle("hover", inside);
+            });
+
+            window.addEventListener("drop", function (event) {
+                if (!dragsFiles(event)) return;
+                event.preventDefault();
+                if (uploading) return;
+                if (!inZone(event)) {
+                    hide();
+                    return;
+                }
+                var files = Array.prototype.filter.call(event.dataTransfer.files, function (f) {
+                    return f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+                });
+                if (!files.length) {
+                    fail("Seuls les fichiers PDF sont acceptés.");
+                    return;
+                }
+                uploadAll(files);
+            });
+
+            // an error: told in the zone, which then goes away
+            function fail(text) {
+                uploading = false;
+                overlay.classList.remove("uploading");
+                overlay.classList.add("error");
+                zone.classList.remove("hover");
+                message.textContent = text;
+                setTimeout(hide, 3500);
+            }
+
+            function uploadAll(files) {
+                uploading = true;
+                overlay.classList.add("uploading");
+                zone.classList.remove("hover");
+                var added = [];
+                (function next(i) {
+                    if (i >= files.length) {
+                        uploading = false;
+                        hide();
+                        done(added);
+                        return;
+                    }
+                    var file = files[i];
+                    if (file.size > MAX_SIZE) {
+                        fail(file.name + " : fichier trop volumineux ("
+                             + Math.round(MAX_SIZE / 1048576) + " Mo au plus).");
+                        return;
+                    }
+                    uploadOne(file, files.length > 1 ? (i + 1) + "/" + files.length + " — " : "",
+                              function (error, result) {
+                        if (error) {
+                            fail(file.name + " : " + error);
+                            return;
+                        }
+                        added.push(result);
+                        next(i + 1);
+                    });
+                })(0);
+            }
+
+            function uploadOne(file, prefix, callback) {
+                var data = new FormData();
+                data.append("book", file, file.name);
+                var request = new XMLHttpRequest();
+                request.open("POST", UPLOAD_URL);
+                request.setRequestHeader("X-CSRFToken", TOKEN);
+                request.upload.onprogress = function (event) {
+                    if (event.lengthComputable) {
+                        message.textContent = prefix + "Envoi de " + file.name + " : "
+                            + Math.round(100 * event.loaded / event.total) + " %";
+                    }
+                };
+                request.onload = function () {
+                    var answer = {};
+                    try {
+                        answer = JSON.parse(request.responseText);
+                    } catch (e) {}
+                    if (request.status === 200) {
+                        callback(null, answer);
+                    } else {
+                        callback(answer.error || ("erreur " + request.status));
+                    }
+                };
+                request.onerror = function () {
+                    callback("envoi interrompu");
+                };
+                message.textContent = prefix + "Envoi de " + file.name + "…";
+                request.send(data);
+            }
+
+            // the books added: in the list (unless a search is shown), and
+            // the new number of books put forward for a second
+            function done(added) {
+                if (!added.length) return;
+                if (!document.getElementById("input-search-pattern").value
+                        && !document.getElementById("search-pinned-book").checked) {
+                    resetViewToFirstSubset();
+                }
+                var count = document.getElementById("book-count");
+                count.textContent = added[added.length - 1].books + " livres";
+                count.classList.add("changed");
+                setTimeout(function () {
+                    count.classList.remove("changed");
+                }, 1000);
+            }
+        })();
+        </script>
+        {% endif %}
     </body>
 
 </html>

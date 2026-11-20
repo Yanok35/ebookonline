@@ -23,8 +23,14 @@ import sys
 import json
 from functools import wraps
 from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
+from flask_wtf.csrf import generate_csrf, validate_csrf
+from werkzeug.exceptions import RequestEntityTooLarge
+from wtforms import ValidationError
+
+from app import is_read_only
 from app.auth import login_required
 from srcs.book import BookDir
+from srcs.bookfileops import INCOMING_DIR, BookFileError
 from srcs.cache import Cache
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -111,7 +117,50 @@ def browser_lazy():
                            titre = "eBook browser",
                            nbBooklist = len(booklist),
                            nbSubset = max(1, len(booklist) // SUBSET_NBBOOKS),
+                           # drag and drop of books (see upload())
+                           upload_token = generate_csrf(),
+                           upload_max_size = current_app.config['UPLOAD_MAX_SIZE'],
+                           incoming_dir = INCOMING_DIR,
                            )
+
+@main.route('/upload', methods=['POST'])
+@login_required
+def upload():
+    """
+    JSON: a book dropped on the library page (field 'book', CSRF token in
+    the X-CSRFToken header), added to BOOK_DIR/Incoming. Answers
+    {filename, sha1, books} (sha1 null when the file is a copy of a known
+    book; books: the number of books of the library), or {error} with 400 (invalid), 403 (read-only) or 413 (too large).
+    """
+    user = session.get("username")
+    if is_read_only():
+        current_app.logger.warning("%s: upload refused: read-only mode", user)
+        return jsonify(error="Le site est en lecture seule."), 403
+    try:
+        validate_csrf(request.headers.get("X-CSRFToken"))
+    except ValidationError:
+        return jsonify(error="Jeton de sécurité invalide : recharger la page."), 400
+
+    # (larger than the other requests: a whole book)
+    request.max_content_length = current_app.config['UPLOAD_MAX_SIZE']
+    try:
+        book = request.files.get('book')
+    except RequestEntityTooLarge:
+        return jsonify(error="Fichier trop volumineux : "
+                             f"{current_app.config['UPLOAD_MAX_SIZE'] // (1024 * 1024)} Mo au plus."), 413
+    if book is None or not book.filename:
+        return jsonify(error="Aucun fichier reçu."), 400
+
+    try:
+        relpath = current_app.bookdir.add_book(book.stream, book.filename)
+    except BookFileError as e:
+        current_app.logger.warning("%s: upload of %r refused: %s", user, book.filename, e)
+        return jsonify(error=f"Fichier refusé : {e}"), 400
+    current_app.logger.warning("%s: upload of %r -> '%s'", user, book.filename, relpath)
+
+    added = current_app.bookdir.find_book_by_filename(relpath)
+    return jsonify(filename=relpath, sha1=added.sha1 if added else None,
+                   books=len(current_app.bookdir.get_booklist()))
 
 @main.route('/browser_subset', methods=['GET', 'POST'])
 @login_required

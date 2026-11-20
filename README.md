@@ -92,6 +92,13 @@ kept in `CACHE_DIR`, next to the thumbnails. See `METADATA_ANALYSIS`,
 `METADATA_WORKERS` and `METADATA_NICE` in `config.py`, and
 `docs/technote-metadata-extract-&-analysis.md`.
 
+### Upload of books
+
+A PDF file dragged from the desktop and dropped on the library page is
+uploaded to `BOOK_DIR/Incoming` (`name (2).pdf`, ... if the name is taken),
+and is at once in the library. `UPLOAD_MAX_SIZE` (500 MB by default) is its
+largest size. Not available in read-only mode.
+
 ### Theme of the reader
 
 `READER_THEME`: `dark` (warm dark browns, the default) or `light` (the beige
