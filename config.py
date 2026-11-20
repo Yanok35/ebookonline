@@ -83,6 +83,9 @@ class Config:
     # Largest request body, in bytes: the image of a cover page (20 MiB at
     # most, see srcs/pdfcover.py), with the other fields of its form
     MAX_CONTENT_LENGTH = 21 * 1024 * 1024
+    # Largest book uploaded from the library page (drag and drop), in
+    # bytes: it goes to BOOK_DIR/Incoming
+    UPLOAD_MAX_SIZE = 500 * 1024 * 1024
 
     # Logs on stderr (journald under systemd), from this level: DEBUG,
     # INFO, WARNING, ERROR
