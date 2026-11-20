@@ -129,8 +129,8 @@ def upload():
     """
     JSON: a book dropped on the library page (field 'book', CSRF token in
     the X-CSRFToken header), added to BOOK_DIR/Incoming. Answers
-    {filename, sha1} (sha1 null when the file is a copy of a known book),
-    or {error} with 400 (invalid), 403 (read-only) or 413 (too large).
+    {filename, sha1, books} (sha1 null when the file is a copy of a known
+    book; books: the number of books of the library), or {error} with 400 (invalid), 403 (read-only) or 413 (too large).
     """
     user = session.get("username")
     if is_read_only():
@@ -159,7 +159,8 @@ def upload():
     current_app.logger.warning("%s: upload of %r -> '%s'", user, book.filename, relpath)
 
     added = current_app.bookdir.find_book_by_filename(relpath)
-    return jsonify(filename=relpath, sha1=added.sha1 if added else None)
+    return jsonify(filename=relpath, sha1=added.sha1 if added else None,
+                   books=len(current_app.bookdir.get_booklist()))
 
 @main.route('/browser_subset', methods=['GET', 'POST'])
 @login_required

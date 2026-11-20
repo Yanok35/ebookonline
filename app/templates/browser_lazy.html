@@ -8,17 +8,24 @@
         <style>
         /* Drag and drop of books: a veil over the page, a drop zone with a
            circled plus, which turns while the book is sent */
+        /* (shown and hidden as the captions of the books: 200 ms) */
         #drop-overlay {
-            display: none;
+            display: flex;
             position: fixed;
             inset: 0;
             z-index: 100;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 0, 0, 0.25);
+            background: rgba(0, 0, 0, 0.32);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 200ms cubic-bezier(.25,.46,.45,.94),
+                        visibility 0s linear 200ms;
         }
         #drop-overlay.visible {
-            display: flex;
+            opacity: 1;
+            visibility: visible;
+            transition-delay: 0s;
         }
         #drop-zone {
             display: flex;
@@ -30,13 +37,13 @@
             height: min(60vh, 560px);
             border: 3px dashed #8a6d3b;
             border-radius: 28px;
-            background: #f4f2eff5;
+            background: #f4f2ef99;
             box-shadow: 1px 1px 12px 2px #808080;
             transition: background 150ms ease, border-color 150ms ease;
         }
         #drop-zone.hover {
             border-color: darkred;
-            background: #f9e3b0f0;
+            background: #f9e3b0b3;
         }
         #drop-zone svg {
             width: 120px;
@@ -62,9 +69,23 @@
         #drop-overlay.error #drop-message {
             color: darkred;
         }
+        /* the number of books, when it changed (an upload) */
+        #book-count {
+            border-radius: 0.3em;
+            transition: background-color 200ms cubic-bezier(.25,.46,.45,.94),
+                        color 200ms cubic-bezier(.25,.46,.45,.94);
+        }
+        #book-count.changed {
+            background-color: #f9e3b0;
+            color: darkred;
+        }
         @media (prefers-reduced-motion: reduce) {
             #drop-overlay.uploading svg {
                 animation-duration: 4s;
+            }
+            #drop-overlay,
+            #book-count {
+                transition: none;
             }
         }
         </style>
@@ -231,7 +252,7 @@
             <div class="linksbar">
                 <div><a href="{{ url_for('.logout') }}">Logout</a> |
                     <a href="{{ url_for('timeline.timeline_page') }}">Mes lectures</a> |
-                    La librairie contient <a href="{{ url_for('admin.book_list') }}">{{ nbBooklist }} livres</a>
+                    La librairie contient <a id="book-count" href="{{ url_for('admin.book_list') }}">{{ nbBooklist }} livres</a>
                     <input type="checkbox" id="display-sorted">ajouts récents</input>
                     |
                 </div>
@@ -379,7 +400,7 @@
                             fail(file.name + " : " + error);
                             return;
                         }
-                        added.push(result.filename);
+                        added.push(result);
                         next(i + 1);
                     });
                 })(0);
@@ -415,16 +436,20 @@
                 request.send(data);
             }
 
-            // the books added: told, and in the list (unless a search is shown)
+            // the books added: in the list (unless a search is shown), and
+            // the new number of books put forward for a second
             function done(added) {
+                if (!added.length) return;
                 if (!document.getElementById("input-search-pattern").value
                         && !document.getElementById("search-pinned-book").checked) {
-                    // (empties the info text)
                     resetViewToFirstSubset();
                 }
-                document.getElementById("info-text").textContent = " | "
-                    + (added.length > 1 ? added.length + " livres ajoutés : " : "Livre ajouté : ")
-                    + added.join(", ");
+                var count = document.getElementById("book-count");
+                count.textContent = added[added.length - 1].books + " livres";
+                count.classList.add("changed");
+                setTimeout(function () {
+                    count.classList.remove("changed");
+                }, 1000);
             }
         })();
         </script>
