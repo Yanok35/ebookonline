@@ -40,6 +40,9 @@ TRASH_DIR = "Trash"
 # Category of the files at the root of the book directory
 ROOT_CATEGORY = "Generals"
 
+# Directory of the books uploaded from the library page
+INCOMING_DIR = "Incoming"
+
 
 class BookFileError(Exception):
     """ A file operation in the book directory was refused, or failed """

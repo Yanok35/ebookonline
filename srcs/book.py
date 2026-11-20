@@ -32,6 +32,9 @@ from srcs.cache import Cache
 from srcs.cache import sha1_file
 from srcs.search import fuzzy_search
 
+# The header of a PDF file
+PDF_MAGIC = b"%PDF-"
+
 log = logging.getLogger(__name__)
 
 import os
@@ -569,6 +572,48 @@ class BookDir:
 
     # Suffix of the name of a copy of a PDF file with a cover page
     COVERED_SUFFIX = " (covered)"
+
+    def add_book(self, stream, filename):
+        """
+        Add the PDF file read from stream (an upload) to the book directory,
+        as INCOMING_DIR/<name of filename> (or 'name (2).pdf', ... if it
+        exists), then rescan: the book is in the list at once. Returns its
+        path, or raises BookFileError (not a PDF file, invalid name).
+        """
+        # the name only (a path is the one of the client)
+        name = posixpath.basename(filename.replace("\\", "/")).strip().lstrip(".").strip()
+        relpath = bookfileops.check_relpath(posixpath.join(bookfileops.INCOMING_DIR, name))
+        dst = bookfileops.check_inside(self.dirpath, relpath)
+        # (the readers accept a header in the first 1024 bytes); checked
+        # before anything is created
+        head = stream.read(1024)
+        if PDF_MAGIC not in head:
+            raise BookFileError(f"not a PDF file: {name!r}")
+        try:
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+        except OSError as e:
+            raise BookFileError(f"can not create {bookfileops.INCOMING_DIR}: {e.strerror}") from None
+
+        # Written next to its destination (same file system), under a name
+        # ignored by the scan and the watcher (hidden, not a PDF); not under
+        # the scan lock: the copy of a large file takes time
+        fd, tmpname = tempfile.mkstemp(prefix=".ebookonline-upload-", suffix=".tmp",
+                                       dir=os.path.dirname(dst))
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(head)
+                shutil.copyfileobj(stream, f, 1024 * 1024)
+            # readable as a file copied there (mkstemp: by its owner only)
+            os.chmod(tmpname, 0o644)
+            with self._scan_lock:
+                dst = bookfileops.move_to_free_name(tmpname, dst)
+                relpath = os.path.relpath(dst, self.dirpath).replace(os.sep, "/")
+                log.info("Book added: '%s'", relpath)
+                self.__rescan()
+        finally:
+            if os.path.exists(tmpname):
+                os.unlink(tmpname)
+        return relpath
 
     def insert_cover(self, sha1, image):
         """
