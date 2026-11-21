@@ -279,7 +279,7 @@
                     <circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" stroke-width="6"/>
                     <path d="M50 28 V72 M28 50 H72" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
                 </svg>
-                <div id="drop-message">Déposer ici un livre (PDF) pour l'ajouter à la bibliothèque, dans « {{ incoming_dir }} »</div>
+                <div id="drop-message">Déposer ici un livre (PDF ou EPUB) pour l'ajouter à la bibliothèque, dans « {{ incoming_dir }} »</div>
             </div>
         </div>
 
@@ -292,6 +292,8 @@
          */
         (function () {
             var UPLOAD_URL = {{ url_for('.upload') | tojson }};
+            var CHECK_URL = {{ url_for('.upload_check') | tojson }};
+            var INCOMING = {{ incoming_dir | tojson }};
             var TOKEN = {{ upload_token | tojson }};
             var MAX_SIZE = {{ upload_max_size | tojson }};
 
@@ -357,13 +359,14 @@
                     return;
                 }
                 var files = Array.prototype.filter.call(event.dataTransfer.files, function (f) {
-                    return f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+                    return /\.(pdf|epub)$/i.test(f.name)
+                        || f.type === "application/pdf" || f.type === "application/epub+zip";
                 });
                 if (!files.length) {
-                    fail("Seuls les fichiers PDF sont acceptés.");
+                    fail("Seuls les fichiers PDF et EPUB sont acceptés.");
                     return;
                 }
-                uploadAll(files);
+                checkThenUpload(files);
             });
 
             // an error: told in the zone, which then goes away
@@ -376,16 +379,49 @@
                 setTimeout(hide, 3500);
             }
 
-            function uploadAll(files) {
+            // the names already in Incoming: not sent (asked to the server
+            // before any transfer)
+            function checkThenUpload(files) {
                 uploading = true;
                 overlay.classList.add("uploading");
                 zone.classList.remove("hover");
+                message.textContent = "Vérification…";
+                fetch(CHECK_URL, {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json", "X-CSRFToken": TOKEN },
+                    body: JSON.stringify({ names: files.map(function (f) { return f.name; }) })
+                })
+                    .then(function (response) {
+                        return response.json().then(function (answer) {
+                            if (!response.ok) throw new Error(answer.error || "erreur " + response.status);
+                            return answer;
+                        });
+                    })
+                    .then(function (answer) {
+                        var skipped = answer.existing || [];
+                        uploadAll(files.filter(function (f) { return skipped.indexOf(f.name) < 0; }),
+                                  skipped);
+                    })
+                    .catch(function (error) {
+                        fail(error.message);
+                    });
+            }
+
+            function uploadAll(files, skipped) {
                 var added = [];
                 (function next(i) {
                     if (i >= files.length) {
                         uploading = false;
-                        hide();
                         done(added);
+                        if (skipped.length) {
+                            // told in the zone, which then goes away
+                            fail((skipped.length > 1 ? "Déjà présents" : "Déjà présent")
+                                 + " dans « " + INCOMING + " », non envoyé"
+                                 + (skipped.length > 1 ? "s" : "") + " : " + skipped.join(", "));
+                        } else {
+                            hide();
+                        }
                         return;
                     }
                     var file = files[i];
@@ -397,6 +433,7 @@
                     uploadOne(file, files.length > 1 ? (i + 1) + "/" + files.length + " — " : "",
                               function (error, result) {
                         if (error) {
+                            done(added);
                             fail(file.name + " : " + error);
                             return;
                         }
@@ -439,7 +476,8 @@
             // the books added: in the list (unless a search is shown), and
             // the new number of books put forward for a second
             function done(added) {
-                if (!added.length) return;
+                // (an EPUB file, a copy of a known book: not a new book)
+                if (!added.some(function (r) { return r.sha1; })) return;
                 if (!document.getElementById("input-search-pattern").value
                         && !document.getElementById("search-pinned-book").checked) {
                     resetViewToFirstSubset();
