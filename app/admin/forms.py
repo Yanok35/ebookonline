@@ -200,6 +200,12 @@ class MoveBookForm(FlaskForm):
     submit = SubmitField("Déplacer")
 
 
+class OptimizeForm(FlaskForm):
+    """ Each page of the PDF file declares its own resources only (CSRF protection only) """
+
+    submit = SubmitField("Optimiser le PDF")
+
+
 class RestoreOriginalForm(FlaskForm):
     """ Undo the last transformation of a book: its original back (CSRF protection only) """
 

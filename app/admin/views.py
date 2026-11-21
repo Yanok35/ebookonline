@@ -37,7 +37,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from app.admin import metadata
 from srcs import naming, pdfstats
 from srcs.cache import available_backends
-from srcs.transformations import CoverPage
+from srcs.transformations import CoverPage, ResourcesPerPage
 from srcs.metadata.service import TASK_TIMEOUT
 from app.admin.forms import (
     AnalyseForm,
@@ -49,6 +49,7 @@ from app.admin.forms import (
     RenameBookForm,
     ResetThumbnailForm,
     THUMBNAIL_BACKEND_LABELS,
+    OptimizeForm,
     RestoreForm,
     RestoreOriginalForm,
     TrashBookForm,
@@ -76,6 +77,7 @@ COVER_FORM_PREFIX = "cover"
 MOVE_FORM_PREFIX = "move"
 TRASH_FORM_PREFIX = "trash"
 ORIGINAL_FORM_PREFIX = "original"
+OPTIMIZE_FORM_PREFIX = "optimize"
 
 CSRF_ERROR = "Formulaire expiré ou invalide, merci de réessayer."
 
@@ -193,7 +195,7 @@ def bookadmin(sha1):
         # the indicators of the PDF file, when already measured (else
         # measured when their section is opened, see pdfstats_view())
         pdfstats=pdfstats.read(current_app.config["CACHE_DIR"], book.sha1),
-        pdfstats_warnings=pdfstats.warnings,
+        **_pdfstats_context(),
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
         # the original of the last transformation (cover page), in the trash
         original=d.original_in_trash(book.sha1),
@@ -263,7 +265,14 @@ def pdfstats_view(sha1):
                              writable=current_app.cache.writable,
                              force=request.args.get("force") == "1")
     return render_template("admin/_pdfstats.html", book=book, pdfstats=stats,
-                           pdfstats_warnings=pdfstats.warnings)
+                           **_pdfstats_context())
+
+
+def _pdfstats_context():
+    """ What the section "Structure du PDF" needs, besides the indicators """
+    return {"pdfstats_warnings": pdfstats.warnings,
+            "pdfstats_optimizable": pdfstats.optimizable,
+            "optimize_form": OptimizeForm(prefix=OPTIMIZE_FORM_PREFIX)}
 
 
 def _reset_form():
@@ -419,6 +428,30 @@ def insert_cover(sha1):
     if not result:
         return redirect(url_for(".bookadmin", sha1=sha1))
     flash(f"Page de couverture insérée. L'original est dans la corbeille : {result.trashed}")
+    return _transformed(result)
+
+
+@admin.route("/bookadmin/<sha1>/optimize", methods=["POST"])
+@login_required
+def optimize(sha1):
+    """
+    Each page of the PDF file declares its own resources only (a book
+    sharing its resources between its pages opens much faster); the
+    original in the trash
+    """
+    book = _book_or_404(sha1)
+    form = OptimizeForm(prefix=OPTIMIZE_FORM_PREFIX)
+    if not form.validate_on_submit():
+        flash(CSRF_ERROR, "error")
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    transformation = ResourcesPerPage()
+    result = _file_operation(f"optimize '{book.filename}'",
+                             lambda: current_app.bookdir.transform(sha1, transformation))
+    if not result:
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    before, after = transformation.gain
+    flash(f"PDF optimisé : la page la plus lourde déclarait {format_filesize(before)} de ressources, "
+          f"{format_filesize(after)} désormais. L'original est dans la corbeille : {result.trashed}")
     return _transformed(result)
 
 

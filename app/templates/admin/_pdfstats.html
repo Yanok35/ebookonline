@@ -65,6 +65,15 @@
     <tr><td>Signets, annotations</td><td>{{ pdfstats.outline }}, {{ pdfstats.annotations }}</td></tr>
     </tbody>
 </table>
+{% if pdfstats_optimizable(pdfstats) %}
+<form class="optimize-form" action="{{ url_for('.optimize', sha1=book.sha1) }}" method="post">
+    {{ optimize_form.hidden_tag() }}
+    {{ optimize_form.submit(disabled=read_only) }}
+    <p class="hint">Chaque page ne déclarera plus que ses propres ressources : même contenu,
+        même rendu, ouverture bien plus rapide. Quelques secondes ; l'original est mis à la
+        corbeille, « (original) », et peut être restauré.</p>
+</form>
+{% endif %}
 <p class="hint">Mesuré le {{ pdfstats.measured_at[:16] | replace("T", " ") }} (UTC).
     <a href="#" class="pdfstats-again" data-src="{{ url_for('.pdfstats_view', sha1=book.sha1, force=1) }}">Mesurer à nouveau</a></p>
 </div>
