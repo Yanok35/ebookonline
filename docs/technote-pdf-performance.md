@@ -144,14 +144,32 @@ the user values), and to keep the original (in the trash).
 ## Transformations of a book file
 
 Two transformations change the content of a book file in place: the
-insertion of a cover page (done) and the optimization of the resources
-(next step). `srcs/transformations.py` describes each one: `apply(src,
+insertion of a cover page and the optimization of the resources. `srcs/transformations.py` describes each one: `apply(src,
 dst)` writes the new file, `check(src, dst)` compares it with the
 original (the number of pages, the size and the text of the first and
 last pages, at `page_offset`), and what it keeps of the original: the
 first page (`keeps_first_page`, then the thumbnail is kept), the text
 (`keeps_text`, then the metadata analysis is kept), the move of the pages
 (`page_offset`: +1 for a cover page).
+
+### The optimization: resources per page
+
+`ResourcesPerPage`: MuPDF rewrites the content stream of each page with
+the resources it uses only (`page.clean_contents(sanitize=True)`), then
+saves the file compacted (`garbage=3`, `deflate`). It keeps the first page
+and the text (the thumbnail and the metadata analysis are renamed). Its
+checks, besides the common ones: the text of every page, the rendering of
+the first pages, the middle one and the last one compared at 30 %
+(a byte of a pixel may differ by 16 at most, 0.5 % of them at most), and
+a gain: refused when the heaviest page keeps more than half of its
+resources ("nothing to gain"), so that a sha1 does not change for
+nothing.
+
+Book page: a button "Optimiser le PDF" in "Structure du PDF" when a page
+declares more than 10 MB of resources; the message tells the resources of
+the heaviest page before and after. On the book of 80.9 MB: 3.2 s, the
+heaviest page from 74.3 MB to 1.7 MB, the first page of the reader at
+20 Mbit/s from 11.1 s (21.9 MB downloaded) to 2.1 s (1.0 MB).
 
 ### `BookDir.transform(sha1, transformation)`, under the scan lock
 
@@ -202,10 +220,7 @@ trash.
 1. Indicators: done (`srcs/pdfstats.py`, book page, `flask pdf audit|show`).
 2. `transform()`, `restore_original()`, the cover page in place, the
    reading positions moved: done.
-3. The optimization (resources per page) as a transformation: a button
-   in "Structure du PDF" when a page declares too many resources, with
-   the gain shown after it (the resources of the heaviest page, before and
-   after).
+3. The optimization (resources per page): done.
 4. Later: `flask pdf optimize` (several books; the server stopped, as it
    keeps book.db in memory), the recompression of the images (lossy).
 
