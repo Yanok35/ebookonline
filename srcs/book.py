@@ -30,7 +30,7 @@ from threading import Thread
 import pymupdf
 
 from srcs import bookfileops
-from srcs.bookfileops import IGNORE_MARKER, BookFileError
+from srcs.bookfileops import IGNORE_MARKER, BookFileError, BookFileExists
 from srcs.cache import Cache
 from srcs.cache import sha1_file
 from srcs.search import fuzzy_search
@@ -591,22 +591,49 @@ class BookDir:
     ORIGINAL_SUFFIX = " (original)"
     TRANSFORMED_SUFFIX = " (transformed)"
 
+    # The files which can be uploaded, by extension: the beginning of their
+    # content (in their first 1024 bytes; an EPUB file is a ZIP archive)
+    UPLOADS = {".pdf": PDF_MAGIC, ".epub": b"PK\x03\x04"}
+
+    def incoming_path(self, filename):
+        """
+        The path in INCOMING_DIR of an uploaded file, from its name (the
+        name only: a path is the one of the client), or raise BookFileError
+        (invalid name, not a PDF or EPUB file name)
+        """
+        name = posixpath.basename(filename.replace("\\", "/")).strip().lstrip(".").strip()
+        return bookfileops.check_relpath(posixpath.join(bookfileops.INCOMING_DIR, name),
+                                         tuple(self.UPLOADS))
+
+    def incoming_exists(self, filename):
+        """ Whether the file of this name is already in INCOMING_DIR (False: invalid name) """
+        try:
+            relpath = self.incoming_path(filename)
+        except BookFileError:
+            return False
+        return os.path.lexists(os.path.join(self.dirpath, relpath))
+
     def add_book(self, stream, filename):
         """
-        Add the PDF file read from stream (an upload) to the book directory,
-        as INCOMING_DIR/<name of filename> (or 'name (2).pdf', ... if it
-        exists), then rescan: the book is in the list at once. Returns its
-        path, or raises BookFileError (not a PDF file, invalid name).
+        Add the file read from stream (an upload) to the book directory, as
+        INCOMING_DIR/<name of filename>, never replacing a file. A PDF file is
+        a book: the directory is rescanned, it is in the list at once. An
+        EPUB file is only stored (the library has PDF files only). Returns
+        its path, or raises BookFileError (not a PDF or EPUB file, invalid
+        name), BookFileExists (a file of this name in INCOMING_DIR).
         """
-        # the name only (a path is the one of the client)
-        name = posixpath.basename(filename.replace("\\", "/")).strip().lstrip(".").strip()
-        relpath = bookfileops.check_relpath(posixpath.join(bookfileops.INCOMING_DIR, name))
+        relpath = self.incoming_path(filename)
+        name = posixpath.basename(relpath)
+        ext = posixpath.splitext(name)[1].lower()
         dst = bookfileops.check_inside(self.dirpath, relpath)
-        # (the readers accept a header in the first 1024 bytes); checked
-        # before anything is created
+        if os.path.lexists(dst):
+            raise BookFileExists(f"already in {bookfileops.INCOMING_DIR}: {name!r}")
+        # checked before anything is created (the readers of PDF accept a
+        # header in the first 1024 bytes)
         head = stream.read(1024)
-        if PDF_MAGIC not in head:
-            raise BookFileError(f"not a PDF file: {name!r}")
+        magic = self.UPLOADS[ext]
+        if (magic not in head) if ext == ".pdf" else not head.startswith(magic):
+            raise BookFileError(f"not a {ext.lstrip('.').upper()} file: {name!r}")
         try:
             os.makedirs(os.path.dirname(dst), exist_ok=True)
         except OSError as e:
@@ -624,10 +651,16 @@ class BookDir:
             # readable as a file copied there (mkstemp: by its owner only)
             os.chmod(tmpname, 0o644)
             with self._scan_lock:
-                dst = bookfileops.move_to_free_name(tmpname, dst)
-                relpath = os.path.relpath(dst, self.dirpath).replace(os.sep, "/")
-                log.info("Book added: '%s'", relpath)
-                self.__rescan()
+                try:
+                    bookfileops.move_no_replace(tmpname, dst)
+                except BookFileError:
+                    if os.path.lexists(dst):
+                        # (uploaded meanwhile)
+                        raise BookFileExists(f"already in {bookfileops.INCOMING_DIR}: {name!r}") from None
+                    raise
+                log.info("File added: '%s'", relpath)
+                if ext == ".pdf":
+                    self.__rescan()
         finally:
             if os.path.exists(tmpname):
                 os.unlink(tmpname)
