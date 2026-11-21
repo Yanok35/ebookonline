@@ -31,11 +31,17 @@ def book_with_images(path, pages=3, shared=False):
         page.insert_text((20, 40), f"Page {n + 1}")
         page.insert_image(pymupdf.Rect(20, 60, 180, 220), stream=image_png(n))
     if shared:
+        # one resource dictionary for every page, with every image; each
+        # page draws its own image (by its name in this dictionary)
         images = [doc[n].get_images()[0][0] for n in range(pages)]
+        font = doc.xref_get_key(doc[0].xref, "Resources/Font")[1]
         res = doc.get_new_xref()
-        doc.update_object(res, "<</XObject<<" + "".join(
+        doc.update_object(res, f"<</Font {font}/XObject<<" + "".join(
             f"/Im{n} {x} 0 R" for n, x in enumerate(images)) + ">>>>")
-        for page in doc:
+        for n, page in enumerate(doc):
+            for xref in page.get_contents():
+                content = doc.xref_stream(xref).replace(b"/fzImg0 Do", f"/Im{n} Do".encode())
+                doc.update_stream(xref, content)
             doc.xref_set_key(page.xref, "Resources", f"{res} 0 R")
     doc.save(path)
     return path
@@ -193,3 +199,53 @@ def test_show(app, book):
     data = json.loads(pdf_cli(app, "show", book.sha1, "--json").output)
     assert data["file"]["pages"] == 3 and data["warnings"] == []
     assert pdf_cli(app, "show", "unknown.pdf").exit_code == 2
+
+
+# --- optimization from the book page
+
+def test_optimize_from_the_book_page(app, client, monkeypatch):
+    import re
+
+    root = Path(app.config["BOOK_DIR"])
+    book_with_images(root / "Shared.pdf", pages=4, shared=True)
+    app.bookdir.rescan()
+    book = app.bookdir.find_book_by_filename("Shared.pdf")
+    old_sha1 = book.sha1
+    client.put("/api/reader/state", json={"documentId": old_sha1, "documentName": "Shared.pdf",
+                                          "pageNumber": 3, "positionX": 0, "positionY": 0, "zoom": 1})
+    # no button: under the threshold
+    assert 'value="Optimiser le PDF"' not in client.get(f"/bookadmin/{old_sha1}/pdfstats").text
+    # the threshold: between the original and the optimized file (a page
+    # then declares a quarter of the resources)
+    heaviest = pdfstats.measure(root / "Shared.pdf")["resources"]["max"]
+    monkeypatch.setattr(pdfstats, "SHARED_RESOURCES_BYTES", heaviest // 2)
+    fragment = client.get(f"/bookadmin/{old_sha1}/pdfstats").text
+    assert 'value="Optimiser le PDF"' in fragment
+    csrf = re.search(r'name="optimize-csrf_token" type="hidden" value="([^"]+)"', fragment).group(1)
+
+    response = client.post(f"/bookadmin/{old_sha1}/optimize", data={"optimize-csrf_token": csrf})
+    assert book.sha1 != old_sha1
+    assert response.status_code == 302 and response.location == f"/bookadmin/{book.sha1}"
+    html = client.get(response.location).text
+    assert "PDF optimisé : la page la plus lourde déclarait" in html
+    assert "L&#39;original est dans la corbeille : Trash/Shared (original).pdf" in html
+    # the position: same page
+    assert client.get(f"/api/reader/state/{book.sha1}").json["pageNumber"] == 3
+    # once optimized: no more button
+    assert 'value="Optimiser le PDF"' not in client.get(f"/bookadmin/{book.sha1}/pdfstats").text
+
+
+def test_optimize_refused_from_the_book_page(app, client):
+    import re
+
+    make_pdf(Path(app.config["BOOK_DIR"]) / "Text.pdf")
+    app.bookdir.rescan()
+    book = app.bookdir.find_book_by_filename("Text.pdf")
+    page = f"/bookadmin/{book.sha1}"
+    response = client.post(f"{page}/optimize", data={})
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
+    # (any form of the page: the same CSRF token)
+    token = re.search(r'name="cover-csrf_token" type="hidden" value="([^"]+)"', client.get(page).text).group(1)
+    response = client.post(f"{page}/optimize", data={"optimize-csrf_token": token})
+    # no resources: nothing to gain
+    assert "Opération refusée : resources per page: nothing to gain" in client.get(response.location).text

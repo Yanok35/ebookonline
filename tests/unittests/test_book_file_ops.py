@@ -493,3 +493,65 @@ def test_scan_compares_the_size(library, book, mocker):
     os.utime(path, (mtime, mtime))
     library.rescan()
     assert book.sha1 == srcs.book.sha1_file(path)
+
+
+# --- optimization: resources per page
+
+def test_optimize(library):
+    import pymupdf
+    from srcs import pdfstats
+    from srcs.metadata import store
+    from srcs.transformations import ResourcesPerPage
+    from tests.unittests.test_pdfstats import book_with_images
+
+    root = Path(library.dirpath)
+    book_with_images(root / "Shared.pdf", pages=4, shared=True)
+    library.rescan()
+    book = library.find_book_by_filename("Shared.pdf")
+    old_sha1 = book.sha1
+    original = (root / "Shared.pdf").read_bytes()
+    Path(library.cache.get_thumbname(old_sha1)).write_bytes(b"thumbnail")
+    store.write(library.cache.cachedir, {"sha1": old_sha1, "raw": {}, "candidates": {}})
+    library.cache.requests.clear()
+
+    transformation = ResourcesPerPage()
+    result = library.transform(old_sha1, transformation)
+
+    assert result == Transformed("Shared.pdf", old_sha1, book.sha1, "Trash/Shared (original).pdf", 0)
+    assert (root / "Trash" / "Shared (original).pdf").read_bytes() == original
+    # each page declares its own image only
+    stats = pdfstats.measure(root / "Shared.pdf")
+    assert stats["resources"]["max_images"] == 1
+    before, after = transformation.gain
+    assert after < before / 2 and after == stats["resources"]["max"]
+    # same pages, same text: the thumbnail and the analysis follow the book
+    with pymupdf.open(root / "Shared.pdf") as doc, pymupdf.open(root / "Trash" / "Shared (original).pdf") as old:
+        assert [p.get_text() for p in doc] == [p.get_text() for p in old]
+    assert Path(library.cache.get_thumbname(book.sha1)).read_bytes() == b"thumbnail"
+    assert store.read(library.cache.cachedir, book.sha1)["sha1"] == book.sha1
+    assert library.cache.requests == []
+    # nothing more to gain
+    with pytest.raises(BookFileError, match="nothing to gain"):
+        library.transform(book.sha1, ResourcesPerPage())
+
+
+def test_optimize_refused(library, book):
+    from srcs.transformations import ResourcesPerPage
+
+    root = Path(library.dirpath)
+    original = (root / "Science" / "a.pdf").read_bytes()
+    with pytest.raises(BookFileError, match="resources per page: nothing to gain"):
+        library.transform(book.sha1, ResourcesPerPage())
+    assert (root / "Science" / "a.pdf").read_bytes() == original
+    assert not (root / "Trash").exists()
+
+
+def test_same_rendering(tmp_path):
+    import pymupdf
+    from srcs.transformations import same_rendering
+    from tests.unittests.test_pdfstats import book_with_images
+
+    a = pymupdf.open(book_with_images(tmp_path / "a.pdf"))
+    assert same_rendering(a, a, 0)
+    # another image on the page
+    assert not same_rendering(a, a, 0, 1)
