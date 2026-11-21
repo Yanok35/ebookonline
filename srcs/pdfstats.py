@@ -299,6 +299,15 @@ def _page_resources(doc, page, length, font_bytes, shared):
     return content, (page_bytes, page.number + 1, n_images), len(page.annot_xrefs())
 
 
+def optimizable(stats):
+    """
+    Whether the resources per page (srcs/transformations.py) may lighten
+    the book: a page declares too many resources
+    """
+    return bool(stats) and not stats.get("error") \
+        and stats["resources"]["max"] > SHARED_RESOURCES_BYTES
+
+
 def _mb(n):
     return f"{n / MB:.1f} Mo"
 

@@ -95,3 +95,81 @@ class CoverPage(Transformation):
 
     def apply(self, src, dst):
         pdfcover.insert_cover(src, self.image, dst)
+
+
+# Rendering compared: scale, pages (the first ones, the middle one, the
+# last one), the tolerance (a byte of a pixel differing by more than
+# PIXEL_TOLERANCE counts, more than RENDERING_TOLERANCE of them fail)
+RENDERING_SCALE = 0.3
+PIXEL_TOLERANCE = 16
+RENDERING_TOLERANCE = 0.005
+# An optimization is refused when the heaviest page keeps more than this
+# part of its resources: nothing to gain
+OPTIMIZATION_MIN_GAIN = 0.5
+
+
+def same_rendering(a, b, pno_a, pno_b=None):
+    """ Whether page pno_a of document a and page pno_b of b look the same, at low resolution """
+    matrix = pymupdf.Matrix(RENDERING_SCALE, RENDERING_SCALE)
+    pa = a[pno_a].get_pixmap(matrix=matrix, alpha=False)
+    pb = b[pno_a if pno_b is None else pno_b].get_pixmap(matrix=matrix, alpha=False)
+    if (pa.width, pa.height, pa.n) != (pb.width, pb.height, pb.n):
+        return False
+    differing = sum(1 for x, y in zip(pa.samples, pb.samples) if abs(x - y) > PIXEL_TOLERANCE)
+    return differing <= RENDERING_TOLERANCE * len(pa.samples)
+
+
+class ResourcesPerPage(Transformation):
+    """
+    Each page declares only the resources (images, fonts, ...) it uses:
+    some books share one resource dictionary between all their pages, and
+    the reader downloads all of it before drawing any page (see
+    docs/technote-pdf-performance.md). Lossless: the same pages, the same
+    rendering. The resources of the heaviest page, before and after, are
+    in self.gain once checked.
+    """
+
+    name = "resources per page"
+
+    def __init__(self):
+        self.gain = None
+
+    def apply(self, src, dst):
+        try:
+            doc = pymupdf.open(src)
+        except Exception as e:
+            raise BookFileError(f"can not read the PDF file: {e}") from None
+        with doc:
+            if doc.needs_pass or doc.is_encrypted:
+                raise BookFileError(f"{self.name}: encrypted PDF file")
+            try:
+                for page in doc:
+                    # the content streams rewritten, with the resources
+                    # they use only
+                    page.clean_contents(sanitize=True)
+                doc.save(dst, garbage=3, deflate=True)
+            except Exception as e:
+                raise BookFileError(f"{self.name}: {e}") from None
+
+    def check(self, src, dst):
+        from srcs import pdfstats
+
+        super().check(src, dst)
+        with pymupdf.open(src) as old, pymupdf.open(dst) as new:
+            # the text of every page, the rendering of a few ones
+            for pno in range(old.page_count):
+                if old[pno].get_text() != new[pno].get_text():
+                    raise BookFileError(f"{self.name}: the text of page {pno + 1} changed")
+            n = old.page_count
+            for pno in sorted({0, 1, 2, n // 2, n - 1} & set(range(n))):
+                if not same_rendering(old, new, pno):
+                    raise BookFileError(f"{self.name}: the rendering of page {pno + 1} changed")
+        before = pdfstats.measure(src)
+        after = pdfstats.measure(dst)
+        if before.get("error") or after.get("error"):
+            raise BookFileError(f"{self.name}: {before.get('error') or after.get('error')}")
+        self.gain = (before["resources"]["max"], after["resources"]["max"])
+        if not before["resources"]["max"] \
+                or after["resources"]["max"] > OPTIMIZATION_MIN_GAIN * before["resources"]["max"]:
+            raise BookFileError(f"{self.name}: nothing to gain, the heaviest page keeps "
+                                f"{after['resources']['max'] / 1048576:.1f} MB of resources")
