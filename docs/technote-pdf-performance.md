@@ -143,115 +143,71 @@ the user values), and to keep the original (in the trash).
 
 ## Transformations of a book file
 
-The optimization is the first operation which changes the content of a
-file of `BOOK_DIR`, but not the only one: the insertion of a cover page
-(today a copy, `name (covered).pdf`, a new book with the user values of
-the original) is another transformation of the content. Both use one
-general operation of the book directory.
+Two transformations change the content of a book file in place: the
+insertion of a cover page (done) and the optimization of the resources
+(next step). `srcs/transformations.py` describes each one: `apply(src,
+dst)` writes the new file, `check(src, dst)` compares it with the
+original (the number of pages, the size and the text of the first and
+last pages, at `page_offset`), and what it keeps of the original: the
+first page (`keeps_first_page`, then the thumbnail is kept), the text
+(`keeps_text`, then the metadata analysis is kept), the move of the pages
+(`page_offset`: +1 for a cover page).
 
-### A transformation
+### `BookDir.transform(sha1, transformation)`, under the scan lock
 
-A transformation is described by:
+1. refused: a missing book, read-only mode, a book with copies in the
+   library (duplicates), a transformed file which is a known book;
+2. `apply()` into a hidden temporary file next to the original (ignored
+   by the scan and the watcher), `check()`;
+3. the new file gets the **modification time of the original** (a book
+   of the library since then, not a new one in "ajouts récents");
+4. the original goes to the trash, `Trash/<path> (original).pdf` (or
+   `(original) (2).pdf`, ... after several transformations);
+5. the new file takes its place: same path, same name;
+6. the entry of the book: the new sha1 and size, the user values kept;
+   the thumbnail and the metadata analysis renamed or made again, the
+   indicators removed (measured again when asked);
+7. book.db saved: the watcher then finds nothing to do.
 
-- `apply(src, dst)`: writes the new file (PyMuPDF);
-- the **page mapping**: old page → new page. The identity for the
-  optimization; `n → n + 1` for a cover page added before the first one;
-- what it **keeps**: the first page (then the thumbnail is kept), the text
-  of the pages (then the metadata analysis is kept), the pages themselves
-  (then the reading positions and the notes stay valid, once mapped);
-- its **checks** of the new file: same number of pages (or one more for
-  a cover), same page sizes, same text, the rendering of a few pages
-  compared at low resolution.
+The reading position belongs to the application: `app/api.py`
+(`move_reader_state()`) moves it to the new sha1, its page moved by
+`page_offset`, under the lock of the positions.
 
-Two **modes**:
+### `BookDir.restore_original(sha1)`: undo the last transformation
 
-- **copy**: the new file next to the original (`name (covered).pdf`), a
-  new book with the user values of the original; nothing else changes
-  (today's cover page);
-- **replace**: the new file takes the place of the original, which goes
-  to the Trash; the book keeps its entry, its path, its user values and
-  its data, under its new sha1.
+The latest `(original)` file of the book in the trash takes its place
+again, the current file goes to the trash, `Trash/<path>
+(transformed).pdf`. The entry takes the sha1 of the original back, the
+position its page back (`page_offset` from the page counts). Button
+"Restaurer l'original" of the book page, while an original is in the
+trash.
 
-### `BookDir.transform(sha1, transformation, mode)`, under the scan lock
+### Consequences
 
-1. the book: present, without duplicates (see below);
-2. `apply()` into a hidden temporary file next to the original (ignored by
-   the scan and the watcher); the checks; its sha1 (already known: a copy
-   of another book, refused);
-3. *copy*: move to a free name, a new entry with the user values;
-   *replace*: the original to the Trash, the new file to its path;
-4. *replace*: the entry takes the new sha1, size and mtime; the data
-   keyed by the sha1 follow it (next section);
-5. save book.db: the watcher then finds nothing to do (book.db already
-   has the size and mtime of the file).
+| place | effect, mitigation |
+|---|---|
+| book.db | the same entry: path, user values; new sha1 and size |
+| modification time | the one of the original (decided); the scan also compares the **size**: a file changed with the same modification time is hashed again (e.g. a crash between the replacement and the saving of book.db) |
+| duplicates | refused while the book has copies in the library |
+| thumbnail, metadata analysis | renamed when the first page / the text are kept, made again otherwise (cover page) |
+| PDF indicators | of the new file, measured when asked |
+| reading position | moved, its page moved by `page_offset` |
+| history ("Mes lectures") | **no aliases** (decided): the sessions before the transformation are no longer shown for this book |
+| old URLs (`/reader/<sha1>`, bookmarks) | 404 (decided); an open reader saves its position under the old sha1, orphan |
+| original | in the trash until it is emptied: the disk space of the book twice meanwhile |
+| restore of the `(original)` file by the trash page | a book of its own, next to the transformed one (use "Restaurer l'original" instead) |
 
-The data kept outside of book.db (reading positions, notes) belong to the
-application (`app/`), not to the book directory: the operation returns
-what changed (old sha1, new sha1, page mapping, what is kept), the
-application moves its data under its own locks.
+### Steps
 
-## Consequences of a replacement, and their mitigations
-
-| place | without care | mitigation |
-|---|---|---|
-| book.db: user values | kept (the rescan sees "same path, new content") | done by the operation, not by a later rescan |
-| duplicates of the book | broken: the entry may follow a copy ("moved"), the new file becomes a book without user values | **refused** while the book has duplicates |
-| thumbnail `<sha1>.jpg` | made again, the old one orphan | **renamed** when the first page is kept (optimization), **made again** otherwise (cover); the old one removed |
-| metadata analysis `<sha1>.meta.json.gz` | made again, the old one orphan | **renamed** (its `sha1` rewritten) when the text is kept, **made again** otherwise; the old one removed |
-| reading position | **lost** | **moved** to the new sha1, its page **mapped** (cover: +1) |
-| notes (future) | lost | moved, their pages mapped |
-| journal of the reader events, "Mes lectures" | the history split, the old sessions dropped | see the aliases |
-| URLs `/reader/<sha1>` (bookmarks, history of the browser), an open reader | 404; an open reader saves its position under the old sha1 | see the aliases |
-| "ajouts récents" (sorted by mtime) | the book becomes the latest one | a date of addition in book.db (`added`, the mtime when the book was found first), used to sort instead of the mtime. Keeping the old mtime on the new file is not an option: a backup comparing size and mtime (rsync) could miss the change |
-| original | lost | in the **Trash**: restorable; its disk space until the trash is emptied (an option of the command line to skip it) |
-| server and command line | two processes writing book.db | the command line needs the server stopped (a lock file of the book directory, taken by both) |
-
-## Aliases: the former sha1 of a book
-
-An alias says "this sha1 is now this book". Three levels, from the
-cheapest:
-
-| | old URLs | history ("Mes lectures") | cost |
-|---|---|---|---|
-| A. none | 404 | split: the sessions before the replacement dropped | none |
-| B. in the journal only: a line `{"t", "alias": old, "doc": new}` appended to `reader_events.jsonl` | 404 | whole: the reading of the journal maps `old` to `new` from this line on | a few lines in `srcs/history.py` and in the operation |
-| C. in book.db: `former_sha1` of each book | redirect to the new sha1 (reader, PDF, book page, thumbnail), an open reader saves under the new sha1 | whole | an index in BookDir, one lookup used by the routes, schema v5, the life cycle below |
-
-Life cycle of an alias (C; B has the same events in the journal):
-
-1. **created** by a replacement: the old sha1 added to `former_sha1` of the
-   book (a book optimized, then given a cover: two aliases);
-2. **used** by the lookups by sha1 (`find_book_by_sha1()` falls back on the
-   aliases: one place, every route benefits), by the reading of the
-   journal, by the API of the reading positions;
-3. **kept** while the book exists, missing books included (their entry is
-   kept); a few dozen bytes each;
-4. **dropped** when a file with this content is in the library again: the
-   original restored from the Trash, or copied back. The scan finds a file
-   whose sha1 is an alias: the alias is dropped, the file is a book of its
-   own (the restore copies the user values to it, as a copy);
-5. **gone** with the entry of the book, if it is ever removed from book.db.
-
-Maintenance: the rule 4 in the scan, the fallback of the lookup, the
-schema v5 (compatible: an older server ignores the field), their tests.
-Recommendation: **B first** (the history kept for a small cost), C when
-the old links matter (shared links, bookmarks of the browser).
-
-## Steps
-
-1. **Indicators** (no file changed): the measure of a PDF file (srcs), its
-   cache `<sha1>.pdfstats.json` made with the metadata analysis, the
-   `<details>` of the book page, `flask pdf audit` (the books worth an
-   optimization first).
-2. **`BookDir.transform()`**, the copy mode first: the cover page made
-   with it (same behaviour as today), the checks of the new file.
-3. **Replace mode**: original to the Trash, entry and caches following
-   the new sha1, reading positions moved and mapped, `added` date for
-   "ajouts récents", refusal with duplicates; the cover page offered "in
-   place" or "as a copy" on the book page.
-4. **Optimization** (per-page resources) as a transformation: the button
-   of the book page, `flask pdf optimize` (server stopped, lock file).
-5. **Aliases** (B, then C if wanted).
+1. Indicators: done (`srcs/pdfstats.py`, book page, `flask pdf audit|show`).
+2. `transform()`, `restore_original()`, the cover page in place, the
+   reading positions moved: done.
+3. The optimization (resources per page) as a transformation: a button
+   in "Structure du PDF" when a page declares too many resources, with
+   the gain shown after it (the resources of the heaviest page, before and
+   after).
+4. Later: `flask pdf optimize` (several books; the server stopped, as it
+   keeps book.db in memory), the recompression of the images (lossy).
 
 Set aside: the linearization (small gain once the resources are per
-page), the recompression of the images (lossy).
+page), the aliases of the former sha1.
