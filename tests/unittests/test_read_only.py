@@ -213,3 +213,5 @@ def test_upload_is_refused(book_dir_read_only_app):
     assert 'id="drop-zone"' not in html
     response = client.post("/upload")
     assert response.status_code == 403 and "lecture seule" in response.json["error"]
+    response = client.post("/upload/check", json={"names": ["a.pdf"]})
+    assert response.status_code == 403
