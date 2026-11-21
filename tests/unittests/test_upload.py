@@ -29,10 +29,40 @@ def test_add_book(app, tmp_path):
     assert (Path(app.config["BOOK_DIR"]) / relpath).stat().st_mode & 0o777 == 0o644
 
 
-def test_add_book_keeps_an_existing_file(app, tmp_path):
-    app.bookdir.add_book(io.BytesIO(pdf_bytes(tmp_path, "a")), "Dune.pdf")
-    relpath = app.bookdir.add_book(io.BytesIO(pdf_bytes(tmp_path, "b")), "Dune.pdf")
-    assert relpath == "Incoming/Dune (2).pdf"
+def test_add_book_refuses_an_existing_name(app, tmp_path):
+    from srcs.bookfileops import BookFileExists
+
+    first = pdf_bytes(tmp_path, "a")
+    app.bookdir.add_book(io.BytesIO(first), "Dune.pdf")
+    with pytest.raises(BookFileExists, match="already in Incoming: 'Dune.pdf'"):
+        app.bookdir.add_book(io.BytesIO(pdf_bytes(tmp_path, "b")), "Dune.pdf")
+    incoming = Path(app.config["BOOK_DIR"]) / "Incoming"
+    assert [p.name for p in incoming.iterdir()] == ["Dune.pdf"]
+    assert (incoming / "Dune.pdf").read_bytes() == first
+    assert app.bookdir.incoming_exists("Dune.pdf") and not app.bookdir.incoming_exists("Other.pdf")
+    # the name of the file only
+    assert app.bookdir.incoming_exists("C:\\Users\\me\\Dune.pdf")
+
+
+def epub_bytes():
+    """ A small EPUB file: a ZIP archive """
+    import zipfile
+
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as z:
+        z.writestr("mimetype", "application/epub+zip")
+    return data.getvalue()
+
+
+def test_add_epub(app):
+    relpath = app.bookdir.add_book(io.BytesIO(epub_bytes()), "Dune.epub")
+    assert relpath == "Incoming/Dune.epub"
+    assert (Path(app.config["BOOK_DIR"]) / relpath).read_bytes() == epub_bytes()
+    # only stored: not a book of the library
+    assert app.bookdir.get_all_books() == []
+    assert app.bookdir.incoming_exists("Dune.epub")
+    with pytest.raises(BookFileError, match="not a EPUB file"):
+        app.bookdir.add_book(io.BytesIO(b"%PDF-1.4 not a ZIP"), "Other.epub")
 
 
 @pytest.mark.parametrize("filename, expected", [
@@ -47,8 +77,8 @@ def test_add_book_name(app, tmp_path, filename, expected):
 
 @pytest.mark.parametrize("data, filename, message", [
     (b"not a PDF file", "a.pdf", "not a PDF file"),
-    (None, "notes.txt", "not a PDF file name"),
-    (None, "", "not a PDF file name|invalid path"),
+    (None, "notes.txt", "not a PDF or EPUB file name"),
+    (None, "", "not a PDF or EPUB file name|invalid path"),
 ])
 def test_add_book_refused(app, tmp_path, data, filename, message):
     data = data if data is not None else pdf_bytes(tmp_path, "x")
@@ -121,3 +151,34 @@ def test_drop_zone_in_the_library(client):
     assert 'id="drop-zone"' in html and "« Incoming »" in html
     # the number of books, put forward after an upload
     assert '<a id="book-count" href="/bookadmin/">0 livres</a>' in html
+
+
+def test_upload_of_an_existing_name(app, client, tmp_path):
+    assert upload(client, pdf_bytes(tmp_path, "Dune")).status_code == 200
+    response = upload(client, pdf_bytes(tmp_path, "Other"))
+    assert response.status_code == 409
+    assert response.json["error"] == "déjà présent dans « Incoming », non envoyé."
+
+
+def test_upload_of_an_epub(app, client):
+    response = upload(client, epub_bytes(), "Dune.epub")
+    assert response.status_code == 200
+    assert response.json == {"filename": "Incoming/Dune.epub", "sha1": None, "books": 0}
+
+
+def test_upload_check(app, client, tmp_path):
+    upload(client, pdf_bytes(tmp_path, "Dune"))
+    upload(client, epub_bytes(), "Dune.epub")
+    response = client.post("/upload/check", json={"names": ["Dune.pdf", "Dune.epub", "Other.pdf", "x.txt"]},
+                           headers={"X-CSRFToken": token(client)})
+    assert response.status_code == 200 and response.json == {"existing": ["Dune.pdf", "Dune.epub"]}
+    assert client.post("/upload/check", json={"names": ["a.pdf"]},
+                       headers={"X-CSRFToken": ""}).status_code == 400
+    assert client.post("/upload/check", json={"names": "a.pdf"},
+                       headers={"X-CSRFToken": token(client)}).status_code == 400
+    assert app.test_client().post("/upload/check").status_code == 302
+
+
+def test_drop_zone_accepts_epub(client):
+    html = client.get("/browser_lazy").text
+    assert "Déposer ici un livre (PDF ou EPUB)" in html and 'var CHECK_URL = "/upload/check";' in html

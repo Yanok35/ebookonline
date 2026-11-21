@@ -30,7 +30,7 @@ from wtforms import ValidationError
 from app import is_read_only
 from app.auth import login_required
 from srcs.book import BookDir
-from srcs.bookfileops import INCOMING_DIR, BookFileError
+from srcs.bookfileops import INCOMING_DIR, BookFileError, BookFileExists
 from srcs.cache import Cache
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -128,18 +128,17 @@ def browser_lazy():
 def upload():
     """
     JSON: a book dropped on the library page (field 'book', CSRF token in
-    the X-CSRFToken header), added to BOOK_DIR/Incoming. Answers
-    {filename, sha1, books} (sha1 null when the file is a copy of a known
-    book; books: the number of books of the library), or {error} with 400 (invalid), 403 (read-only) or 413 (too large).
+    the X-CSRFToken header), added to BOOK_DIR/Incoming: a PDF file (a book
+    of the library), or an EPUB file (only stored). Answers {filename,
+    sha1, books} (sha1 null when the file is not a new book: an EPUB file,
+    a copy of a known book; books: the number of books of the library), or
+    {error} with 400 (invalid), 403 (read-only), 409 (a file of this name
+    already in Incoming) or 413 (too large).
     """
+    refused = _upload_refused()
+    if refused:
+        return refused
     user = session.get("username")
-    if is_read_only():
-        current_app.logger.warning("%s: upload refused: read-only mode", user)
-        return jsonify(error="Le site est en lecture seule."), 403
-    try:
-        validate_csrf(request.headers.get("X-CSRFToken"))
-    except ValidationError:
-        return jsonify(error="Jeton de sécurité invalide : recharger la page."), 400
 
     # (larger than the other requests: a whole book)
     request.max_content_length = current_app.config['UPLOAD_MAX_SIZE']
@@ -153,6 +152,9 @@ def upload():
 
     try:
         relpath = current_app.bookdir.add_book(book.stream, book.filename)
+    except BookFileExists:
+        current_app.logger.warning("%s: upload of %r refused: already in %s", user, book.filename, INCOMING_DIR)
+        return jsonify(error=f"déjà présent dans « {INCOMING_DIR} », non envoyé."), 409
     except BookFileError as e:
         current_app.logger.warning("%s: upload of %r refused: %s", user, book.filename, e)
         return jsonify(error=f"Fichier refusé : {e}"), 400
@@ -161,6 +163,34 @@ def upload():
     added = current_app.bookdir.find_book_by_filename(relpath)
     return jsonify(filename=relpath, sha1=added.sha1 if added else None,
                    books=len(current_app.bookdir.get_booklist()))
+
+def _upload_refused():
+    """ The answer refusing an upload (read-only, CSRF token), or None """
+    if is_read_only():
+        current_app.logger.warning("%s: upload refused: read-only mode", session.get("username"))
+        return jsonify(error="Le site est en lecture seule."), 403
+    try:
+        validate_csrf(request.headers.get("X-CSRFToken"))
+    except ValidationError:
+        return jsonify(error="Jeton de sécurité invalide : recharger la page."), 400
+    return None
+
+
+@main.route('/upload/check', methods=['POST'])
+@login_required
+def upload_check():
+    """
+    JSON {"names": [file names]}, before an upload: answers {"existing":
+    [the names already in BOOK_DIR/Incoming]}, which are not sent
+    """
+    refused = _upload_refused()
+    if refused:
+        return refused
+    names = (request.get_json(silent=True) or {}).get("names")
+    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+        return jsonify(error="Liste de noms attendue."), 400
+    return jsonify(existing=[n for n in names if current_app.bookdir.incoming_exists(n)])
+
 
 @main.route('/browser_subset', methods=['GET', 'POST'])
 @login_required

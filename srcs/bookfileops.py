@@ -48,6 +48,10 @@ class BookFileError(Exception):
     """ A file operation in the book directory was refused, or failed """
 
 
+class BookFileExists(BookFileError):
+    """ The file would replace another one: refused """
+
+
 # A PDF file of the trash: its path (Trash/...), the path it is restored to,
 # its modification time and size
 TrashFile = namedtuple("TrashFile", "filename original mtime filesize")
@@ -75,11 +79,11 @@ def list_categories(book_dir):
     return sorted(categories, key=str.lower)
 
 
-def check_relpath(relpath):
+def check_relpath(relpath, extensions=(".pdf",)):
     """
     The normalized relpath of a PDF file of the book directory, or raise
     BookFileError: it must be relative, without '..' nor hidden component,
-    and end with '.pdf'.
+    and end with '.pdf' (or another of extensions).
     """
     if not isinstance(relpath, str) or not relpath.strip():
         raise BookFileError("empty path")
@@ -95,8 +99,9 @@ def check_relpath(relpath):
             raise BookFileError(f"hidden file or directory in {relpath!r}")
         if part != part.strip():
             raise BookFileError(f"leading or trailing space in {relpath!r}")
-    if not parts[-1].lower().endswith(".pdf") or len(parts[-1]) <= len(".pdf"):
-        raise BookFileError(f"not a PDF file name: {relpath!r}")
+    if not any(parts[-1].lower().endswith(e) and len(parts[-1]) > len(e) for e in extensions):
+        kinds = " or ".join(e.lstrip(".").upper() for e in extensions)
+        raise BookFileError(f"not a {kinds} file name: {relpath!r}")
     return posixpath.normpath(relpath)
 
 
