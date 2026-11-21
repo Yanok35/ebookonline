@@ -345,19 +345,62 @@ def test_book_page_shows_cover_form(client, book):
     assert 'value="Insérer une page de couverture"' in html
 
 
+STATE = {"documentId": None, "documentName": "O'Reilly.pdf", "pageNumber": 3,
+         "positionX": 0, "positionY": 120.5, "zoom": 1.5}
+
+
 @pytest.mark.parametrize("fmt, filename", [("jpeg", "cover.JPG"), ("png", "cover.png")])
 def test_insert_cover(app, client, book, caplog, fmt, filename):
     caplog.set_level(logging.WARNING)
+    old_sha1 = book.sha1
+    client.put("/api/reader/state", json=dict(STATE, documentId=old_sha1))
+
     response = post_cover(client, book, cover_image(fmt), filename)
 
-    copy = app.bookdir.find_book_by_filename("Science/O'Reilly (covered).pdf")
-    assert copy is not None and copy.tags == book.tags
-    # to the page of the copy
-    assert response.status_code == 302 and response.location == f"/bookadmin/{copy.sha1}"
+    # in place: the same book, under its new sha1
+    assert app.bookdir.find_book_by_filename("Science/O'Reilly.pdf") is book
+    assert book.sha1 != old_sha1
+    assert (Path(app.config["BOOK_DIR"]) / "Trash" / "Science" / "O'Reilly (original).pdf").exists()
+    # to its page (new URL)
+    assert response.status_code == 302 and response.location == f"/bookadmin/{book.sha1}"
     html = client.get(response.location).text
-    assert "Copie avec une page de couverture créée : Science/O&#39;Reilly (covered).pdf" in html
-    assert "test: insert a cover in 'Science/O'Reilly.pdf' -> 'Science/O'Reilly (covered).pdf'" \
-        in caplog.text
+    assert ("Page de couverture insérée. L&#39;original est dans la corbeille : "
+            "Trash/Science/O&#39;Reilly (original).pdf") in html
+    assert "test: insert a cover in 'Science/O'Reilly.pdf'" in caplog.text
+    # the reading position follows the book, one page further
+    assert client.get(f"/api/reader/state/{old_sha1}").status_code == 404
+    state = client.get(f"/api/reader/state/{book.sha1}").json
+    assert state["pageNumber"] == 4 and state["documentId"] == book.sha1
+    # the original can be restored
+    assert 'value="Restaurer l&#39;original"' in html
+
+
+def test_restore_original(app, client, book):
+    old_sha1 = book.sha1
+    post_cover(client, book, cover_image())
+    client.put("/api/reader/state", json=dict(STATE, documentId=book.sha1, pageNumber=1))
+    page = f"/bookadmin/{book.sha1}"
+    response = client.post(f"{page}/original",
+                           data={"original-csrf_token": token(client, page, "original")})
+    assert book.sha1 == old_sha1
+    assert response.status_code == 302 and response.location == f"/bookadmin/{old_sha1}"
+    html = client.get(response.location).text
+    assert ("Original restauré. Le fichier remplacé est dans la corbeille : "
+            "Trash/Science/O&#39;Reilly (transformed).pdf") in html
+    assert 'value="Restaurer l&#39;original"' not in html
+    # the position: one page back (never before the first one)
+    assert client.get(f"/api/reader/state/{old_sha1}").json["pageNumber"] == 1
+
+
+def test_restore_original_refused(app, client, book):
+    page = f"/bookadmin/{book.sha1}"
+    assert 'value="Restaurer l&#39;original"' not in client.get(page).text
+    # no original in the trash
+    client.post(f"{page}/cover", data={})
+    response = client.post(f"{page}/original", data={"original-csrf_token": token(client, page, "trash")})
+    assert "Opération refusée : no original in the trash" in client.get(response.location).text
+    response = client.post(f"{page}/original", data={})
+    assert "Formulaire expiré ou invalide" in client.get(response.location).text
 
 
 @pytest.mark.parametrize("data, filename, message", [
@@ -368,7 +411,7 @@ def test_insert_cover_refused(app, client, book, data, filename, message):
     response = post_cover(client, book, data, filename)
     assert response.location == f"/bookadmin/{book.sha1}"
     assert message in client.get(response.location).text
-    assert not list(Path(app.config["BOOK_DIR"]).rglob("*covered*"))
+    assert not (Path(app.config["BOOK_DIR"]) / "Trash").exists()
 
 
 def test_insert_cover_without_image(app, client, book):

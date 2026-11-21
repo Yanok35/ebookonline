@@ -78,3 +78,18 @@ def test_reader_event_failure_is_logged(app, client, tmp_path, caplog):
     # the state is saved all the same
     assert response.status_code == 200 and response.json["success"]
     assert "Reader event not logged" in caplog.text
+
+
+# --- reading position of a book whose file was replaced
+
+def test_move_reader_state(app, client):
+    from app.api import move_reader_state
+
+    client.put("/api/reader/state", json=dict(STATE, pageNumber=3))
+    with app.test_request_context():
+        move_reader_state("doc-1", "doc-2", page_offset=1)
+        move_reader_state("unknown", "doc-3")
+    assert client.get("/api/reader/state/doc-1").status_code == 404
+    state = client.get("/api/reader/state/doc-2").json
+    assert state["pageNumber"] == 4 and state["documentId"] == "doc-2"
+    assert client.get("/api/reader/state/doc-3").status_code == 404
