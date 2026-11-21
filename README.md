@@ -94,9 +94,11 @@ kept in `CACHE_DIR`, next to the thumbnails. See `METADATA_ANALYSIS`,
 
 ### Upload of books
 
-A PDF file dragged from the desktop and dropped on the library page is
-uploaded to `BOOK_DIR/Incoming` (`name (2).pdf`, ... if the name is taken),
-and is at once in the library. `UPLOAD_MAX_SIZE` (500 MB by default) is its
+A PDF or EPUB file dragged from the desktop and dropped on the library page
+is uploaded to `BOOK_DIR/Incoming`. A PDF file is at once in the library;
+an EPUB file is only stored there (the library has PDF files only). A file
+whose name is already in `Incoming` is not sent (the page asks the server
+first), and is never replaced. `UPLOAD_MAX_SIZE` (500 MB by default) is the
 largest size. Not available in read-only mode.
 
 ### Theme of the reader
