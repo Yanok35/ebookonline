@@ -72,8 +72,18 @@
                         {{ cover_form.image(required=True, disabled=read_only) }}
                     </div>
                     {{ cover_form.submit(disabled=read_only) }}
-                    <p class="hint">Crée une copie du PDF, « (covered) », avec l'image (JPEG ou PNG) en première page.</p>
+                    <p class="hint">Ajoute l'image (JPEG ou PNG) en première page du PDF ; l'original
+                        est mis à la corbeille, « (original) », et peut être restauré.</p>
                 </form>
+                {% if original %}
+                <h3>Original</h3>
+                <form class="original-form" action="{{ url_for('.restore_original', sha1 = book.sha1) }}" method="post">
+                    {{ original_form.hidden_tag() }}
+                    {{ original_form.submit(disabled=read_only) }}
+                    <p class="hint">Le fichier d'avant la dernière transformation est dans la corbeille :
+                        {{ original }}. Il reprend sa place, le fichier actuel va à la corbeille.</p>
+                </form>
+                {% endif %}
                 {% endif %}
             </div>
 

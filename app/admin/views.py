@@ -37,6 +37,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from app.admin import metadata
 from srcs import naming, pdfstats
 from srcs.cache import available_backends
+from srcs.transformations import CoverPage
 from srcs.metadata.service import TASK_TIMEOUT
 from app.admin.forms import (
     AnalyseForm,
@@ -49,10 +50,12 @@ from app.admin.forms import (
     ResetThumbnailForm,
     THUMBNAIL_BACKEND_LABELS,
     RestoreForm,
+    RestoreOriginalForm,
     TrashBookForm,
     TrashDuplicateForm,
 )
 from app import is_read_only
+from app.api import move_reader_state
 from app.auth import login_required
 from srcs.bookfileops import (
     ROOT_CATEGORY,
@@ -72,6 +75,7 @@ RENAME_FORM_PREFIX = "rename"
 COVER_FORM_PREFIX = "cover"
 MOVE_FORM_PREFIX = "move"
 TRASH_FORM_PREFIX = "trash"
+ORIGINAL_FORM_PREFIX = "original"
 
 CSRF_ERROR = "Formulaire expiré ou invalide, merci de réessayer."
 
@@ -191,6 +195,9 @@ def bookadmin(sha1):
         pdfstats=pdfstats.read(current_app.config["CACHE_DIR"], book.sha1),
         pdfstats_warnings=pdfstats.warnings,
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
+        # the original of the last transformation (cover page), in the trash
+        original=d.original_in_trash(book.sha1),
+        original_form=RestoreOriginalForm(prefix=ORIGINAL_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
                                    data={"name": os.path.basename(book.filename)}),
@@ -387,10 +394,19 @@ def rename_book(sha1):
     return redirect(url_for(".bookadmin", sha1=sha1))
 
 
+def _transformed(result):
+    """
+    A book whose file was replaced (transformation, restored original): its
+    reading position follows it. Returns its page (new URL).
+    """
+    move_reader_state(result.old_sha1, result.new_sha1, result.page_offset)
+    return redirect(url_for(".bookadmin", sha1=result.new_sha1))
+
+
 @admin.route("/bookadmin/<sha1>/cover", methods=["POST"])
 @login_required
 def insert_cover(sha1):
-    """ A copy of the PDF file, with a cover page made of the uploaded image """
+    """ A cover page made of the uploaded image, in the PDF file; the original in the trash """
     book = _book_or_404(sha1)
     form = CoverForm(prefix=COVER_FORM_PREFIX)
     if not form.validate_on_submit():
@@ -398,14 +414,29 @@ def insert_cover(sha1):
         return redirect(url_for(".bookadmin", sha1=sha1))
 
     image = form.image.data.read()
-    copy = _file_operation(f"insert a cover in '{book.filename}'",
-                           lambda: current_app.bookdir.insert_cover(sha1, image))
-    if not copy:
+    result = _file_operation(f"insert a cover in '{book.filename}'",
+                             lambda: current_app.bookdir.transform(sha1, CoverPage(image)))
+    if not result:
         return redirect(url_for(".bookadmin", sha1=sha1))
-    flash(f"Copie avec une page de couverture créée : {copy}")
-    # the page of the copy (unless it is a duplicate of a known file)
-    new_book = current_app.bookdir.find_book_by_filename(copy)
-    return redirect(url_for(".bookadmin", sha1=new_book.sha1 if new_book else sha1))
+    flash(f"Page de couverture insérée. L'original est dans la corbeille : {result.trashed}")
+    return _transformed(result)
+
+
+@admin.route("/bookadmin/<sha1>/original", methods=["POST"])
+@login_required
+def restore_original(sha1):
+    """ Undo the last transformation of a book: its original back, the transformed file in the trash """
+    book = _book_or_404(sha1)
+    form = RestoreOriginalForm(prefix=ORIGINAL_FORM_PREFIX)
+    if not form.validate_on_submit():
+        flash(CSRF_ERROR, "error")
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    result = _file_operation(f"restore the original of '{book.filename}'",
+                             lambda: current_app.bookdir.restore_original(sha1))
+    if not result:
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    flash(f"Original restauré. Le fichier remplacé est dans la corbeille : {result.trashed}")
+    return _transformed(result)
 
 
 @admin.errorhandler(RequestEntityTooLarge)
