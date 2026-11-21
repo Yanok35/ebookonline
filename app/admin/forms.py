@@ -163,7 +163,7 @@ class ResetThumbnailForm(FlaskForm):
 # File operations: the paths are checked by BookDir (srcs/bookfileops.py)
 
 class CoverForm(FlaskForm):
-    """ Insert a cover page, from an image, in a copy of the PDF file """
+    """ Insert a cover page, from an image, in the PDF file (its original in the trash) """
 
     image = FileField(
         "Image de couverture",
@@ -198,6 +198,18 @@ class MoveBookForm(FlaskForm):
 
     category = CategoryField("Catégorie")
     submit = SubmitField("Déplacer")
+
+
+class OptimizeForm(FlaskForm):
+    """ Each page of the PDF file declares its own resources only (CSRF protection only) """
+
+    submit = SubmitField("Optimiser le PDF")
+
+
+class RestoreOriginalForm(FlaskForm):
+    """ Undo the last transformation of a book: its original back (CSRF protection only) """
+
+    submit = SubmitField("Restaurer l'original")
 
 
 class TrashBookForm(FlaskForm):

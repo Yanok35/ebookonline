@@ -250,6 +250,35 @@ def get_reader_state(document_id):
     return jsonify(state)
 
 
+def move_reader_state(old_sha1, new_sha1, page_offset=0):
+    """
+    The reading position of a book whose file was replaced in place
+    (BookDir.transform(), restore_original()): moved to its new sha1, its
+    page moved by page_offset (a cover page added: +1). A failure is
+    logged: the position is then lost, the book is not.
+    """
+    def moved(state):
+        state = dict(state, documentId=new_sha1)
+        if isinstance(state.get("pageNumber"), int):
+            state["pageNumber"] = max(1, state["pageNumber"] + page_offset)
+        return state
+
+    try:
+        with state_lock:
+            memory = memory_states()
+            if old_sha1 in memory:
+                memory[new_sha1] = moved(memory.pop(old_sha1))
+            if is_read_only():
+                return
+            states = load_states()
+            if old_sha1 in states:
+                states[new_sha1] = moved(states.pop(old_sha1))
+                save_states(states)
+    except (OSError, ValueError) as e:
+        current_app.logger.warning("Reading position of %s not moved to %s: %s",
+                                   old_sha1, new_sha1, e)
+
+
 # =========================================================
 # API : SAUVEGARDER UN ÉTAT
 # =========================================================

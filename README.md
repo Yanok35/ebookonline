@@ -202,8 +202,17 @@ and about the metadata analysis (see
 - `metadata stats`: state of the analysis, and agreement of the
   suggestions with the reviewed books, to tune the rules.
 
-`thumbnails help [COMMAND]` and `metadata help [COMMAND]` show their
-options. They use the configuration of the server, start none of its
+and about what makes a book slow to open in the reader (see
+[technote-pdf-performance.md](docs/technote-pdf-performance.md)):
+
+- `pdf audit`: measures the PDF files (kept in the cache directory), and
+  lists them by the resources their heaviest page declares, with their
+  warnings (`--warnings`: those with warnings only);
+- `pdf show BOOK`: the indicators of a book (also in the book page,
+  section "Structure du PDF").
+
+`thumbnails help [COMMAND]`, `metadata help [COMMAND]` and
+`pdf help [COMMAND]` show their options. They use the configuration of the server, start none of its
 services, and can run while it runs. In
 production, as the user and with the secrets of the service (see
 `resources/ebookonline.service.sample`):

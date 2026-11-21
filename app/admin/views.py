@@ -35,8 +35,9 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.admin import metadata
-from srcs import naming
+from srcs import naming, pdfstats
 from srcs.cache import available_backends
+from srcs.transformations import CoverPage, ResourcesPerPage
 from srcs.metadata.service import TASK_TIMEOUT
 from app.admin.forms import (
     AnalyseForm,
@@ -48,11 +49,14 @@ from app.admin.forms import (
     RenameBookForm,
     ResetThumbnailForm,
     THUMBNAIL_BACKEND_LABELS,
+    OptimizeForm,
     RestoreForm,
+    RestoreOriginalForm,
     TrashBookForm,
     TrashDuplicateForm,
 )
 from app import is_read_only
+from app.api import move_reader_state
 from app.auth import login_required
 from srcs.bookfileops import (
     ROOT_CATEGORY,
@@ -72,6 +76,8 @@ RENAME_FORM_PREFIX = "rename"
 COVER_FORM_PREFIX = "cover"
 MOVE_FORM_PREFIX = "move"
 TRASH_FORM_PREFIX = "trash"
+ORIGINAL_FORM_PREFIX = "original"
+OPTIMIZE_FORM_PREFIX = "optimize"
 
 CSRF_ERROR = "Formulaire expiré ou invalide, merci de réessayer."
 
@@ -80,6 +86,14 @@ CSRF_ERROR = "Formulaire expiré ou invalide, merci de réessayer."
 def format_datetime(timestamp):
     """ {{ book.mtime | datetime }} -> '2026-11-13 21:27' """
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+
+
+@admin.app_template_filter("filesize")
+def format_filesize(n):
+    """ {{ 1536 | filesize }} -> '1.5 Ko'; Mo above a MiB """
+    if n >= 1024 * 1024:
+        return f"{n / 1024 / 1024:.1f}\u00a0Mo"
+    return f"{n / 1024:.1f}\u00a0Ko"
 
 
 @admin.route("/bookadmin/")
@@ -178,7 +192,14 @@ def bookadmin(sha1):
         analyse_form=AnalyseForm(prefix=ANALYSE_FORM_PREFIX),
         reset_form=_reset_form(),
         thumbnail=current_app.cache.thumbnail_info(book.sha1),
+        # the indicators of the PDF file, when already measured (else
+        # measured when their section is opened, see pdfstats_view())
+        pdfstats=pdfstats.read(current_app.config["CACHE_DIR"], book.sha1),
+        **_pdfstats_context(),
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
+        # the original of the last transformation (cover page), in the trash
+        original=d.original_in_trash(book.sha1),
+        original_form=RestoreOriginalForm(prefix=ORIGINAL_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
                                    data={"name": os.path.basename(book.filename)}),
@@ -226,6 +247,32 @@ def thumbnail_state(sha1):
     """ JSON: whether the thumbnail of a book exists (book page, after a regeneration) """
     _book_or_404(sha1)
     return jsonify(ready=os.path.exists(current_app.cache.get_thumbname(sha1)))
+
+
+@admin.route("/bookadmin/<sha1>/pdfstats")
+@login_required
+def pdfstats_view(sha1):
+    """
+    HTML fragment: the indicators of the PDF file of a book (section
+    "Structure du PDF" of the book page), measured if needed (a few
+    hundred ms), kept in the cache. ?force=1 measures again.
+    """
+    book = _book_or_404(sha1)
+    stats = None
+    if book.present:
+        stats = pdfstats.get(current_app.config["CACHE_DIR"], sha1,
+                             os.path.join(book.book_dir, book.filename),
+                             writable=current_app.cache.writable,
+                             force=request.args.get("force") == "1")
+    return render_template("admin/_pdfstats.html", book=book, pdfstats=stats,
+                           **_pdfstats_context())
+
+
+def _pdfstats_context():
+    """ What the section "Structure du PDF" needs, besides the indicators """
+    return {"pdfstats_warnings": pdfstats.warnings,
+            "pdfstats_optimizable": pdfstats.optimizable,
+            "optimize_form": OptimizeForm(prefix=OPTIMIZE_FORM_PREFIX)}
 
 
 def _reset_form():
@@ -356,10 +403,19 @@ def rename_book(sha1):
     return redirect(url_for(".bookadmin", sha1=sha1))
 
 
+def _transformed(result):
+    """
+    A book whose file was replaced (transformation, restored original): its
+    reading position follows it. Returns its page (new URL).
+    """
+    move_reader_state(result.old_sha1, result.new_sha1, result.page_offset)
+    return redirect(url_for(".bookadmin", sha1=result.new_sha1))
+
+
 @admin.route("/bookadmin/<sha1>/cover", methods=["POST"])
 @login_required
 def insert_cover(sha1):
-    """ A copy of the PDF file, with a cover page made of the uploaded image """
+    """ A cover page made of the uploaded image, in the PDF file; the original in the trash """
     book = _book_or_404(sha1)
     form = CoverForm(prefix=COVER_FORM_PREFIX)
     if not form.validate_on_submit():
@@ -367,14 +423,53 @@ def insert_cover(sha1):
         return redirect(url_for(".bookadmin", sha1=sha1))
 
     image = form.image.data.read()
-    copy = _file_operation(f"insert a cover in '{book.filename}'",
-                           lambda: current_app.bookdir.insert_cover(sha1, image))
-    if not copy:
+    result = _file_operation(f"insert a cover in '{book.filename}'",
+                             lambda: current_app.bookdir.transform(sha1, CoverPage(image)))
+    if not result:
         return redirect(url_for(".bookadmin", sha1=sha1))
-    flash(f"Copie avec une page de couverture créée : {copy}")
-    # the page of the copy (unless it is a duplicate of a known file)
-    new_book = current_app.bookdir.find_book_by_filename(copy)
-    return redirect(url_for(".bookadmin", sha1=new_book.sha1 if new_book else sha1))
+    flash(f"Page de couverture insérée. L'original est dans la corbeille : {result.trashed}")
+    return _transformed(result)
+
+
+@admin.route("/bookadmin/<sha1>/optimize", methods=["POST"])
+@login_required
+def optimize(sha1):
+    """
+    Each page of the PDF file declares its own resources only (a book
+    sharing its resources between its pages opens much faster); the
+    original in the trash
+    """
+    book = _book_or_404(sha1)
+    form = OptimizeForm(prefix=OPTIMIZE_FORM_PREFIX)
+    if not form.validate_on_submit():
+        flash(CSRF_ERROR, "error")
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    transformation = ResourcesPerPage()
+    result = _file_operation(f"optimize '{book.filename}'",
+                             lambda: current_app.bookdir.transform(sha1, transformation))
+    if not result:
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    before, after = transformation.gain
+    flash(f"PDF optimisé : la page la plus lourde déclarait {format_filesize(before)} de ressources, "
+          f"{format_filesize(after)} désormais. L'original est dans la corbeille : {result.trashed}")
+    return _transformed(result)
+
+
+@admin.route("/bookadmin/<sha1>/original", methods=["POST"])
+@login_required
+def restore_original(sha1):
+    """ Undo the last transformation of a book: its original back, the transformed file in the trash """
+    book = _book_or_404(sha1)
+    form = RestoreOriginalForm(prefix=ORIGINAL_FORM_PREFIX)
+    if not form.validate_on_submit():
+        flash(CSRF_ERROR, "error")
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    result = _file_operation(f"restore the original of '{book.filename}'",
+                             lambda: current_app.bookdir.restore_original(sha1))
+    if not result:
+        return redirect(url_for(".bookadmin", sha1=sha1))
+    flash(f"Original restauré. Le fichier remplacé est dans la corbeille : {result.trashed}")
+    return _transformed(result)
 
 
 @admin.errorhandler(RequestEntityTooLarge)

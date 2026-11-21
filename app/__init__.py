@@ -187,9 +187,10 @@ def create_app(config_name):
     app.register_blueprint(timeline_blueprint)
 
     # Command line interface (flask --app ebookonline thumbnails|metadata ...)
-    from .cli import metadata, thumbnails
+    from .cli import metadata, pdf, thumbnails
     app.cli.add_command(thumbnails)
     app.cli.add_command(metadata)
+    app.cli.add_command(pdf)
 
     app.register_error_handler(404, _log_not_found)
 

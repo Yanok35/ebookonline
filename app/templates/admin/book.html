@@ -72,8 +72,18 @@
                         {{ cover_form.image(required=True, disabled=read_only) }}
                     </div>
                     {{ cover_form.submit(disabled=read_only) }}
-                    <p class="hint">Crée une copie du PDF, « (covered) », avec l'image (JPEG ou PNG) en première page.</p>
+                    <p class="hint">Ajoute l'image (JPEG ou PNG) en première page du PDF ; l'original
+                        est mis à la corbeille, « (original) », et peut être restauré.</p>
                 </form>
+                {% if original %}
+                <h3>Original</h3>
+                <form class="original-form" action="{{ url_for('.restore_original', sha1 = book.sha1) }}" method="post">
+                    {{ original_form.hidden_tag() }}
+                    {{ original_form.submit(disabled=read_only) }}
+                    <p class="hint">Le fichier d'avant la dernière transformation est dans la corbeille :
+                        {{ original }}. Il reprend sa place, le fichier actuel va à la corbeille.</p>
+                </form>
+                {% endif %}
                 {% endif %}
             </div>
 
@@ -251,11 +261,60 @@
         </details>
         {% endif %}
 
+        {% if book.present %}
+        {#- measured when opened, unless already measured #}
+        {%- set warnings = pdfstats_warnings(pdfstats) if pdfstats else [] %}
+        <details class="admin-db pdfstats" id="pdfstats"
+                 data-src="{{ url_for('.pdfstats_view', sha1=book.sha1) }}"{% if pdfstats %} data-loaded{% endif %}>
+            <summary>Structure du PDF<span class="pdfstats-summary">{% if warnings %} — {{ warnings | length }} alerte{{ "s" if warnings | length > 1 }}{% endif %}</span></summary>
+            <div class="pdfstats-body">
+                {%- if pdfstats %}{% include "admin/_pdfstats.html" %}
+                {%- else %}<p class="hint">Mesure du fichier…</p>{% endif %}
+            </div>
+        </details>
+        {% endif %}
+
         <details class="admin-db">
             <summary>Entrée book.db</summary>
             <pre>{{ book.to_json() | tojson(indent=2) }}</pre>
         </details>
         <script>
+            // "Structure du PDF": measured when opened (the first time), or
+            // again with its link
+            (function () {
+                var section = document.getElementById("pdfstats");
+                if (!section) return;
+                var body = section.querySelector(".pdfstats-body");
+                var summary = section.querySelector(".pdfstats-summary");
+                function load(url) {
+                    body.innerHTML = '<p class="hint">Mesure du fichier…</p>';
+                    fetch(url, { credentials: "same-origin" })
+                        .then(function (response) { return response.text(); })
+                        .then(function (html) {
+                            body.innerHTML = html;
+                            section.dataset.loaded = "";
+                            var content = body.querySelector(".pdfstats-content");
+                            var n = content ? Number(content.dataset.warnings) : 0;
+                            summary.textContent = n ? " — " + n + (n > 1 ? " alertes" : " alerte") : "";
+                        })
+                        .catch(function () {
+                            body.innerHTML = '<p class="error">La mesure a échoué.</p>';
+                        });
+                }
+                section.addEventListener("toggle", function () {
+                    if (section.open && !("loaded" in section.dataset)) {
+                        load(section.dataset.src);
+                    }
+                });
+                body.addEventListener("click", function (event) {
+                    var again = event.target.closest(".pdfstats-again");
+                    if (again) {
+                        event.preventDefault();
+                        load(again.dataset.src);
+                    }
+                });
+            })();
+
             // "Utiliser": set a suggestion in its field; "+ name": add an author
             document.querySelectorAll("button.use-suggestion, button.add-author").forEach(function (button) {
                 button.addEventListener("click", function () {
