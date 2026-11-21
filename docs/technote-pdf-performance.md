@@ -123,78 +123,117 @@ the user values), and to keep the original (in the trash).
 4. Not recommended: pages rendered by the server (images per page and
    zoom: much disk, no text layer, the reader to rewrite).
 
-## Optimization in place: consequences and mitigations
+## Transformations of a book file
 
-No copy in the cache (the disk space of production): an optimized book
-replaces its file in `BOOK_DIR`. Its content changes, so does its sha1,
-the identity of the book everywhere. What each place keyed by the sha1
-becomes, today, and how to mitigate it:
+The optimization is the first operation which changes the content of a
+file of `BOOK_DIR`, but not the only one: the insertion of a cover page
+(today a copy, `name (covered).pdf`, a new book with the user values of
+the original) is another transformation of the content. Both use one
+general operation of the book directory.
 
-| place | today (file changed in place, then rescan) | mitigation |
+### A transformation
+
+A transformation is described by:
+
+- `apply(src, dst)`: writes the new file (PyMuPDF);
+- the **page mapping**: old page → new page. The identity for the
+  optimization; `n → n + 1` for a cover page added before the first one;
+- what it **keeps**: the first page (then the thumbnail is kept), the text
+  of the pages (then the metadata analysis is kept), the pages themselves
+  (then the reading positions and the notes stay valid, once mapped);
+- its **checks** of the new file: same number of pages (or one more for
+  a cover), same page sizes, same text, the rendering of a few pages
+  compared at low resolution.
+
+Two **modes**:
+
+- **copy**: the new file next to the original (`name (covered).pdf`), a
+  new book with the user values of the original; nothing else changes
+  (today's cover page);
+- **replace**: the new file takes the place of the original, which goes
+  to the Trash; the book keeps its entry, its path, its user values and
+  its data, under its new sha1.
+
+### `BookDir.transform(sha1, transformation, mode)`, under the scan lock
+
+1. the book: present, without duplicates (see below);
+2. `apply()` into a hidden temporary file next to the original (ignored by
+   the scan and the watcher); the checks; its sha1 (already known: a copy
+   of another book, refused);
+3. *copy*: move to a free name, a new entry with the user values;
+   *replace*: the original to the Trash, the new file to its path;
+4. *replace*: the entry takes the new sha1, size and mtime; the data
+   keyed by the sha1 follow it (next section);
+5. save book.db: the watcher then finds nothing to do (book.db already
+   has the size and mtime of the file).
+
+The data kept outside of book.db (reading positions, notes) belong to the
+application (`app/`), not to the book directory: the operation returns
+what changed (old sha1, new sha1, page mapping, what is kept), the
+application moves its data under its own locks.
+
+## Consequences of a replacement, and their mitigations
+
+| place | without care | mitigation |
 |---|---|---|
-| book.db: user values (title, authors, tags, pinned, reviewed) | kept: the rescan sees "same path, new content", the entry takes the new sha1 | none needed; done by the operation itself rather than by the next rescan |
-| book.db: the old sha1 | forgotten | **aliases**: book.db keeps `former_sha1` of the book (schema v5, compatible) |
-| duplicates (other files with the old content) | broken: a copy keeps the old sha1, the entry of the book may follow the copy (seen as "moved"), the optimized file becomes a new book without user values | **refused** while the book has duplicates (or all its copies optimized together) |
-| thumbnail `CACHE_DIR/<sha1>.jpg` | made again (the first page is the same); the old one stays, orphan | **renamed** to the new sha1 (same first page) |
-| metadata analysis `<sha1>.meta.json.gz` | made again (a few seconds); the old one stays | **renamed**, its `sha1` field rewritten (same text) |
-| reading position `reader_states.json` | **lost** (keyed by the old sha1) | **moved** to the new sha1 (same pages: the position stays valid) |
-| journal of the reader events, timeline | the history is **split**; the old sessions are dropped from "Mes lectures" (unknown sha1) | journal kept as is (append only); the **aliases** are applied when it is read (`srcs/history.py`) |
-| notes in the margin (future, by sha1) | lost | moved with the book (same pages: anchors valid) |
-| links and bookmarks `/reader/<sha1>`, `/pdf/`, `/bookadmin/`, `/images/` | 404 | the **aliases** answer a redirect (301) to the new sha1 |
-| an open reader tab | its positions saved under the old sha1 | the API maps an alias to the new sha1 |
-| "ajouts récents" (sorted by mtime) | the book becomes the most recent one | the **mtime of the original kept** (os.utime) |
-| original file | lost | moved to the **Trash** (restorable; disk ×2 until the trash is emptied; an option to skip it for a batch) |
-| restore of the original from the Trash | a new book with the old sha1, which is an alias | restore: the alias is dropped, the restored file is a book of its own (its user values copied, as a copy with a cover page) |
+| book.db: user values | kept (the rescan sees "same path, new content") | done by the operation, not by a later rescan |
+| duplicates of the book | broken: the entry may follow a copy ("moved"), the new file becomes a book without user values | **refused** while the book has duplicates |
+| thumbnail `<sha1>.jpg` | made again, the old one orphan | **renamed** when the first page is kept (optimization), **made again** otherwise (cover); the old one removed |
+| metadata analysis `<sha1>.meta.json.gz` | made again, the old one orphan | **renamed** (its `sha1` rewritten) when the text is kept, **made again** otherwise; the old one removed |
+| reading position | **lost** | **moved** to the new sha1, its page **mapped** (cover: +1) |
+| notes (future) | lost | moved, their pages mapped |
+| journal of the reader events, "Mes lectures" | the history split, the old sessions dropped | see the aliases |
+| URLs `/reader/<sha1>` (bookmarks, history of the browser), an open reader | 404; an open reader saves its position under the old sha1 | see the aliases |
+| "ajouts récents" (sorted by mtime) | the book becomes the latest one | a date of addition in book.db (`added`, the mtime when the book was found first), used to sort instead of the mtime. Keeping the old mtime on the new file is not an option: a backup comparing size and mtime (rsync) could miss the change |
+| original | lost | in the **Trash**: restorable; its disk space until the trash is emptied (an option of the command line to skip it) |
+| server and command line | two processes writing book.db | the command line needs the server stopped (a lock file of the book directory, taken by both) |
 
-### Safety of the optimized file
+## Aliases: the former sha1 of a book
 
-Before it replaces the original, the optimized file is checked: same
-number of pages, same page sizes, same text of the pages (extracted), the
-rendering of a few pages compared at low resolution (a small difference
-only). Otherwise the optimization is refused and the original kept.
+An alias says "this sha1 is now this book". Three levels, from the
+cheapest:
 
-### The operation
+| | old URLs | history ("Mes lectures") | cost |
+|---|---|---|---|
+| A. none | 404 | split: the sessions before the replacement dropped | none |
+| B. in the journal only: a line `{"t", "alias": old, "doc": new}` appended to `reader_events.jsonl` | 404 | whole: the reading of the journal maps `old` to `new` from this line on | a few lines in `srcs/history.py` and in the operation |
+| C. in book.db: `former_sha1` of each book | redirect to the new sha1 (reader, PDF, book page, thumbnail), an open reader saves under the new sha1 | whole | an index in BookDir, one lookup used by the routes, schema v5, the life cycle below |
 
-`BookDir.optimize(sha1, steps)`, under the scan lock, as the file
-operations of the book page:
+Life cycle of an alias (C; B has the same events in the journal):
 
-1. measure the book (indicators); nothing to do: stop;
-2. write the optimized file to a hidden temporary file next to it (ignored
-   by the scan and the watcher), check it, compute its sha1;
-3. move the original to the Trash, the optimized file to its path, with
-   the mtime of the original;
-4. the entry of the book: new sha1, size, mtime, `former_sha1` += old one;
-5. rename the thumbnail and the metadata cache file, move the reading
-   position (and the notes);
-6. save book.db; the watcher then sees nothing to do (same mtime and size
-   as in book.db).
+1. **created** by a replacement: the old sha1 added to `former_sha1` of the
+   book (a book optimized, then given a cover: two aliases);
+2. **used** by the lookups by sha1 (`find_book_by_sha1()` falls back on the
+   aliases: one place, every route benefits), by the reading of the
+   journal, by the API of the reading positions;
+3. **kept** while the book exists, missing books included (their entry is
+   kept); a few dozen bytes each;
+4. **dropped** when a file with this content is in the library again: the
+   original restored from the Trash, or copied back. The scan finds a file
+   whose sha1 is an alias: the alias is dropped, the file is a book of its
+   own (the restore copies the user values to it, as a copy);
+5. **gone** with the entry of the book, if it is ever removed from book.db.
 
-### Book page and command line
+Maintenance: the rule 4 in the scan, the fallback of the lookup, the
+schema v5 (compatible: an older server ignores the field), their tests.
+Recommendation: **B first** (the history kept for a small cost), C when
+the old links matter (shared links, bookmarks of the browser).
 
-- **Book page**: the indicators in a `<details>`, with the possible gain
-  ("the first page needs 77.7 MB, 0.7 MB once optimized"), and a button
-  "Optimiser" (with the steps chosen: per-page resources, linearization,
-  images). The page then goes to the new URL (the old one redirects).
-- **Command line** (`flask --app ebookonline pdf audit|optimize`): audit of
-  the whole library (the books worth an optimization first), optimization
-  by sha1 or path, or of all the books over a threshold, with `-n` (dry
-  run). It writes book.db and `reader_states.json`: **the server must be
-  stopped** (it keeps book.db in memory and would overwrite it); the
-  command refuses to run while the server answers, or uses a lock file.
+## Steps
 
-### Steps of the implementation
+1. **Indicators** (no file changed): the measure of a PDF file (srcs), its
+   cache `<sha1>.pdfstats.json` made with the metadata analysis, the
+   `<details>` of the book page, `flask pdf audit` (the books worth an
+   optimization first).
+2. **`BookDir.transform()`**, the copy mode first: the cover page made
+   with it (same behaviour as today), the checks of the new file.
+3. **Replace mode**: original to the Trash, entry and caches following
+   the new sha1, reading positions moved and mapped, `added` date for
+   "ajouts récents", refusal with duplicates; the cover page offered "in
+   place" or "as a copy" on the book page.
+4. **Optimization** (per-page resources) as a transformation: the button
+   of the book page, `flask pdf optimize` (server stopped, lock file).
+5. **Aliases** (B, then C if wanted).
 
-1. indicators: measure (srcs, a function of the PDF file), cache
-   (`<sha1>.pdfstats.json`, with the metadata analysis), `<details>` of
-   the book page, `flask pdf audit`;
-2. aliases in book.db (v5), redirects of the old URLs, aliases applied to
-   the history;
-3. `BookDir.optimize()` with the per-page resources step, the checks, the
-   moves of the sha1-keyed data; the button of the book page;
-4. `flask pdf optimize` (server stopped);
-5. later, the other steps (linearization with qpdf, images).
-
-An alternative, larger: an identity of the book independent of its
-content (an id in book.db), used by the URLs and the data instead of the
-sha1. The sha1 would only detect moves and duplicates. Every URL and
-store to migrate: the aliases give most of the benefit at a small cost.
+Set aside: the linearization (small gain once the resources are per
+page), the recompression of the images (lossy).
