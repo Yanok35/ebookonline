@@ -35,7 +35,7 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.admin import metadata
-from srcs import naming
+from srcs import naming, pdfstats
 from srcs.cache import available_backends
 from srcs.metadata.service import TASK_TIMEOUT
 from app.admin.forms import (
@@ -80,6 +80,14 @@ CSRF_ERROR = "Formulaire expiré ou invalide, merci de réessayer."
 def format_datetime(timestamp):
     """ {{ book.mtime | datetime }} -> '2026-11-13 21:27' """
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+
+
+@admin.app_template_filter("filesize")
+def format_filesize(n):
+    """ {{ 1536 | filesize }} -> '1.5 Ko'; Mo above a MiB """
+    if n >= 1024 * 1024:
+        return f"{n / 1024 / 1024:.1f}\u00a0Mo"
+    return f"{n / 1024:.1f}\u00a0Ko"
 
 
 @admin.route("/bookadmin/")
@@ -178,6 +186,10 @@ def bookadmin(sha1):
         analyse_form=AnalyseForm(prefix=ANALYSE_FORM_PREFIX),
         reset_form=_reset_form(),
         thumbnail=current_app.cache.thumbnail_info(book.sha1),
+        # the indicators of the PDF file, when already measured (else
+        # measured when their section is opened, see pdfstats_view())
+        pdfstats=pdfstats.read(current_app.config["CACHE_DIR"], book.sha1),
+        pdfstats_warnings=pdfstats.warnings,
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
@@ -226,6 +238,25 @@ def thumbnail_state(sha1):
     """ JSON: whether the thumbnail of a book exists (book page, after a regeneration) """
     _book_or_404(sha1)
     return jsonify(ready=os.path.exists(current_app.cache.get_thumbname(sha1)))
+
+
+@admin.route("/bookadmin/<sha1>/pdfstats")
+@login_required
+def pdfstats_view(sha1):
+    """
+    HTML fragment: the indicators of the PDF file of a book (section
+    "Structure du PDF" of the book page), measured if needed (a few
+    hundred ms), kept in the cache. ?force=1 measures again.
+    """
+    book = _book_or_404(sha1)
+    stats = None
+    if book.present:
+        stats = pdfstats.get(current_app.config["CACHE_DIR"], sha1,
+                             os.path.join(book.book_dir, book.filename),
+                             writable=current_app.cache.writable,
+                             force=request.args.get("force") == "1")
+    return render_template("admin/_pdfstats.html", book=book, pdfstats=stats,
+                           pdfstats_warnings=pdfstats.warnings)
 
 
 def _reset_form():

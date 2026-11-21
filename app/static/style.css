@@ -507,3 +507,29 @@ input:disabled {
 .admin q {
     quotes: "« " " »";
 }
+
+/* Admin: "Structure du PDF" of the book page */
+.admin .pdfstats-warnings {
+    margin: 0.5em 0;
+    padding-left: 1.2em;
+    color: darkred;
+}
+
+.admin .pdfstats-ok {
+    color: #2e7d32;
+}
+
+.admin .pdfstats-table {
+    width: auto;
+    margin: 0.5em 0;
+}
+
+.admin .pdfstats-table th {
+    text-align: left;
+    padding-top: 0.8em;
+}
+
+.admin .pdfstats-table td:first-child {
+    color: #444;
+    padding-right: 1.5em;
+}

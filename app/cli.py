@@ -526,3 +526,156 @@ def stats(live):
     for field, c in fields.items():
         click.echo(f"{field:10} {c['filled']:7} {c['suggested']:10}   "
                    f"{rate(c['agree'], c['compared']):24} {rate(c['agree80'], c['compared80']):18}")
+
+
+# --- PDF indicators (srcs/pdfstats.py)
+
+pdf = Group("pdf", help="Indicators of the PDF files: what makes a book slow to open in the reader.")
+add_help_command(pdf)
+
+
+def _measure(cache_dir, sha1, pdf_path, force):
+    from srcs import pdfstats
+    return pdfstats.get(cache_dir, sha1, pdf_path, writable=True, force=force)
+
+
+def _mib(n):
+    return f"{n / 1024 / 1024:7.1f} MB"
+
+
+@pdf.command("audit")
+@click.option("--force", is_flag=True, help="Measure again, even the files already measured.")
+@click.option("--jobs", "-j", type=click.IntRange(min=1), default=1, show_default=True,
+              help="Number of parallel processes.")
+@click.option("--limit", type=click.IntRange(min=0), default=20, show_default=True,
+              help="Number of books listed, the slowest first (0: all of them).")
+@click.option("--warnings", "only_warnings", is_flag=True, help="List only the books with warnings.")
+@click.argument("books", nargs=-1)
+def audit(force, jobs, limit, only_warnings, books):
+    """
+    Measure the PDF files of the book directory, or the BOOKS given by sha1
+    or path, then list them by the resources their heaviest page declares
+    (what the reader downloads before drawing it), with their warnings.
+
+    The indicators are kept in the cache directory (<sha1>.pdfstats.json):
+    a file already measured is not read again (unless --force). The same
+    indicators are shown by the book page, section "Structure du PDF".
+    """
+    from srcs import pdfstats
+
+    cache_dir = current_app.config["CACHE_DIR"]
+    if not current_app.cache.writable:
+        raise click.ClickException(f"the cache directory can not be written: {cache_dir}")
+
+    click.echo("Listing the PDF files (the new ones are hashed)...", err=True)
+    files = {}
+    for f in sorted(current_app.bookdir.pdf_files(), key=lambda f: f.filename):
+        files.setdefault(f.sha1, f)  # one measure per content
+    if books:
+        by_path = {f.filename: f for f in files.values()}
+        selected = {}
+        for arg in books:
+            f = files.get(arg) or by_path.get(arg)
+            if f is None:
+                raise click.BadParameter(f"no PDF file with this sha1 or path: {arg}",
+                                         param_hint="BOOKS")
+            selected[f.sha1] = f
+        files = selected
+
+    results = {}
+    todo = []
+    for sha1, f in files.items():
+        entry = None if force else pdfstats.read(cache_dir, sha1)
+        if entry is None:
+            todo.append(f)
+        else:
+            results[sha1] = entry
+    path = lambda f: os.path.join(current_app.bookdir.dirpath, f.filename)
+    if todo:
+        with click.progressbar(length=len(todo), label="Measure", file=sys.stderr,
+                               item_show_func=lambda f: f.filename[-50:] if f else None) as bar:
+            if jobs == 1:
+                for f in todo:
+                    results[f.sha1] = _measure(cache_dir, f.sha1, path(f), force)
+                    bar.update(1, f)
+            else:
+                with ProcessPoolExecutor(
+                        max_workers=jobs,
+                        mp_context=multiprocessing.get_context("forkserver")) as pool:
+                    futures = {pool.submit(_measure, cache_dir, f.sha1, path(f), force): f
+                               for f in todo}
+                    for future in as_completed(futures):
+                        f = futures[future]
+                        results[f.sha1] = future.result()
+                        bar.update(1, f)
+
+    rows = []
+    errors = []
+    for sha1, entry in results.items():
+        f = files[sha1]
+        if entry is None or entry.get("error"):
+            errors.append((f, (entry or {}).get("error", "missing")))
+            continue
+        rows.append((entry["resources"]["max"], f, entry, pdfstats.warnings(entry)))
+    rows.sort(key=lambda r: (-r[0], r[1].filename))
+    with_warnings = [r for r in rows if r[3]]
+    listed = with_warnings if only_warnings else rows
+    if limit:
+        listed = listed[:limit]
+    if listed:
+        click.echo(f"{'page':>10} {'images':>6} {'file':>10}  book")
+    for page_bytes, f, entry, warns in listed:
+        click.echo(f"{_mib(page_bytes)} {entry['resources']['max_images']:6} "
+                   f"{_mib(entry['file']['size'])}  {f.filename}")
+        for w in warns:
+            click.echo(f"{'':30}! {w}")
+    for f, error in sorted(errors, key=lambda e: e[0].filename):
+        click.echo(f"error  {f.filename}: {error}", err=True)
+    click.echo(f"{len(rows)} file(s) measured, {len(with_warnings)} with warnings, "
+               f"{len(errors)} unreadable")
+
+
+@pdf.command("show")
+@click.argument("book")
+@click.option("--force", is_flag=True, help="Measure again.")
+@click.option("--json", "as_json", is_flag=True, help="Output JSON.")
+def pdf_show(book, force, as_json):
+    """
+    Show the indicators of the PDF file of a BOOK (sha1 or path), measured
+    if needed, and their warnings.
+    """
+    import json
+
+    from srcs import pdfstats
+
+    book = _find_book(book)
+    pdf_path = os.path.join(current_app.bookdir.dirpath, book.filename)
+    entry = pdfstats.get(current_app.config["CACHE_DIR"], book.sha1, pdf_path,
+                         writable=current_app.cache.writable, force=force)
+    if entry is None:
+        raise click.ClickException(f"no PDF file: {book.filename}")
+    if as_json:
+        click.echo(json.dumps(dict(entry, warnings=pdfstats.warnings(entry)), indent=2,
+                              ensure_ascii=False))
+        return
+    click.echo(book.filename)
+    if entry.get("error"):
+        raise click.ClickException(entry["error"])
+    f, res, img, fonts = entry["file"], entry["resources"], entry["images"], entry["fonts"]
+    click.echo(f"file      {f['size'] / 1024 / 1024:.1f} MB, {f['pages']} pages, {f['version']}, "
+               f"producer {f['producer'] or f['creator'] or '-'}, "
+               f"{'linearized' if f['linearized'] else 'not linearized'}, "
+               f"{f['objects']} objects, {f['updates']} incremental update(s)")
+    click.echo("weight    " + ", ".join(f"{k} {v / 1024 / 1024:.1f} MB" for k, v in entry["bytes"].items()))
+    click.echo(f"resources heaviest page {res['max_page']}: {res['max'] / 1024 / 1024:.1f} MB, "
+               f"{res['max_images']} images; median {res['median'] / 1024 / 1024:.2f} MB; "
+               f"{res['pages_over']} page(s) over 10 MB")
+    click.echo(f"images    {img['count']}, {img['bytes'] / 1024 / 1024:.1f} MB, largest "
+               f"{img['max_pixels'] / 1e6:.1f} MP, CMYK {img['cmyk']}, JPEG 2000 {img['jpx']}, "
+               f"soft masks {img['soft_masks']}")
+    click.echo(f"fonts     {fonts['count']}, embedded {fonts['embedded']}, subsets {fonts['subsets']}, "
+               f"Type 3 {fonts['type3']}")
+    click.echo(f"content   median {entry['content']['median'] / 1024:.0f} KB, largest "
+               f"{entry['content']['max'] / 1024:.0f} KB (page {entry['content']['max_page']})")
+    for w in pdfstats.warnings(entry):
+        click.echo(f"! {w}")

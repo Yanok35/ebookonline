@@ -1,0 +1,71 @@
+{#- Indicators of the PDF file of a book (srcs/pdfstats.py): the section
+    "Structure du PDF" of the book page, also loaded alone (pdfstats_view) -#}
+{%- if not pdfstats %}
+<p class="hint">{{ "Le PDF est absent du répertoire des livres." if not book.present else "Indicateurs indisponibles." }}</p>
+{%- elif pdfstats.error %}
+<p class="error">Le PDF ne peut pas être lu : {{ pdfstats.error }}</p>
+{%- else %}
+{%- set warnings = pdfstats_warnings(pdfstats) %}
+{%- set f = pdfstats.file %}
+{%- set res = pdfstats.resources %}
+{%- set img = pdfstats.images %}
+<div class="pdfstats-content" data-warnings="{{ warnings | length }}">
+<p class="hint">Ce qui peut ralentir l'ouverture du livre dans le lecteur : avant d'afficher
+    une page, il télécharge toutes les ressources (images, polices) qu'elle déclare.</p>
+{% if warnings %}
+<ul class="pdfstats-warnings">
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+</ul>
+{% else %}
+<p class="pdfstats-ok">Aucun problème repéré.</p>
+{% endif %}
+
+<table class="admin-table pdfstats-table">
+    <tbody>
+    <tr><th colspan="2">Fichier</th></tr>
+    <tr><td>Taille, pages</td><td>{{ f.size | filesize }}, {{ f.pages }} pages</td></tr>
+    <tr><td>Version, producteur</td><td>{{ f.version }}{% if f.producer or f.creator %}, {{ f.producer or f.creator }}{% endif %}</td></tr>
+    <tr><td>Linéarisé (affichage rapide)</td><td>{{ "oui" if f.linearized else "non" }}</td></tr>
+    <tr><td>Objets, mises à jour incrémentales</td><td>{{ f.objects }}, {{ f.updates }}</td></tr>
+    {% if f.encrypted %}<tr><td>Chiffré</td><td>oui</td></tr>{% endif %}
+
+    <tr><th colspan="2">Poids par nature</th></tr>
+    {% for kind, label in [("images", "Images"), ("fonts", "Polices"), ("content", "Contenu des pages"), ("other", "Autres")] %}
+    <tr><td>{{ label }}</td><td>{{ pdfstats.bytes[kind] | filesize }}
+        ({{ (100 * pdfstats.bytes[kind] / f.size) | round(1) if f.size else 0 }}&nbsp;%)</td></tr>
+    {% endfor %}
+
+    <tr><th colspan="2">Ressources déclarées par page (chargées avant son affichage)</th></tr>
+    <tr><td>La plus lourde</td><td>{{ res.max | filesize }}{% if res.max_page %}, page {{ res.max_page }}{% endif %},
+        {{ res.max_images }} image(s) au plus</td></tr>
+    <tr><td>Médiane</td><td>{{ res.median | filesize }}</td></tr>
+    <tr><td>Pages au-delà de 10&nbsp;Mo</td><td>{{ res.pages_over }}</td></tr>
+
+    <tr><th colspan="2">Images</th></tr>
+    <tr><td>Nombre, poids</td><td>{{ img.count }}, {{ img.bytes | filesize }}</td></tr>
+    {% if img.largest %}
+    <tr><td>La plus lourde</td><td>{{ img.largest.width }}×{{ img.largest.height }} pixels,
+        {{ img.largest.bytes | filesize }}, {{ img.largest.filter }}, {{ img.largest.colorspace }}</td></tr>
+    <tr><td>La plus grande</td><td>{{ (img.max_pixels / 1000000) | round(1) }} mégapixels</td></tr>
+    {% endif %}
+    {% if img.count %}
+    <tr><td>Compressions</td><td>{% for k, n in img.filters | dictsort %}{{ k }}&nbsp;: {{ n }}{{ ", " if not loop.last }}{% endfor %}</td></tr>
+    <tr><td>Couleurs</td><td>{% for k, n in img.colorspaces | dictsort %}{{ k }}&nbsp;: {{ n }}{{ ", " if not loop.last }}{% endfor %}</td></tr>
+    <tr><td>Avec transparence</td><td>{{ img.soft_masks }}</td></tr>
+    {% endif %}
+
+    <tr><th colspan="2">Polices</th></tr>
+    <tr><td>Nombre, embarquées, sous-ensembles</td><td>{{ pdfstats.fonts.count }}, {{ pdfstats.fonts.embedded }},
+        {{ pdfstats.fonts.subsets }}</td></tr>
+    <tr><td>Type 3</td><td>{{ pdfstats.fonts.type3 }}</td></tr>
+
+    <tr><th colspan="2">Contenu des pages</th></tr>
+    <tr><td>Médiane, le plus long</td><td>{{ pdfstats.content.median | filesize }},
+        {{ pdfstats.content.max | filesize }}{% if pdfstats.content.max_page %} (page {{ pdfstats.content.max_page }}){% endif %}</td></tr>
+    <tr><td>Signets, annotations</td><td>{{ pdfstats.outline }}, {{ pdfstats.annotations }}</td></tr>
+    </tbody>
+</table>
+<p class="hint">Mesuré le {{ pdfstats.measured_at[:16] | replace("T", " ") }} (UTC).
+    <a href="#" class="pdfstats-again" data-src="{{ url_for('.pdfstats_view', sha1=book.sha1, force=1) }}">Mesurer à nouveau</a></p>
+</div>
+{%- endif %}
