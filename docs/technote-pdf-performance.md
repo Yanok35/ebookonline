@@ -122,3 +122,79 @@ the user values), and to keep the original (in the trash).
    the reverse proxy helps likewise.
 4. Not recommended: pages rendered by the server (images per page and
    zoom: much disk, no text layer, the reader to rewrite).
+
+## Optimization in place: consequences and mitigations
+
+No copy in the cache (the disk space of production): an optimized book
+replaces its file in `BOOK_DIR`. Its content changes, so does its sha1,
+the identity of the book everywhere. What each place keyed by the sha1
+becomes, today, and how to mitigate it:
+
+| place | today (file changed in place, then rescan) | mitigation |
+|---|---|---|
+| book.db: user values (title, authors, tags, pinned, reviewed) | kept: the rescan sees "same path, new content", the entry takes the new sha1 | none needed; done by the operation itself rather than by the next rescan |
+| book.db: the old sha1 | forgotten | **aliases**: book.db keeps `former_sha1` of the book (schema v5, compatible) |
+| duplicates (other files with the old content) | broken: a copy keeps the old sha1, the entry of the book may follow the copy (seen as "moved"), the optimized file becomes a new book without user values | **refused** while the book has duplicates (or all its copies optimized together) |
+| thumbnail `CACHE_DIR/<sha1>.jpg` | made again (the first page is the same); the old one stays, orphan | **renamed** to the new sha1 (same first page) |
+| metadata analysis `<sha1>.meta.json.gz` | made again (a few seconds); the old one stays | **renamed**, its `sha1` field rewritten (same text) |
+| reading position `reader_states.json` | **lost** (keyed by the old sha1) | **moved** to the new sha1 (same pages: the position stays valid) |
+| journal of the reader events, timeline | the history is **split**; the old sessions are dropped from "Mes lectures" (unknown sha1) | journal kept as is (append only); the **aliases** are applied when it is read (`srcs/history.py`) |
+| notes in the margin (future, by sha1) | lost | moved with the book (same pages: anchors valid) |
+| links and bookmarks `/reader/<sha1>`, `/pdf/`, `/bookadmin/`, `/images/` | 404 | the **aliases** answer a redirect (301) to the new sha1 |
+| an open reader tab | its positions saved under the old sha1 | the API maps an alias to the new sha1 |
+| "ajouts récents" (sorted by mtime) | the book becomes the most recent one | the **mtime of the original kept** (os.utime) |
+| original file | lost | moved to the **Trash** (restorable; disk ×2 until the trash is emptied; an option to skip it for a batch) |
+| restore of the original from the Trash | a new book with the old sha1, which is an alias | restore: the alias is dropped, the restored file is a book of its own (its user values copied, as a copy with a cover page) |
+
+### Safety of the optimized file
+
+Before it replaces the original, the optimized file is checked: same
+number of pages, same page sizes, same text of the pages (extracted), the
+rendering of a few pages compared at low resolution (a small difference
+only). Otherwise the optimization is refused and the original kept.
+
+### The operation
+
+`BookDir.optimize(sha1, steps)`, under the scan lock, as the file
+operations of the book page:
+
+1. measure the book (indicators); nothing to do: stop;
+2. write the optimized file to a hidden temporary file next to it (ignored
+   by the scan and the watcher), check it, compute its sha1;
+3. move the original to the Trash, the optimized file to its path, with
+   the mtime of the original;
+4. the entry of the book: new sha1, size, mtime, `former_sha1` += old one;
+5. rename the thumbnail and the metadata cache file, move the reading
+   position (and the notes);
+6. save book.db; the watcher then sees nothing to do (same mtime and size
+   as in book.db).
+
+### Book page and command line
+
+- **Book page**: the indicators in a `<details>`, with the possible gain
+  ("the first page needs 77.7 MB, 0.7 MB once optimized"), and a button
+  "Optimiser" (with the steps chosen: per-page resources, linearization,
+  images). The page then goes to the new URL (the old one redirects).
+- **Command line** (`flask --app ebookonline pdf audit|optimize`): audit of
+  the whole library (the books worth an optimization first), optimization
+  by sha1 or path, or of all the books over a threshold, with `-n` (dry
+  run). It writes book.db and `reader_states.json`: **the server must be
+  stopped** (it keeps book.db in memory and would overwrite it); the
+  command refuses to run while the server answers, or uses a lock file.
+
+### Steps of the implementation
+
+1. indicators: measure (srcs, a function of the PDF file), cache
+   (`<sha1>.pdfstats.json`, with the metadata analysis), `<details>` of
+   the book page, `flask pdf audit`;
+2. aliases in book.db (v5), redirects of the old URLs, aliases applied to
+   the history;
+3. `BookDir.optimize()` with the per-page resources step, the checks, the
+   moves of the sha1-keyed data; the button of the book page;
+4. `flask pdf optimize` (server stopped);
+5. later, the other steps (linearization with qpdf, images).
+
+An alternative, larger: an identity of the book independent of its
+content (an id in book.db), used by the URLs and the data instead of the
+sha1. The sha1 would only detect moves and duplicates. Every URL and
+store to migrate: the aliases give most of the benefit at a small cost.
