@@ -58,11 +58,28 @@ draws (MuPDF `page.clean_contents(sanitize=True)`, then saved with
 The rendering itself is not the problem here: MuPDF draws a page of this
 book in 1 to 36 ms (151 ms for the cover, a CMYK JPEG of 2325×2850).
 
-## Indicators (proposal: a `<details>` of the book page)
+## Indicators
 
-Measurable with PyMuPDF when the file is read (no rendering needed, a few
-hundred ms for a large book), kept in the cache like the metadata
-analysis:
+`srcs/pdfstats.py` measures them with PyMuPDF, without rendering: one pass
+over the objects of the file (weight by kind, images, fonts), then the
+resources each page declares, measured once per resource dictionary
+(pages sharing a dictionary, by reference or by a copy of its text, as
+some books repeat a dictionary of hundreds of patterns in every page).
+0.1 to 1.7 s per book (0.3 s for the book of 80.9 MB). Kept in
+`CACHE_DIR/<sha1>.pdfstats.json` (version `STATS_VERSION`); the warnings
+are computed when shown (`warnings()`), their thresholds can change.
+
+- book page, section "Structure du PDF": measured when opened the first
+  time (`/bookadmin/<sha1>/pdfstats`, an HTML fragment), then shown at
+  once; the number of warnings in its title; "Mesurer à nouveau";
+- command line: `flask pdf audit` (the library, the heaviest first),
+  `flask pdf show BOOK`.
+
+Warnings: a page declaring more than 10 MB of resources (shared when
+with more than 20 images), CMYK or JPEG 2000 images, an image over 20
+megapixels, Type 3 fonts, a content stream over 1 MB. Not warned: the
+linearization and the incremental updates (small effects; the `%%EOF`
+markers do not count the updates, a linearized file has two).
 
 | indicator | why |
 |---|---|
@@ -75,9 +92,10 @@ analysis:
 | **resources declared per page: largest, and their bytes** | **what pdf.js downloads before drawing a page**: the main cause found |
 | outline entries, annotations | |
 
-With warnings when a threshold is passed, e.g. "shared resources: a page
-needs 77.7 MB before being shown", "CMYK images", "not linearized and
-larger than 50 MB".
+On the library of development (108 files), besides the book above: 1
+book with shared resources (39 MB, every page declaring 719 images, 29
+MB, through a dictionary of patterns repeated in each page), 14 with CMYK
+images, 2 with very large images, 1 with Type 3 fonts.
 
 ## Optimizations of the file
 
