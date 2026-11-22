@@ -72,8 +72,8 @@ are computed when shown (`warnings()`), their thresholds can change.
 - book page, section "Structure du PDF": measured when opened the first
   time (`/bookadmin/<sha1>/pdfstats`, an HTML fragment), then shown at
   once; the number of warnings in its title; "Mesurer à nouveau";
-- command line: `flask pdf audit` (the library, the heaviest first),
-  `flask pdf show BOOK`.
+- command line: `python -m srcs.cli pdf audit` (the library, the
+  heaviest first), `python -m srcs.cli pdf show BOOK`.
 
 Warnings: a page declaring more than 10 MB of resources (shared when
 with more than 20 images), CMYK or JPEG 2000 images, an image over 20
@@ -217,11 +217,11 @@ trash.
 
 ### Steps
 
-1. Indicators: done (`srcs/pdfstats.py`, book page, `flask pdf audit|show`).
+1. Indicators: done (`srcs/pdfstats.py`, book page, `pdf audit|show`).
 2. `transform()`, `restore_original()`, the cover page in place, the
    reading positions moved: done.
 3. The optimization (resources per page): done.
-4. Later: `flask pdf optimize` (several books; the server stopped, as it
+4. Later: `python -m srcs.cli pdf optimize` (several books; the server stopped, as it
    keeps book.db in memory), the recompression of the images (lossy).
 
 Set aside: the linearization (small gain once the resources are per

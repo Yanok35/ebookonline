@@ -42,9 +42,14 @@ in this order (last one wins):
 1. `config.py` (defaults, versioned),
 2. `instance/config.py` (optional, **not versioned**), handy for development,
 3. environment variables prefixed with `EBOOKONLINE_`, recommended in
-   production. Values are parsed as JSON when possible.
+   production. Values are parsed as JSON when possible;
+   `EBOOKONLINE_A__B` sets the key `B` of the dictionary `A`.
 
-Two settings are required:
+Only the upper case names are settings; relative paths are relative to the
+current directory. The server and the command line read them the same way
+(`srcs/config.py`).
+
+Two settings are required by the server (not by the command line):
 
 - `SECRET_KEY`: used to sign session cookies, see the
   [Flask session documentation](https://flask.palletsprojects.com/en/stable/quickstart/#sessions).
@@ -183,7 +188,10 @@ Outside of systemd (terminal), each line starts with the date and the level.
 
 ## Command line interface
 
-Commands for the administrator, about the thumbnails:
+`python -m srcs.cli`, run from the project directory with the Python of
+the virtual environment, independent of the web server (Flask is not
+loaded); `python -m srcs.cli help [COMMAND]` lists the commands. Commands
+for the administrator, about the thumbnails:
 
 - `thumbnails check [--list]`: counts the thumbnails by state (ok, missing,
   unreadable, cmyk) and lists the books whose thumbnail is not ok;
@@ -194,7 +202,7 @@ Commands for the administrator, about the thumbnails:
   the old one is kept on failure.
 
 and about the metadata analysis (see
-[technote-metadata-extract-&-analysis.md](docs/technote-metadata-extract-&-analysis.md#command-line-appclipy)):
+[technote-metadata-extract-&-analysis.md](docs/technote-metadata-extract-&-analysis.md#command-line-srcsclipy)):
 
 - `metadata scan`: analyses the PDF files not analysed yet (or outdated),
   with `-n`, `--jobs N`, `--force`; e.g. the initial analysis of a large
@@ -214,9 +222,10 @@ and about what makes a book slow to open in the reader (see
   section "Structure du PDF").
 
 `thumbnails help [COMMAND]`, `metadata help [COMMAND]` and
-`pdf help [COMMAND]` show their options. They use the configuration of the server, start none of its
-services, and can run while it runs. In
-production, as the user and with the secrets of the service (see
+`pdf help [COMMAND]` show their options. They use the configuration of the
+server (`SECRET_KEY` and `CREDENTIALS` not needed), start none of its
+services, only read book.db, and can run while it runs. In production, as
+the user of the service and with its settings (see
 `resources/ebookonline.service.sample`):
 
 ```bash
@@ -224,14 +233,14 @@ sudo systemd-run --pty --wait --collect -p User=ebookonline -p Nice=10 \
     -p WorkingDirectory=/opt/ebookonline \
     -p EnvironmentFile=/etc/ebookonline/secrets.env \
     -E EBOOKONLINE_BOOK_DIR=/srv/books \
-    /opt/ebookonline/venv/bin/flask --app ebookonline thumbnails check --list
+    /opt/ebookonline/venv/bin/python -m srcs.cli thumbnails check --list
 ```
 
 Alternative command:
 
 ```bash
 cd /opt/ebookonline
-sudo -u nobody venv/bin/flask --app ebookonline thumbnails --help
+sudo -u nobody venv/bin/python -m srcs.cli thumbnails --help
 ```
 
 ## fail2ban configuration
