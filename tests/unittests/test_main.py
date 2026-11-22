@@ -147,3 +147,19 @@ def test_book_reader_theme(app, client, book):
     assert '<html lang="fr" class="light">' in html and "html.light {" in html
     app.config["READER_THEME"] = "pink"
     assert '<html lang="fr">' in client.get(f"/reader/{book.sha1}").text
+
+
+def test_pages_are_laid_out_at_the_width_of_the_device(app, client, book):
+    """ meta viewport: not a page of 980px shrunk on a phone """
+    viewport = '<meta name="viewport" content="width=device-width, initial-scale=1'
+    assert viewport in app.test_client().get("/login").text
+    for url in ["/browser_lazy", "/timeline", f"/reader/{book.sha1}", "/bookadmin/",
+                f"/bookadmin/{book.sha1}"]:
+        response = client.get(url, follow_redirects=True)
+        assert response.status_code == 200 and viewport in response.text, url
+
+
+def test_reader_index_over_the_document_on_a_narrow_screen(client, book):
+    html = client.get(f"/reader/{book.sha1}").text
+    assert 'window.matchMedia("(max-width: 900px)")' in html
+    assert "body.sidebar-overlay.sidebar-open #sidebar" in html
