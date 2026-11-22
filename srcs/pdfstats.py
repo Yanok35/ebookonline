@@ -40,6 +40,10 @@ import tempfile
 
 import pymupdf
 
+# The errors of damaged files: not printed (the indicators tell them)
+pymupdf.TOOLS.mupdf_display_errors(False)
+pymupdf.TOOLS.mupdf_display_warnings(False)
+
 log = logging.getLogger(__name__)
 
 # Version of the indicators: a cache file of another version is measured
