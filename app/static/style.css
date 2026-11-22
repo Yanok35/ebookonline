@@ -601,15 +601,20 @@ html {
     margin: 0.8em auto 0 auto;
 }
 
-/* Library: the covers fill the width, 2 columns on a phone, 4 on a
-   tablet (the thumbnails are 300px wide: not much larger) */
+/* Library: the links on several lines when they do not fit */
 
-@media (max-width: 1000px) {
-    .linksbar {
-        flex-wrap: wrap;
-        row-gap: 4px;
-    }
+.linksbar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+}
 
+/* Phones and tablets only (touch screen, a finger as pointer): the covers
+   fill the width, 2 columns on a phone, 4 on a tablet (the thumbnails are
+   300px wide: not much larger). A narrow window of a computer keeps the
+   covers at their size, on the next line when they do not fit. */
+
+@media (pointer: coarse) and (max-width: 1000px) {
+    /* 16px: no zoom of the page when it gets the focus (iOS) */
     .searchbar #input-search-pattern {
         font-size: 16px;
         padding: 6px;
