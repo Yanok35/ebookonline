@@ -165,7 +165,9 @@ def test_pdfstats_view_errors(app, client, book):
 # --- command line
 
 def pdf_cli(app, *args):
-    return app.test_cli_runner().invoke(args=["pdf", *args])
+    from tests.conftest import invoke_cli
+
+    return invoke_cli(app, "pdf", *args)
 
 
 def test_audit(app, book):

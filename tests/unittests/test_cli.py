@@ -1,11 +1,11 @@
-""" Command line interface (app/cli.py): flask thumbnails ... """
+""" Command line interface (srcs/cli.py): python -m srcs.cli thumbnails ... """
 
 import shutil
 from pathlib import Path
 
 import pytest
 
-from tests.conftest import make_pdf, write_jpeg
+from tests.conftest import invoke_cli, make_pdf, write_jpeg
 
 # The header of a CMYK JPEG image (4 components): enough for jpeg_info()
 CMYK_JPEG = b"\xff\xd8\xff\xc0\x00\x11\x08" + (450).to_bytes(2, "big") + (300).to_bytes(2, "big") + b"\x04"
@@ -26,7 +26,7 @@ def books(app):
 
 
 def run(app, *args):
-    return app.test_cli_runner().invoke(args=["thumbnails", *args])
+    return invoke_cli(app, "thumbnails", *args)
 
 
 def test_check(app, books):
@@ -150,7 +150,7 @@ def library(app):
 
 
 def metadata(app, *args):
-    return app.test_cli_runner().invoke(args=["metadata", *args])
+    return invoke_cli(app, "metadata", *args)
 
 
 def test_metadata_scan(app, library):

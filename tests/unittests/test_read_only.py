@@ -33,7 +33,7 @@ def book_dir_read_only_app(app):
     app.bookdir.rescan()
     for d in [root, root / "Science"]:
         d.chmod(0o555)
-    yield create_app("default")
+    yield create_app()
     for d in [root, root / "Science"]:
         d.chmod(0o755)
 
@@ -66,7 +66,7 @@ def test_state_file_directory_not_writable(app, tmp_path, monkeypatch):
     states.chmod(0o555)
     monkeypatch.setenv("EBOOKONLINE_STATE_FILE", str(states / "reader_states.json"))
     try:
-        app = create_app("default")
+        app = create_app()
     finally:
         states.chmod(0o755)
     assert app.read_only_reasons == [
@@ -120,7 +120,7 @@ def test_memory_state_is_over_the_file(app, tmp_bookdir, monkeypatch):
     content = state_file.read_text()
     tmp_bookdir[1].chmod(0o555)
     try:
-        app = create_app("default")
+        app = create_app()
     finally:
         tmp_bookdir[1].chmod(0o755)
     client = logged_in(app)
@@ -167,7 +167,7 @@ def cache_read_only_app(app):
     app.bookdir.rescan()
     cache = Path(app.config["CACHE_DIR"])
     cache.chmod(0o555)
-    yield create_app("default")
+    yield create_app()
     cache.chmod(0o755)
 
 

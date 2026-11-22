@@ -123,7 +123,7 @@ def test_invalid_pattern_refused_at_startup(app, monkeypatch):
 
     monkeypatch.setenv("EBOOKONLINE_FILENAME_PATTERN", "{titre}")
     with pytest.raises(RuntimeError, match="FILENAME_PATTERN"):
-        create_app("default")
+        create_app()
 
 
 def test_free_name(tmp_path):
