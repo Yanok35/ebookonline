@@ -530,6 +530,39 @@
             display: none;
         }
 
+        /* Narrow screen, full screen: the index over the document (which
+           keeps its width), hidden until asked, as the toolbar */
+        body.sidebar-overlay #workspace {
+            position: relative;
+        }
+
+        body.sidebar-overlay #sidebar,
+        body.sidebar-overlay #workspace.sidebar-hidden #sidebar {
+            display: flex;
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 8;
+            width: min(300px, 85vw);
+            box-shadow: 2px 0 8px #0006;
+            transform: translateX(-100%);
+            visibility: hidden;
+            transition: transform 200ms ease, visibility 0s linear 200ms;
+        }
+
+        body.sidebar-overlay.sidebar-open #sidebar {
+            transform: none;
+            visibility: visible;
+            transition-delay: 0s;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            body.sidebar-overlay #sidebar {
+                transition: none;
+            }
+        }
+
         /* =====================================
            CONTENEUR DU PDF
            ===================================== */
@@ -4011,6 +4044,13 @@
             $("toggleSidebar").addEventListener(
                 "click",
                 () => {
+                    // over the document: shown or hidden, without
+                    // changing its width (see the end of the page)
+                    if (document.body.classList.contains("sidebar-overlay")) {
+                        document.body.classList.toggle("sidebar-open");
+                        return;
+                    }
+
                     workspace.classList.toggle(
                         "sidebar-hidden"
                     );
@@ -4311,6 +4351,12 @@
      * and shows again when the reader scrolls up (also on a tablet), or
      * when the pointer comes near the top of the screen. It stays while
      * it is used (pointer over it, focus in it) or while searching.
+     *
+     * Full screen or narrow screen: the index goes over the document,
+     * hidden; shown by its button, or in full screen when the pointer
+     * comes near the left side of the screen; hidden again when an entry
+     * is chosen, by a tap or a click out of it, Escape, or when the
+     * pointer which showed it goes away.
      */
     (() => {
         "use strict";
@@ -4331,6 +4377,62 @@
         let hideTimer = null;
         // shown by the pointer: hidden again when it goes away
         let shownByPointer = false;
+
+        const sidebar = document.getElementById("sidebar");
+        const sidebarButton = document.getElementById("toggleSidebar");
+        // narrower than this: the index over the document
+        const narrow = window.matchMedia("(max-width: 900px)");
+        let sidebarTimer = null;
+        let sidebarByPointer = false;
+
+        function updateSidebar() {
+            const overlay = narrow.matches || body.classList.contains("fullscreen");
+            if (overlay !== body.classList.contains("sidebar-overlay")) {
+                body.classList.toggle("sidebar-overlay", overlay);
+                closeSidebar();
+            }
+        }
+
+        function openSidebar(byPointer = false) {
+            clearTimeout(sidebarTimer);
+            sidebarByPointer = byPointer;
+            body.classList.add("sidebar-open");
+        }
+
+        function closeSidebar() {
+            clearTimeout(sidebarTimer);
+            sidebarTimer = null;
+            sidebarByPointer = false;
+            body.classList.remove("sidebar-open");
+        }
+
+        function sidebarOpen() {
+            return body.classList.contains("sidebar-overlay")
+                && body.classList.contains("sidebar-open");
+        }
+
+        // an entry chosen: the page is shown
+        sidebar.addEventListener("click", event => {
+            if (sidebarOpen() && event.target.closest(".outline-link")) {
+                closeSidebar();
+            }
+        });
+
+        // a tap or a click out of it (its button toggles it)
+        document.addEventListener("pointerdown", event => {
+            if (sidebarOpen() && !sidebar.contains(event.target)
+                    && !sidebarButton.contains(event.target)) {
+                closeSidebar();
+            }
+        });
+
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && sidebarOpen()) {
+                closeSidebar();
+            }
+        });
+
+        narrow.addEventListener("change", updateSidebar);
 
         function isFullscreen() {
             // F11 is not seen by the Fullscreen API: the window then fills
@@ -4380,6 +4482,7 @@
             } else {
                 show();
             }
+            updateSidebar();
         }
 
         // the search bar goes under the toolbar, as high as it
@@ -4412,6 +4515,21 @@
             if (!body.classList.contains("fullscreen")) {
                 return;
             }
+            // the index, from the left side of the screen
+            if (!sidebarOpen()) {
+                if (event.clientX <= REVEAL_ZONE && event.clientY > toolbar.offsetHeight) {
+                    openSidebar(true);
+                }
+            } else if (sidebarByPointer) {
+                if (event.clientX > sidebar.offsetWidth + REVEAL_ZONE) {
+                    if (!sidebarTimer) {
+                        sidebarTimer = setTimeout(closeSidebar, HIDE_DELAY);
+                    }
+                } else {
+                    clearTimeout(sidebarTimer);
+                    sidebarTimer = null;
+                }
+            }
             if (body.classList.contains("toolbar-hidden")) {
                 if (event.clientY <= REVEAL_ZONE) {
                     show(true);
@@ -4429,6 +4547,7 @@
         });
 
         update();
+        updateSidebar();
     })();
     </script>
 </body>
