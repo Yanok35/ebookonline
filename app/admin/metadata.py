@@ -24,25 +24,12 @@ prefill, what to show next to each field, and the state of the analysis.
 """
 
 from srcs.metadata import analyse, store
-from srcs.metadata.isbn import to_isbn13
-from srcs.metadata.text import norm_key
 
 
 def _user_value(book, field):
     """ The value of a field in book.db, None when empty """
     value = getattr(book, field)
     return value or None
-
-
-def same_value(field, user, suggested):
-    """ True when a value of book.db is the suggested one (case, accents, ISBN-10) """
-    if field == "authors":
-        return [norm_key(n) for n in user] == [norm_key(n) for n in suggested]
-    if field == "year":
-        return user == suggested
-    if field == "isbn":
-        return (to_isbn13(user) or user) == suggested
-    return norm_key(user) == norm_key(suggested)
 
 
 def display(field, value):
@@ -75,7 +62,7 @@ class FieldSuggestion:
         if user_value is None:
             self.differs = not self.prefilled
         else:
-            self.differs = not same_value(field, user_value, self.value)
+            self.differs = not analyse.same_value(field, user_value, self.value)
 
     @property
     def text(self):

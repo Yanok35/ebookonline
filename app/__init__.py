@@ -20,16 +20,16 @@
 import os
 
 import click
-from config import Config
 from flask import Flask, current_app, request, session
 from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from srcs.access import can_write_dir, check_write_access
+from srcs import config
+from srcs.access import check_write_access
 from srcs.logs import setup_logging
-from srcs.cache import Cache
-from srcs.book import DB_VERSION, BookDir
+from srcs.book import DB_VERSION
 from srcs.metadata.service import MetadataService
+from srcs.services import make_bookdir, make_cache
 from srcs.naming import NamingError, check_pattern
 from srcs.watcher import BookDirWatcher
 
@@ -42,7 +42,7 @@ def _serves_requests():
       the application there, before spawning the serving child process. Two
       scans and watchers in two processes would both rewrite book.db, each
       one with its own in-memory state, and generate the same thumbnails;
-    - other flask commands (flask shell, flask routes, ...).
+    - the other flask commands (flask shell, flask routes, ...).
 
     gunicorn, app.run() and 'flask run' without reloader serve requests.
     """
@@ -95,16 +95,12 @@ def _log_not_found(e):
                                 user, request.method, request.path)
     return e
 
-def create_app(config_name):
-    # instance_relative_config: relative paths given to from_pyfile() are
-    # resolved from app.instance_path (<project>/instance) and not from the
-    # 'app' package directory.
-    app = Flask(__name__, instance_relative_config=True)
-    app.config.from_object(Config)
-    # Local overrides, kept out of git (instance/ folder at project root)
-    app.config.from_pyfile('config.py', silent=True)
-    # Production: secrets come from the environment, e.g. EBOOKONLINE_SECRET_KEY
-    app.config.from_prefixed_env(prefix='EBOOKONLINE')
+def create_app():
+    app = Flask(__name__)
+    # config.py, instance/config.py, then the EBOOKONLINE_* variables (e.g.
+    # the secrets in production): srcs/config.py, shared with the command
+    # line
+    app.config.update(config.load())
 
     # Before anything logs (Flask then adds no handler of its own)
     setup_logging(app.config['LOG_LEVEL'])
@@ -112,7 +108,7 @@ def create_app(config_name):
     if not app.config.get('SECRET_KEY'):
         raise RuntimeError(
             "SECRET_KEY is not set: define EBOOKONLINE_SECRET_KEY or set it "
-            f"in {os.path.join(app.instance_path, 'config.py')}"
+            f"in {config.INSTANCE_CONFIG}"
         )
 
     try:
@@ -129,29 +125,23 @@ def create_app(config_name):
             x_host=1
         )
 
-    # (creates the cache directory if missing). No thumbnail processes in a
-    # process which serves no requests (flask commands, see app/cli.py).
-    app.cache = Cache.get_instance(app.config['CACHE_DIR'],
-                                   workers=None if _serves_requests() else 0)
+    # No thumbnail processes in a process which serves no requests (the
+    # watching process of the reloader, flask shell, ...)
+    app.cache = make_cache(app.config, workers=None if _serves_requests() else 0)
 
     # Read-only when the server can not write where it needs to, or when
     # book.db was written by a newer version: the reasons, as messages.
     app.read_only_reasons = check_write_access(
         app.config['BOOK_DIR'], app.config['BOOK_DB'], app.config['STATE_FILE'],
         app.config['CACHE_DIR'])
-    # No thumbnail generation which would fail
-    app.cache.writable = can_write_dir(app.config['CACHE_DIR'])
-
-    app.bookdir = BookDir(app.config['BOOK_DB'], app.cache,
-                          read_only=bool(app.read_only_reasons))
+    # Last known book list, available at once (no directory scan)
+    app.bookdir = make_bookdir(app.config, app.cache, read_only=bool(app.read_only_reasons))
     # Suggestions of metadata, kept in the cache directory like the
     # thumbnails (also written in read-only mode, when writable)
     app.metadata = MetadataService(
         app.config['CACHE_DIR'], workers=app.config['METADATA_WORKERS'],
         nice=app.config['METADATA_NICE'], writable=app.cache.writable)
     app.bookdir.metadata = app.metadata
-    # Last known book list, available at once (no directory scan)
-    app.bookdir.open(app.config['BOOK_DIR'])
     if app.bookdir.db_version is not None:
         app.read_only_reasons.append(
             f"La base des livres a été écrite par une version plus récente "
@@ -185,12 +175,6 @@ def create_app(config_name):
 
     from .timeline import timeline as timeline_blueprint
     app.register_blueprint(timeline_blueprint)
-
-    # Command line interface (flask --app ebookonline thumbnails|metadata ...)
-    from .cli import metadata, pdf, thumbnails
-    app.cli.add_command(thumbnails)
-    app.cli.add_command(metadata)
-    app.cli.add_command(pdf)
 
     app.register_error_handler(404, _log_not_found)
 

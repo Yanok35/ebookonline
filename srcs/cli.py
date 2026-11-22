@@ -18,20 +18,22 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-Command line interface, for the administrator: flask commands, with the
-configuration of the server (instance/config.py, EBOOKONLINE_* variables).
+Command line interface, for the administrator, independent of the web
+server (Flask), with its configuration (srcs/config.py: config.py,
+instance/config.py, EBOOKONLINE_* variables):
 
-    flask --app ebookonline thumbnails help [COMMAND]
-    flask --app ebookonline thumbnails check [--list]
-    flask --app ebookonline thumbnails regenerate --cmyk [--jobs 2]
-    flask --app ebookonline metadata help [COMMAND]
-    flask --app ebookonline metadata scan [--jobs 2]
-    flask --app ebookonline metadata show <sha1 or path>
-    flask --app ebookonline metadata stats
+    python -m srcs.cli help [COMMAND]
+    python -m srcs.cli thumbnails check [--list]
+    python -m srcs.cli thumbnails regenerate --cmyk [--jobs 2]
+    python -m srcs.cli metadata scan [--jobs 2]
+    python -m srcs.cli metadata show <sha1 or path>
+    python -m srcs.cli metadata stats
+    python -m srcs.cli pdf audit [--warnings]
+    python -m srcs.cli pdf show <sha1 or path>
 
-The commands do not start the services of the server (directory scan,
-watcher, thumbnail and analysis processes): they can run while the server
-runs. book.db is only read.
+The commands start none of the services of the server (directory scan,
+watcher, thumbnail and analysis processes): they can run while it runs.
+book.db is only read (opened read-only).
 """
 
 import inspect
@@ -42,14 +44,55 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import click
-from flask import current_app
-from flask.cli import AppGroup
 
+from srcs import config as settings
 from srcs.cache import BACKENDS, Cache, available_backends
 from srcs.logs import setup_logging
 
 
-class Command(click.Command):
+class Library:
+    """
+    The configuration and the services of the book directory, made when
+    first used: a command which needs no book list reads no book.db (the
+    tests give theirs)
+    """
+
+    def __init__(self, config=None, cache=None, bookdir=None):
+        self._config = config
+        self._cache = cache
+        self._bookdir = bookdir
+
+    @property
+    def config(self):
+        if self._config is None:
+            self._config = settings.load()
+        return self._config
+
+    @property
+    def cache(self):
+        """ The thumbnail cache, without processes: thumbnails made in this one """
+        from srcs.services import make_cache
+
+        if self._cache is None:
+            self._cache = make_cache(self.config, workers=0)
+        return self._cache
+
+    @property
+    def bookdir(self):
+        """ The book directory, its last known book list: book.db only read """
+        from srcs.services import make_bookdir
+
+        if self._bookdir is None:
+            self._bookdir = make_bookdir(self.config, self.cache, read_only=True)
+        return self._bookdir
+
+
+def library():
+    """ The Library of the command being run """
+    return click.get_current_context().find_object(Library)
+
+
+class WholeShortHelp:
     """
     A command whose list of commands (group help) shows the whole first
     paragraph of its help, wrapped: click keeps its first sentence only,
@@ -62,8 +105,12 @@ class Command(click.Command):
         return " ".join(inspect.cleandoc(self.help).split("\n\n")[0].split())
 
 
-class Group(AppGroup):
-    """ A group of flask commands (AppGroup) made of Command """
+class Command(WholeShortHelp, click.Command):
+    pass
+
+
+class Group(WholeShortHelp, click.Group):
+    """ A group of commands made of Command """
     command_class = Command
 
 
@@ -110,7 +157,7 @@ def thumbnail_state(info):
 
 
 def _present_books():
-    return sorted((b for b in current_app.bookdir.get_all_books() if b.present),
+    return sorted((b for b in library().bookdir.get_all_books() if b.present),
                   key=lambda b: b.filename)
 
 
@@ -124,7 +171,7 @@ def check(show):
     """
     counts = dict.fromkeys(STATES, 0)
     for book in _present_books():
-        state = thumbnail_state(current_app.cache.thumbnail_info(book.sha1))
+        state = thumbnail_state(library().cache.thumbnail_info(book.sha1))
         counts[state] += 1
         if show and state != "ok":
             click.echo(f"{state:10} {book.sha1}  {book.filename}")
@@ -148,7 +195,7 @@ def _make_thumbnail(pdffilename, sha1, backend):
 
 def _select(states, books_args):
     """ The present books to regenerate: by state of their thumbnail, or named """
-    d = current_app.bookdir
+    d = library().bookdir
     selected = {}
     for arg in books_args:
         book = d.find_book_by_sha1(arg) or d.find_book_by_filename(arg)
@@ -158,7 +205,7 @@ def _select(states, books_args):
         selected[book.sha1] = book
     if states:
         for book in _present_books():
-            if thumbnail_state(current_app.cache.thumbnail_info(book.sha1)) in states:
+            if thumbnail_state(library().cache.thumbnail_info(book.sha1)) in states:
                 selected.setdefault(book.sha1, book)
     return sorted(selected.values(), key=lambda b: b.filename)
 
@@ -194,7 +241,7 @@ def regenerate(cmyk, missing, unreadable, all_, backend, jobs, dry_run, verbose,
                                "--all, or books")
     if backend and backend not in available_backends():
         raise click.UsageError(f"backend not available here: {backend}")
-    cache = current_app.cache
+    cache = library().cache
     if not cache.writable:
         raise click.ClickException(f"the cache directory can not be written: {cache.cachedir}")
 
@@ -216,7 +263,7 @@ def regenerate(cmyk, missing, unreadable, all_, backend, jobs, dry_run, verbose,
                                item_show_func=lambda b: b.filename[-50:] if b else None) as bar:
             if jobs == 1:
                 for book in selected:
-                    pdffile = os.path.join(current_app.bookdir.dirpath, book.filename)
+                    pdffile = os.path.join(library().bookdir.dirpath, book.filename)
                     if not cache.make_thumbnail(pdffile, book.sha1, backend):
                         failed.append(book)
                     bar.update(1, book)
@@ -225,7 +272,7 @@ def regenerate(cmyk, missing, unreadable, all_, backend, jobs, dry_run, verbose,
                         max_workers=jobs, mp_context=multiprocessing.get_context("forkserver"),
                         initializer=_init_worker, initargs=(cache.cachedir, log_level)) as pool:
                     futures = {pool.submit(_make_thumbnail,
-                                           os.path.join(current_app.bookdir.dirpath, b.filename),
+                                           os.path.join(library().bookdir.dirpath, b.filename),
                                            b.sha1, backend): b for b in selected}
                     for future in as_completed(futures):
                         book = futures[future]
@@ -257,7 +304,7 @@ def _find_book(arg):
     from srcs.book import Book
     from srcs.cache import sha1_file
 
-    d = current_app.bookdir
+    d = library().bookdir
     book = d.find_book_by_sha1(arg) or d.find_book_by_filename(arg)
     if book is not None:
         return book
@@ -306,13 +353,13 @@ def scan(force, jobs, nice, dry_run, verbose, books):
     """
     from srcs.metadata import store
 
-    cache_dir = current_app.config["CACHE_DIR"]
-    if not current_app.cache.writable:
+    cache_dir = library().config["CACHE_DIR"]
+    if not library().cache.writable:
         raise click.ClickException(f"the cache directory can not be written: {cache_dir}")
 
     click.echo("Listing the PDF files (the new ones are hashed)...", err=True)
     files = {}
-    for f in sorted(current_app.bookdir.pdf_files(), key=lambda f: f.filename):
+    for f in sorted(library().bookdir.pdf_files(), key=lambda f: f.filename):
         files.setdefault(f.sha1, f)  # one analysis per content
     if books:
         by_path = {f.filename: f for f in files.values()}
@@ -354,13 +401,13 @@ def scan(force, jobs, nice, dry_run, verbose, books):
                     os.nice(nice)
                 for f in todo:
                     done(f, _analyse(cache_dir, f.sha1,
-                                     os.path.join(current_app.bookdir.dirpath, f.filename), force))
+                                     os.path.join(library().bookdir.dirpath, f.filename), force))
             else:
                 with ProcessPoolExecutor(
                         max_workers=jobs, mp_context=multiprocessing.get_context("forkserver"),
                         initializer=_init_metadata_worker, initargs=(log_level, nice)) as pool:
                     futures = {pool.submit(_analyse, cache_dir, f.sha1,
-                                           os.path.join(current_app.bookdir.dirpath, f.filename),
+                                           os.path.join(library().bookdir.dirpath, f.filename),
                                            force): f for f in todo}
                     for future in as_completed(futures):
                         done(futures[future], future.result())
@@ -404,10 +451,10 @@ def show(book, text, as_json):
     from srcs.metadata import analyse, store
 
     book = _find_book(book)
-    entry = store.read(current_app.config["CACHE_DIR"], book.sha1)
+    entry = store.read(library().config["CACHE_DIR"], book.sha1)
     raw = (entry or {}).get("raw") or {}
     candidates = analyse.candidates(raw) if raw else (entry or {}).get("candidates") or {}
-    learned = analyse.Learned.from_books(current_app.bookdir.get_all_books())
+    learned = analyse.Learned.from_books(library().bookdir.get_all_books())
     suggestions = analyse.suggest(candidates, book.filename, learned) if candidates else {}
 
     if as_json:
@@ -474,11 +521,10 @@ def stats(live):
     The editor spellings learned from book.db include the reviewed books
     themselves: the agreement of the editor is a little optimistic.
     """
-    from app.admin.metadata import same_value
     from srcs.metadata import analyse, store
 
-    cache_dir = current_app.config["CACHE_DIR"]
-    all_books = current_app.bookdir.get_all_books()
+    cache_dir = library().config["CACHE_DIR"]
+    all_books = library().bookdir.get_all_books()
     books = [b for b in all_books if b.present]
     learned = analyse.Learned.from_books(all_books)
     cache = {"current": 0, "outdated": 0, "failed": 0, "internal error": 0, "not analysed": 0}
@@ -507,7 +553,7 @@ def stats(live):
                 c["filled"] += bool(value)
                 c["suggested"] += s is not None
                 if book.meta_reviewed and value and s is not None:
-                    agree = same_value(field, value, s["value"])
+                    agree = analyse.same_value(field, value, s["value"])
                     c["compared"] += 1
                     c["agree"] += agree
                     if s["score"] >= 80:
@@ -563,13 +609,13 @@ def audit(force, jobs, limit, only_warnings, books):
     """
     from srcs import pdfstats
 
-    cache_dir = current_app.config["CACHE_DIR"]
-    if not current_app.cache.writable:
+    cache_dir = library().config["CACHE_DIR"]
+    if not library().cache.writable:
         raise click.ClickException(f"the cache directory can not be written: {cache_dir}")
 
     click.echo("Listing the PDF files (the new ones are hashed)...", err=True)
     files = {}
-    for f in sorted(current_app.bookdir.pdf_files(), key=lambda f: f.filename):
+    for f in sorted(library().bookdir.pdf_files(), key=lambda f: f.filename):
         files.setdefault(f.sha1, f)  # one measure per content
     if books:
         by_path = {f.filename: f for f in files.values()}
@@ -590,7 +636,7 @@ def audit(force, jobs, limit, only_warnings, books):
             todo.append(f)
         else:
             results[sha1] = entry
-    path = lambda f: os.path.join(current_app.bookdir.dirpath, f.filename)
+    path = lambda f: os.path.join(library().bookdir.dirpath, f.filename)
     if todo:
         with click.progressbar(length=len(todo), label="Measure", file=sys.stderr,
                                item_show_func=lambda f: f.filename[-50:] if f else None) as bar:
@@ -649,9 +695,9 @@ def pdf_show(book, force, as_json):
     from srcs import pdfstats
 
     book = _find_book(book)
-    pdf_path = os.path.join(current_app.bookdir.dirpath, book.filename)
-    entry = pdfstats.get(current_app.config["CACHE_DIR"], book.sha1, pdf_path,
-                         writable=current_app.cache.writable, force=force)
+    pdf_path = os.path.join(library().bookdir.dirpath, book.filename)
+    entry = pdfstats.get(library().config["CACHE_DIR"], book.sha1, pdf_path,
+                         writable=library().cache.writable, force=force)
     if entry is None:
         raise click.ClickException(f"no PDF file: {book.filename}")
     if as_json:
@@ -679,3 +725,28 @@ def pdf_show(book, force, as_json):
                f"{entry['content']['max'] / 1024:.0f} KB (page {entry['content']['max_page']})")
     for w in pdfstats.warnings(entry):
         click.echo(f"! {w}")
+
+
+# --- the root group
+
+@click.group(cls=Group, context_settings={"help_option_names": ["-h", "--help"]})
+@click.pass_context
+def cli(ctx):
+    """
+    Command line interface of ebookonline: thumbnails, metadata analysis,
+    PDF indicators. Configuration: config.py, instance/config.py, the
+    EBOOKONLINE_* variables (as the server).
+    """
+    if ctx.obj is None:
+        ctx.obj = Library()
+    setup_logging(ctx.obj.config["LOG_LEVEL"])
+
+
+cli.add_command(thumbnails)
+cli.add_command(metadata)
+cli.add_command(pdf)
+add_help_command(cli)
+
+
+if __name__ == "__main__":
+    cli(prog_name="python -m srcs.cli")
