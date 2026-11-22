@@ -316,10 +316,10 @@ toolbar of the reader shows a badge "À relire" (only its icon on a narrow
 screen), a link to the book page, opened in a new tab so that the reading
 goes on. It is not shown by the deprecated route `/pdfjsviewer/...`.
 
-## Command line (`app/cli.py`)
+## Command line (`srcs/cli.py`)
 
-`flask --app ebookonline metadata ...`, with the configuration of the
-server, without starting its services (book.db is only read):
+`python -m srcs.cli metadata ...`, with the configuration of the server
+(`srcs/config.py`), without starting its services (book.db is only read):
 
 - `scan`: analyses the present PDF files whose cache file is missing or
   outdated (internal errors included), or all of them (`--force`), or the

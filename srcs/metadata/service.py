@@ -78,7 +78,7 @@ def analyse_book(cache_dir, sha1, pdf_path, force=False):
     store.update() of a book, stopped after TASK_TIMEOUT seconds, an error
     saved in its cache file: never raises. Returns the status (store.*).
     In the main thread of a process only (SIGALRM): a worker process of the
-    service, or the command line (app/cli.py).
+    service, or the command line (srcs/cli.py).
     """
     previous = signal.signal(signal.SIGALRM, _alarm)
     signal.alarm(TASK_TIMEOUT)

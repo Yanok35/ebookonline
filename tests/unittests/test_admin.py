@@ -342,7 +342,7 @@ def read_only_app(app, book):
     db["version"] = srcs.book.DB_VERSION + 1
     with open(app.config["BOOK_DB"], "w") as f:
         json.dump(db, f)
-    app = create_app("default")
+    app = create_app()
     assert app.bookdir.read_only
     return app
 

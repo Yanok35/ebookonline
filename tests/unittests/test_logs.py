@@ -79,7 +79,7 @@ def test_log_level_setting(app, monkeypatch, root_handlers):
     from app import create_app
 
     monkeypatch.setenv("EBOOKONLINE_LOG_LEVEL", "debug")
-    create_app("default")
+    create_app()
     assert root_handlers.level == logging.DEBUG
 
 

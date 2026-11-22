@@ -133,7 +133,7 @@ def app(tmp_bookdir, monkeypatch):
     monkeypatch.setattr(Cache, "get_instance",
                         classmethod(lambda cls, cachedir, **kwargs: FakeCache(cachedir)))
 
-    app = create_app("default")
+    app = create_app()
     app.config["TESTING"] = True
     return app
 
@@ -145,3 +145,11 @@ def client(app):
     with client.session_transaction() as session:
         session["username"] = "test"
     return client
+
+
+def invoke_cli(app, *args):
+    """ The command line (srcs/cli.py) run with the services of app """
+    from click.testing import CliRunner
+    from srcs.cli import Library, cli
+
+    return CliRunner().invoke(cli, list(args), obj=Library(app.config, app.cache, app.bookdir))

@@ -31,7 +31,7 @@ sys.setrecursionlimit(10000)
 # Globals
 #
 # The application is created on first access to 'ebookonline.app' (PEP 562
-# module __getattr__), not at import: 'gunicorn ebookonline:create_app(...)'
+# module __getattr__), not at import: 'gunicorn ebookonline:create_app()'
 # imports this module then calls the factory, and an application created at
 # import would be a second one, with its own directory scan and watcher.
 # 'flask --app ebookonline' and 'gunicorn ebookonline:app' still work.
@@ -41,9 +41,9 @@ def __getattr__(name):
     global _app
     if name in ("app", "application"):
         if _app is None:
-            _app = create_app(os.getenv('FLASK_CONFIG') or 'default')
+            _app = create_app()
         return _app
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 if __name__ == '__main__':
-    create_app(os.getenv('FLASK_CONFIG') or 'default').run()
+    create_app().run()

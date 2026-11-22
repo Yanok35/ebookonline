@@ -511,6 +511,17 @@ RE_NOT_SUBTITLE = re.compile(
 RE_SERIES = re.compile(r"\s*[(\[][^()\[\]]*[)\]]\s*$")
 
 
+def same_value(field, user, suggested):
+    """ True when a value of book.db is the suggested one (case, accents, ISBN-10) """
+    if field == "authors":
+        return [norm_key(n) for n in user] == [norm_key(n) for n in suggested]
+    if field == "year":
+        return user == suggested
+    if field == "isbn":
+        return (to_isbn13(user) or user) == suggested
+    return norm_key(user) == norm_key(suggested)
+
+
 def split_title(value):
     """
     (title, subtitle) of a title: ('Python Algorithms', 'Mastering Basic
