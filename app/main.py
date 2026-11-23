@@ -116,7 +116,9 @@ def browser_lazy():
     return render_template("browser_lazy.html",
                            titre = "eBook browser",
                            nbBooklist = len(booklist),
-                           nbSubset = max(1, len(booklist) // SUBSET_NBBOOKS),
+                           # books per subset: the page asks the next one until
+                           # a subset is not full (the last one)
+                           subset_size = SUBSET_NBBOOKS,
                            # drag and drop of books (see upload())
                            upload_token = generate_csrf(),
                            upload_max_size = current_app.config['UPLOAD_MAX_SIZE'],

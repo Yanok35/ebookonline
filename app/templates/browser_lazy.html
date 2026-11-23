@@ -91,37 +91,101 @@
         }
         </style>
     <script>
-        var nextSubset=0;
-        $(window).scroll(function () {
-            if ($(window).scrollTop() + 1 >= $(document).height() - $(window).height() && nextSubset < {{ nbSubset }}) {
-                appendBooklistSubset();
-            }
-        });
+        /*
+         * The book list, by subsets of SUBSET_SIZE books: the next one is
+         * asked when the end of the list comes near (#book-view-end, seen
+         * by an IntersectionObserver: also on a tablet, where the bar of
+         * the browser changes the height of the window), one at a time (in
+         * their order), until a subset is not full (the last one). Below a
+         * search, the next subsets of the library are added as well, when
+         * the reader scrolls down (not at once below short results).
+         */
+        var SUBSET_SIZE = {{ subset_size }};
+        // asked this much before the end of the list (px)
+        var NEAR_END = 800;
+        var nextSubset = 0;
+        var request = null;
+        var exhausted = false;
+        // the reader scrolled (wheel, finger, keyboard) since the results
+        // of a search were shown
+        var scrolledSinceSearch = true;
+
+        function searching() {
+            return $('#input-search-pattern').val() !== "" || $('#search-pinned-book').is(':checked');
+        }
+
+        function nearEnd() {
+            var end = document.getElementById('book-view-end');
+            return end && end.getBoundingClientRect().top < window.innerHeight + NEAR_END;
+        }
+
         function appendBooklistSubset() {
-            const Http = new XMLHttpRequest();
-            url='/browser_subset?subset-id=' + nextSubset;
+            if (request || exhausted)
+                return;
+            var subset = nextSubset++;
+            const Http = request = new XMLHttpRequest();
+            url='/browser_subset?subset-id=' + subset;
             var sorted = $('#display-sorted').is(':checked');
             if (sorted)
                 url = url + '&sorted=true'; // optional parameter
             Http.open("GET", url);
             Http.send();
-            nextSubset++;
 
             Http.onreadystatechange = (e) => {
-                if (Http.readyState == Http.DONE) {
-                    // console.log(Http.responseText)
-                    $('#main-book-view').append(Http.responseText);
+                // (a request cancelled by resetViewToFirstSubset(): ignored)
+                if (Http.readyState != Http.DONE || Http !== request)
+                    return;
+                request = null;
+                if (Http.status != 200) {
+                    // asked again when the end comes near again
+                    nextSubset = subset;
+                    return;
                 }
+                var count = (Http.responseText.match(/class="book-box"/g) || []).length;
+                $('#main-book-view').append(Http.responseText);
+                if (count < SUBSET_SIZE) {
+                    exhausted = true;
+                    return;
+                }
+                // the end still near (a large screen, a short list): the next one
+                if (!searching() && nearEnd())
+                    appendBooklistSubset();
             }
         }
-        // Initial subset #0 display to populate when arriving on page
-        appendBooklistSubset();
+
+        $(function () {
+            // Initial subset #0 display to populate when arriving on page
+            appendBooklistSubset();
+            new IntersectionObserver(function (entries) {
+                if (entries[0].isIntersecting && (scrolledSinceSearch || !searching()))
+                    appendBooklistSubset();
+            }, { rootMargin: "0px 0px " + NEAR_END + "px 0px" })
+                .observe(document.getElementById('book-view-end'));
+            $(window).on("wheel touchmove keydown", function (event) {
+                // the keys which scroll down, out of a text field
+                if (event.type === "keydown" && (["PageDown", "ArrowDown", "End", " "].indexOf(event.key) < 0
+                        || $(event.target).is("input, textarea, select")))
+                    return;
+                if (scrolledSinceSearch)
+                    return;
+                scrolledSinceSearch = true;
+                // (the end already near: no change seen by the observer)
+                if (searching() && nearEnd())
+                    appendBooklistSubset();
+            });
+        });
 
         // Fill the main-book-view with first subset of booklist, as on page arrival.
         function resetViewToFirstSubset() {
+            if (request) {
+                var cancelled = request;
+                request = null;
+                cancelled.abort();
+            }
             document.getElementById('main-book-view').innerHTML = "";
             document.getElementById('info-text').innerHTML = "";
             nextSubset = 0;
+            exhausted = false;
             appendBooklistSubset();
         }
 
@@ -207,6 +271,7 @@
             Http.onreadystatechange = (e) => {
                 if (Http.readyState == Http.DONE) {
                     var jsonResponse = JSON.parse(Http.responseText);
+                    scrolledSinceSearch = false;
                     document.getElementById('main-book-view').innerHTML = jsonResponse["body"];
                     document.getElementById('info-text').innerHTML = jsonResponse["info-text"];
                 }
@@ -271,6 +336,8 @@
         <div class="book-view" id="main-book-view">
             <!-- This is part is fulfilled by AJAX -->
         </div>
+        <!-- the end of the list: the next subset is asked when it comes near -->
+        <div id="book-view-end"></div>
 
         {% if not read_only %}
         <!-- Drag and drop of books: shown while files are dragged over the page -->

@@ -187,6 +187,11 @@
             line-height: 1;
         }
 
+        /* a button not available here (the full screen one on a computer) */
+        #toolbar button[hidden] {
+            display: none;
+        }
+
         /* The groups of tools (page, zoom, search and points of view):
            more space between them than in them */
         .toolbar-group {
@@ -292,7 +297,8 @@
             }
         }
 
-        #docInfo a {
+        #docInfo a,
+        #docInfo > button {
             flex-shrink: 0;
         }
 
@@ -573,6 +579,9 @@
             min-height: 0;
             overflow: auto;
             overscroll-behavior: contain;
+            /* touch screen: two fingers zoom the document (pinch, see
+               setupPinchZoom()), not the whole page; scrolled as usual */
+            touch-action: pan-x pan-y;
             padding: 20px 12px;
             background: #574e45;
             scrollbar-gutter: stable;
@@ -1031,6 +1040,9 @@
                         💾
                     </button>
                 </a>
+
+                <!-- touch screen only (see the end of the page): a computer has F11 -->
+                <button id="toggleFullscreen" type="button" hidden title="Plein écran">⛶</button>
             </div>
         </div>
 
@@ -1130,6 +1142,8 @@
             <div id="loading">
                 Chargement du document PDF...
             </div>
+            <!-- the pages (scaled as a whole while pinched) -->
+            <div id="pdf-pages"></div>
         </div>
 
     </div>
@@ -1197,6 +1211,7 @@
         const outlineStatus = $("outline-status");
 
         const loading = $("loading");
+        const pagesBox = $("pdf-pages");
         const errorElement = $("error");
 
         const currentPageInput = $("currentPage");
@@ -1773,7 +1788,7 @@
 
                     pages.push(info);
 
-                    container.appendChild(shell);
+                    pagesBox.appendChild(shell);
 
                     updateShellSize(info);
                 }
@@ -3827,6 +3842,139 @@
         // ZOOM
         // =========================================
 
+        /*
+         * Pinch (touch screen, two fingers): the pages scaled as a whole
+         * while the fingers move, then drawn again at the new zoom
+         * (setZoom()), the point of the document between the fingers kept
+         * under them. The browser does not zoom the page there
+         * (touch-action of #pdf-container).
+         */
+        function setupPinchZoom() {
+            const touches = new Map();
+            let pinch = null;
+
+            function fingers() {
+                const [a, b] = [...touches.values()];
+
+                return {
+                    x: (a.x + b.x) / 2,
+                    y: (a.y + b.y) / 2,
+                    distance: Math.hypot(a.x - b.x, a.y - b.y)
+                };
+            }
+
+            // the page under a point of the screen
+            function pageAt(y) {
+                for (const info of pages) {
+                    const rect = info.shell.getBoundingClientRect();
+
+                    if (rect.top <= y && rect.bottom > y) {
+                        return info;
+                    }
+                }
+
+                return null;
+            }
+
+            function start() {
+                const f = fingers();
+                const info = pageAt(f.y);
+
+                if (!pdfDoc || !info || f.distance < 10) return;
+
+                const page = info.shell.getBoundingClientRect();
+                const box = pagesBox.getBoundingClientRect();
+
+                pinch = {
+                    distance: f.distance,
+                    factor: 1,
+                    x: f.x,
+                    y: f.y,
+                    info,
+                    // the point between the fingers, in its page
+                    fx: (f.x - page.left) / page.width,
+                    fy: (f.y - page.top) / page.height
+                };
+
+                pagesBox.style.transformOrigin =
+                    (f.x - box.left) + "px " + (f.y - box.top) + "px";
+            }
+
+            function move() {
+                const f = fingers();
+
+                pinch.factor = clamp(
+                    f.distance / pinch.distance,
+                    MIN_SCALE / scale,
+                    MAX_SCALE / scale
+                );
+                pinch.x = f.x;
+                pinch.y = f.y;
+
+                pagesBox.style.transform = "scale(" + pinch.factor + ")";
+            }
+
+            async function end() {
+                const { factor, x, y, info, fx, fy } = pinch;
+
+                pinch = null;
+                pagesBox.style.transform = "";
+                pagesBox.style.transformOrigin = "";
+
+                if (Math.abs(factor - 1) < 0.02) return;
+
+                await setZoom(scale * factor);
+                await nextFrame();
+
+                // the same point of the page under the fingers
+                const page = info.shell.getBoundingClientRect();
+
+                container.scrollTo({
+                    left: container.scrollLeft + page.left + fx * page.width - x,
+                    top: container.scrollTop + page.top + fy * page.height - y,
+                    behavior: "auto"
+                });
+
+                scheduleViewportUpdate();
+            }
+
+            container.addEventListener("pointerdown", event => {
+                if (event.pointerType !== "touch") return;
+
+                touches.set(event.pointerId, {
+                    x: event.clientX,
+                    y: event.clientY
+                });
+
+                if (touches.size === 2 && !pinch) {
+                    start();
+                }
+            });
+
+            container.addEventListener("pointermove", event => {
+                if (!touches.has(event.pointerId)) return;
+
+                touches.set(event.pointerId, {
+                    x: event.clientX,
+                    y: event.clientY
+                });
+
+                if (pinch && touches.size >= 2) {
+                    move();
+                }
+            });
+
+            for (const type of ["pointerup", "pointercancel"]) {
+                container.addEventListener(type, event => {
+                    if (!touches.delete(event.pointerId)) return;
+
+                    if (pinch && touches.size < 2) {
+                        end();
+                    }
+                });
+            }
+        }
+
         async function changeZoom(delta) {
             if (!pdfDoc) return;
 
@@ -4132,6 +4280,8 @@
                 () => changeZoom(-SCALE_STEP)
             );
 
+            setupPinchZoom();
+
             zoomLevelInput.addEventListener(
                 "change",
                 applyManualZoom
@@ -4433,6 +4583,32 @@
         });
 
         narrow.addEventListener("change", updateSidebar);
+
+        // Touch screen (a tablet, a phone): a button to go full screen, the
+        // bar of the browser hidden (a computer has F11; nothing where the
+        // Fullscreen API is missing, e.g. an iPhone)
+        const fullscreenButton = document.getElementById("toggleFullscreen");
+
+        if (document.fullscreenEnabled
+                && window.matchMedia("(pointer: coarse)").matches) {
+            fullscreenButton.hidden = false;
+
+            fullscreenButton.addEventListener("click", () => {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                } else {
+                    document.documentElement
+                        .requestFullscreen({ navigationUI: "hide" })
+                        .catch(() => {});
+                }
+            });
+
+            document.addEventListener("fullscreenchange", () => {
+                fullscreenButton.title = document.fullscreenElement
+                    ? "Quitter le plein écran"
+                    : "Plein écran";
+            });
+        }
 
         function isFullscreen() {
             // F11 is not seen by the Fullscreen API: the window then fills
