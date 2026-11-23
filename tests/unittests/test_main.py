@@ -163,3 +163,40 @@ def test_reader_index_over_the_document_on_a_narrow_screen(client, book):
     html = client.get(f"/reader/{book.sha1}").text
     assert 'window.matchMedia("(max-width: 900px)")' in html
     assert "body.sidebar-overlay.sidebar-open #sidebar" in html
+
+
+def test_subsets_of_the_library_up_to_the_last_one(app, client, monkeypatch):
+    """ the last subset, not full, is given too (5 books, subsets of 2) """
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "SUBSET_NBBOOKS", 2)
+    root = Path(app.config["BOOK_DIR"])
+    for i in range(5):
+        make_pdf(root / f"book{i}.pdf")
+    app.bookdir.rescan()
+    counts = [client.get(f"/browser_subset?subset-id={i}").text.count('class="book-box"')
+              for i in range(4)]
+    assert counts == [2, 2, 1, 0]
+    # the page asks the next subset until one is not full
+    assert "var SUBSET_SIZE = 2;" in client.get("/browser_lazy").text
+
+
+def test_library_asks_the_next_subset_near_the_end(client):
+    html = client.get("/browser_lazy").text
+    assert '<div id="book-view-end"></div>' in html
+    assert "new IntersectionObserver(" in html and "$(window).scroll(" not in html
+    # below the results of a search, the next subsets of the library too,
+    # when the reader scrolls down: the search does not start them again
+    search = html[html.index("function booklistSearch("):]
+    search = search[:search.index("\n        }\n")]
+    assert "nextSubset" not in search and "scrolledSinceSearch = false;" in search
+
+
+def test_book_reader_touch_screen(client, book):
+    html = client.get(f"/reader/{book.sha1}").text
+    # full screen: a button, shown on a touch screen only
+    assert '<button id="toggleFullscreen" type="button" hidden' in html
+    assert 'window.matchMedia("(pointer: coarse)").matches' in html
+    # pinch: the document zoomed, not the page
+    assert "touch-action: pan-x pan-y;" in html
+    assert '<div id="pdf-pages"></div>' in html and "setupPinchZoom();" in html
