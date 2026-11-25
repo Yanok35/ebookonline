@@ -160,7 +160,7 @@ it chooses the user and the command of the service.
 gunicorn -w 1 --threads 4 -b 127.0.0.1:5000 \
     --no-control-socket \
     --logger-class srcs.gunicorn_logger.GunicornLogger \
-    'ebookonline:create_app("default")'
+    'ebookonline:create_app()'
 ```
 
 `-w 1`: a single process, which holds the book list in memory and writes
