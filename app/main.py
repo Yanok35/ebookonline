@@ -314,6 +314,8 @@ def book_reader(sha1):
                             pdfurl = url_for('.book_pdf', sha1 = sha1),
                             documentId = sha1,
                             documentName = docName,
+                            # the notes in the margin, saved by PUT /api/notes/<sha1>
+                            notes_token = generate_csrf(),
                             # "à relire" badge: metadata not reviewed yet
                             reviewUrl = None if book.meta_reviewed
                                 else url_for('admin.bookadmin', sha1 = sha1),
@@ -368,6 +370,7 @@ def pdfjs_read(sha1, pdffile):
                             pdfurl = url_for('.pdf_read', pdffile = pdffile).replace("'", "%27"),
                             documentId = docId,
                             documentName = docName,
+                            notes_token = generate_csrf(),
                             titre = docName)
 
 @main.route("/pinbook", methods=['POST'])

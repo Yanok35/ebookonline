@@ -26,6 +26,15 @@ def is_logged_in():
     return 'username' in session
 
 
+def current_user_key():
+    """
+    The key of the logged in user in the data kept for each user (the
+    journal of the reader events, userdata.db): their login. The only place
+    to change to key them otherwise (e.g. by an id).
+    """
+    return session.get("username")
+
+
 def login_required(view):
     """
     Decorator for HTML views: redirect anonymous users to the login page.

@@ -5033,14 +5033,20 @@
      * to the page and the height of the click in it (or of the selected
      * text, quoted in the note): the note follows the document (scroll,
      * zoom). The bubbles are moved down so as not to overlap. Two buttons
-     * go to the previous / next note. The notes are kept in this browser
-     * only (localStorage), until they are saved by the server.
+     * go to the previous / next note. The notes are those of the logged in
+     * user, saved by the server (userdata.db, PUT /api/notes/<sha1>), 500
+     * ms after a change; a copy is kept in this browser (localStorage) while
+     * the server can not save them, sent at the next opening.
      */
     (() => {
         "use strict";
 
         const DOCUMENT_ID = {{ documentId | tojson }};
         const STORE_KEY = "ebookonline.notes." + DOCUMENT_ID;
+        const NOTES_URL = {{ url_for('api.get_notes', sha1=documentId) | tojson }};
+        const NOTES_TOKEN = {{ notes_token | tojson }};
+        // delay of the saving, after a change (ms)
+        const SAVE_DELAY = 500;
         const SHOWN_KEY = "ebookonline.notes.shown";
         // space between two bubbles; the tail is this far below their top (px)
         const GAP = 8;
@@ -5065,25 +5071,86 @@
             return Boolean(note.quote || note.text.trim());
         }
 
-        function load() {
+        // the notes to save: those with a quotation or a text
+        function payload() {
+            return notes.filter(filled).map(({ id, page, ratio, quote, text }) =>
+                ({ id: String(id), page, ratio, quote, text }));
+        }
+
+        function localCopy() {
             try {
-                notes = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+                return JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
             } catch (_) {
-                notes = [];
+                return [];
             }
         }
 
-        function save() {
+        // the notes of the server; those of this browser not saved yet
+        // (not sent, or of the mockup) win, and are sent
+        async function load() {
+            const local = localCopy();
+            let saved;
             try {
-                const kept = notes.filter(filled)
-                    .map(({ id, page, ratio, quote, text }) => ({ id, page, ratio, quote, text }));
-                if (kept.length) {
-                    localStorage.setItem(STORE_KEY, JSON.stringify(kept));
-                } else {
-                    localStorage.removeItem(STORE_KEY);
+                const response = await fetch(NOTES_URL, { credentials: "same-origin" });
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
                 }
-            } catch (_) {}
+                saved = (await response.json()).notes;
+            } catch (error) {
+                console.warn("Notes du serveur indisponibles :", error);
+                return local;
+            }
+            if (!local.length) {
+                return saved;
+            }
+            const ids = new Set(local.map(n => String(n.id)));
+            return saved.filter(n => !ids.has(String(n.id))).concat(local);
         }
+
+        async function send(keepalive = false) {
+            try {
+                const response = await fetch(NOTES_URL, {
+                    method: "PUT",
+                    credentials: "same-origin",
+                    keepalive,
+                    headers: { "Content-Type": "application/json", "X-CSRFToken": NOTES_TOKEN },
+                    body: JSON.stringify({ notes: payload() })
+                });
+                if (!response.ok) {
+                    throw new Error((await response.json().catch(() => ({}))).error
+                                    || "HTTP " + response.status);
+                }
+                try {
+                    localStorage.removeItem(STORE_KEY);
+                } catch (_) {}
+                return true;
+            } catch (error) {
+                console.warn("Notes non enregistrées sur le serveur :", error);
+                // kept in this browser, sent at the next opening
+                try {
+                    localStorage.setItem(STORE_KEY, JSON.stringify(payload()));
+                } catch (_) {}
+                return false;
+            }
+        }
+
+        let saveTimer = null;
+        function save() {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => {
+                saveTimer = null;
+                send();
+            }, SAVE_DELAY);
+        }
+
+        // leaving the page: the change not sent yet
+        window.addEventListener("pagehide", () => {
+            if (saveTimer) {
+                clearTimeout(saveTimer);
+                saveTimer = null;
+                send(true);
+            }
+        });
 
         // --- positions, in the coordinates of the scrolled document
         function documentY(clientY) {
@@ -5306,7 +5373,8 @@
             if (!anchor) {
                 return;
             }
-            const note = { id: Date.now(), page: anchor.page, ratio: anchor.ratio,
+            const note = { id: "n-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                           page: anchor.page, ratio: anchor.ratio,
                            quote: quote ? quote.text : "", text: "" };
             quote = null;
             notes.push(note);
@@ -5352,8 +5420,17 @@
             show(workspace.classList.contains("notes-hidden"));
         });
 
-        load();
-        notes.forEach(element);
+        // (the notes made meanwhile are kept)
+        load().then(loaded => {
+            const made = notes;
+            notes = loaded;
+            notes.forEach(element);
+            notes.push(...made);
+            layoutSoon();
+            if (localCopy().length) {
+                send();
+            }
+        });
         let shown = true;
         try {
             shown = localStorage.getItem(SHOWN_KEY) !== "0";
