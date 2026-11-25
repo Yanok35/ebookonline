@@ -1,7 +1,8 @@
 # The data of the users: `userdata.db`
 
-The notes of the users in the margin of the books, kept by the server, for
-each user: found again in any browser, on any device. A JSON file next to
+The data kept by the server for each user, found again in any browser, on
+any device: the notes in the margin of the books, the reading positions,
+the pins. A JSON file next to
 `book.db`, on the same principles (versioned, kept in memory, rewritten
 whole and atomically after each change). Code: `srcs/userdata.py`.
 
@@ -13,14 +14,26 @@ the users, which can not be made again: not in `CACHE_DIR`; to back up with
 `book.db`. Its directory is checked at startup as the other ones (read-only
 mode when it can not be written, see `docs/technote-bookdb.md`).
 
-## Schema (version 1)
+## Schema (version 2)
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "min_reader_version": 1,
   "users": {
     "<login>": {
+      "states": {
+        "<sha1 of the book>": {
+          "documentId": "<sha1 of the book>",
+          "documentName": "Dune.pdf",
+          "pageNumber": 12,
+          "positionX": 0,
+          "positionY": 120.5,
+          "zoom": 1.25,
+          "updatedAt": "2026-11-25T10:05:00.000Z"
+        }
+      },
+      "pins": ["<sha1 of a book>"],
       "notes": {
         "<sha1 of the book>": [
           {
@@ -47,8 +60,26 @@ mode when it can not be written, see `docs/technote-bookdb.md`).
   its text (10 000 characters at most); `created` and `updated` (UTC, time
   of the server) set by the server. 1 000 notes at most per book; a note
   without quotation nor text is not kept, nor a book without notes.
-- later, in the same file: the reading positions of each user (today
-  common to all, `reader_states.json`), their pins (today in `book.db`).
+- `states`: the reading position of the user in each book (as sent by the
+  reader, `PUT /api/reader/state`); `pins`: the books pinned by the user.
+
+### Schema history
+
+| version | change | min_reader_version |
+|---|---|---|
+| 1 | `notes` of each user | 1 |
+| 2 | `states` and `pins` of each user (older code keeps them: the users are kept as they are) | 1 |
+
+## Positions and pins of before: copied once
+
+The reading positions (`reader_states.json`, `STATE_FILE`) and the pins
+(`bookmarked` of `book.db`) were common to all the users. At startup
+(`import_common_data()`, `app/api.py`), each user of `CREDENTIALS` who has
+no `states` nor `pins` yet gets a copy of them (also a user added later).
+Then those sources are no longer written: kept as they are (a backup, and
+an older version can still run on them). Not done when `reader_states.json`
+can not be read (done at a next start). In read-only mode, the copy is in
+memory only.
 
 ## Versioning
 
@@ -59,8 +90,14 @@ never written: the notes are then kept in memory only, and the server is in
 read-only mode (one more reason in the list); it is refused when its
 `min_reader_version` is newer than this code.
 
-## API (`app/api.py`)
+## API (`app/api.py`, `app/main.py`)
 
+- `GET /api/reader/state/<sha1>`, `PUT /api/reader/state`: the reading
+  position of the logged in user (also appended to the journal of the
+  reader events);
+- `POST /pinbook` (`id`: sha1): pins or unpins a book for the logged in
+  user; the library shows their pins, and the filter "épinglés" of the
+  search keeps them;
 - `GET /api/notes/<sha1>`: `{"notes": [...]}`, the notes of the logged in
   user on this book;
 - `PUT /api/notes/<sha1>`: `{"notes": [{id, page, ratio, quote, text}]}`, all
@@ -78,12 +115,12 @@ Two tabs on the same book: the last saving wins (the whole list).
 
 ## Life of the book
 
-The notes are keyed by the sha1 of the book. When its file is replaced in
+The data is keyed by the sha1 of the book. When its file is replaced in
 place (cover page, optimization, restored original: `BookDir.transform()`,
-`restore_original()`), they follow it with the reading position
-(`move_notes()`, `app/api.py`), their page moved as the pages of the book.
-A book in the trash keeps its notes (the same sha1 when it comes back);
-the copies of a book (duplicates) share them.
+`restore_original()`), the notes, reading positions and pins of the users
+follow it (`move_user_data()`, `app/api.py`), the pages moved as the pages
+of the book. A book in the trash keeps them (the same sha1 when it comes
+back); the copies of a book (duplicates) share them.
 
 ## User identity
 

@@ -53,7 +53,7 @@ the books whose file is missing.
 | `year`       | integer | Publication year. `0` when unknown. |
 | `isbn`       | string  | ISBN-10 or ISBN-13, digits (and final `X`) only. `""` when unknown. |
 | `meta_reviewed` | boolean | The user has reviewed (validated) the metadata of the book. |
-| `bookmarked` | boolean | Pinned book. |
+| `bookmarked` | boolean | Pinned book, for all the users: no longer changed, read once to give a copy of the pins to each user in `userdata.db` (see `docs/technote-userdata.md`). |
 
 Required when loading: `sha1`, `filename`, `category`. The other keys take
 the default value above when missing.
@@ -248,8 +248,10 @@ the access is only checked at startup.
 - **One process per book directory.** Each process keeps its own book list in
   memory and rewrites the whole file: the server must run a single process
   (e.g. gunicorn `-w 1`).
-- **Reader states** (`reader_states.json`, `STATE_FILE`) are a separate file,
-  which is not versioned. Each saved state is also appended to the journal
+- **Reader states** (`reader_states.json`, `STATE_FILE`) were a separate
+  file, common to all the users: now in `userdata.db`, for each user (see
+  `docs/technote-userdata.md`); the file is read once, no longer written.
+  Each saved state is also appended to the journal
   of the reader events (`reader_events.jsonl`, `READER_EVENTS_FILE`): one
   JSON line `{"t", "doc", "page", "user"}` (time of the server in UTC, sha1
   of the book, page, user name), the base of a reading history. Not written
