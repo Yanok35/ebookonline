@@ -75,9 +75,12 @@ class Config:
 
     # Following are in current directory
     BOOK_DB = "book.db"
+    # The reading positions common to all the users, before USERDATA_DB:
+    # read once (a copy for each user), no longer written
     STATE_FILE = "reader_states.json"
-    # The data of the users (their notes in the margin of the books): a
-    # versioned JSON file, as book.db (see docs/technote-userdata.md)
+    # The data of the users (notes in the margin of the books, reading
+    # positions, pins): a versioned JSON file, as book.db (see
+    # docs/technote-userdata.md)
     USERDATA_DB = "userdata.db"
     # Journal of the reader events: one JSON line per saved position (the
     # base of the reading history: sessions, reading time). Empty: no journal.
