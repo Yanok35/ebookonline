@@ -57,7 +57,7 @@ def file_dir(path):
     return os.path.dirname(os.path.abspath(path))
 
 
-def check_write_access(book_dir, book_db, state_file, cache_dir):
+def check_write_access(book_dir, book_db, state_file, cache_dir, userdata_db=None):
     """
     Check that the server can write in the book directory (file operations
     of the admin pages), in the directories of the book database and of
@@ -74,7 +74,8 @@ def check_write_access(book_dir, book_db, state_file, cache_dir):
          file_dir(book_db)),
         (f"le répertoire des positions de lecture ({os.path.basename(state_file)})",
          file_dir(state_file)),
-    ]:
+    ] + ([(f"le répertoire des données des utilisateurs ({os.path.basename(userdata_db)})",
+           file_dir(userdata_db))] if userdata_db else []):
         if not can_write_dir(dirpath):
             problems.append(f"Écriture impossible dans {description} : {dirpath}")
     if not can_read_dir(cache_dir):
