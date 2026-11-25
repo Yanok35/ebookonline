@@ -88,6 +88,14 @@ By default the server will search for PDF files in a subdirectory "books" as
 referenced by the `BOOK_DIR` variable. Like any other setting it can be
 overridden, e.g. `EBOOKONLINE_BOOK_DIR=/srv/books`.
 
+The data written by the server, in the current directory by default:
+`book.db` (`BOOK_DB`, the book list), `reader_states.json` (`STATE_FILE`,
+the reading positions), `reader_events.jsonl` (`READER_EVENTS_FILE`, the
+journal of the readings) and `userdata.db` (`USERDATA_DB`, the notes of the
+users in the margin of the books, see
+[technote-userdata.md](docs/technote-userdata.md)): to back up, unlike
+`CACHE_DIR` (thumbnails, analyses: made again when missing).
+
 ### Metadata analysis
 
 The PDF files are analysed in background processes, at a low priority, to

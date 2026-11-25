@@ -7,3 +7,4 @@ reader_events.jsonl
 venv/
 instance/*
 !instance/*.example
+userdata.db
