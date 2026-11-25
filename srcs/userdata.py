@@ -21,11 +21,20 @@
 The data of the users (USERDATA_DB, "userdata.db"): a JSON file next to
 book.db, versioned as it (see docs/technote-userdata.md), kept in memory and
 rewritten whole, atomically, after each change. One server process only (as
-book.db). For now: the notes of the users in the margin of the books.
+book.db). For each user: their notes in the margin of the books, their
+reading positions, their pins.
 
-    {"version": 1, "min_reader_version": 1,
-     "users": {<login>: {"notes": {<sha1>: [{id, page, ratio, quote, text,
-                                             created, updated}]}}}}
+    {"version": 2, "min_reader_version": 1,
+     "users": {<login>: {
+         "notes": {<sha1>: [{id, page, ratio, quote, text, created, updated}]},
+         "states": {<sha1>: {documentId, documentName, pageNumber, positionX,
+                             positionY, zoom, updatedAt}},
+         "pins": [<sha1>, ...]}}}
+
+The reading positions and pins were common to all the users
+(reader_states.json, "bookmarked" of book.db): import_common() gives a copy
+of them to each user who has none yet, once; those sources are then no
+longer read nor written (kept as they are).
 
 A file written by a newer version is read, never written (read-only): the
 changes are then kept in memory only, as in read-only mode.
@@ -42,13 +51,16 @@ import threading
 
 log = logging.getLogger(__name__)
 
-USERDATA_VERSION = 1
+USERDATA_VERSION = 2
 # Oldest schema version whose code can read a file of USERDATA_VERSION
 USERDATA_MIN_READER_VERSION = 1
 
 # Migrations: _MIGRATIONS[n] converts the content of version n to n + 1
 _MIGRATIONS = [
     # 0 -> 1: the first version
+    lambda db: db,
+    # 1 -> 2: "states" and "pins" of each user, added by import_common()
+    # (older code keeps them: the users are kept as they are)
     lambda db: db,
 ]
 assert len(_MIGRATIONS) == USERDATA_VERSION
@@ -203,21 +215,97 @@ class UserData:
 
     def move_book(self, old_sha1, new_sha1, page_offset=0):
         """
-        The notes of a book whose file was replaced in place (a cover page
-        added: page_offset 1): moved to its new sha1, their page moved.
-        Returns the number of users whose notes moved.
+        The data of a book whose file was replaced in place (a cover page
+        added: page_offset 1): the notes, the reading positions and the pins
+        of the users move to its new sha1, the pages moved. Returns the
+        number of users whose data moved.
         """
         with self.lock:
             moved = 0
             for data in self.users.values():
+                found = False
                 books = data.get("notes", {})
-                if old_sha1 not in books:
-                    continue
-                notes = books.pop(old_sha1)
-                for note in notes:
-                    note["page"] = max(1, note["page"] + page_offset)
-                books[new_sha1] = notes
-                moved += 1
+                if old_sha1 in books:
+                    notes = books.pop(old_sha1)
+                    for note in notes:
+                        note["page"] = max(1, note["page"] + page_offset)
+                    books[new_sha1] = notes
+                    found = True
+                states = data.get("states", {})
+                if old_sha1 in states:
+                    state = dict(states.pop(old_sha1), documentId=new_sha1)
+                    if isinstance(state.get("pageNumber"), int):
+                        state["pageNumber"] = max(1, state["pageNumber"] + page_offset)
+                    states[new_sha1] = state
+                    found = True
+                pins = data.get("pins", [])
+                if old_sha1 in pins:
+                    pins[pins.index(old_sha1)] = new_sha1
+                    found = True
+                moved += found
             if moved:
                 self._save()
             return moved
+
+    # --- reading positions
+
+    def state(self, user, sha1):
+        """ The reading position of user in the book sha1 (a copy), or None """
+        with self.lock:
+            state = self.users.get(user, {}).get("states", {}).get(sha1)
+            return dict(state) if state is not None else None
+
+    def set_state(self, user, state):
+        """
+        The reading position of user in the book state["documentId"]
+        (validated by the API), saved. Raises OSError (not saved: kept in
+        memory).
+        """
+        with self.lock:
+            self.users.setdefault(user, {}).setdefault("states", {})[state["documentId"]] = dict(state)
+            self._save()
+
+    # --- pins
+
+    def pins(self, user):
+        """ The sha1 of the books pinned by user: a set """
+        with self.lock:
+            return set(self.users.get(user, {}).get("pins", []))
+
+    def toggle_pin(self, user, sha1):
+        """ Pin, or unpin, a book for user, and save. Returns whether it is pinned """
+        with self.lock:
+            pins = self.users.setdefault(user, {}).setdefault("pins", [])
+            if sha1 in pins:
+                pins.remove(sha1)
+            else:
+                pins.append(sha1)
+            self._save()
+            return sha1 in pins
+
+    # --- the positions and pins common to all the users, before
+
+    def import_common(self, logins, states, pins):
+        """
+        The reading positions ({sha1: state}) and pins ([sha1]) common to
+        all the users (reader_states.json, book.db): a copy for each user
+        of logins who has none yet (once: a user with "states" or "pins",
+        even empty, is left as is). Saved when something was imported.
+        Returns the logins given a copy.
+        """
+        with self.lock:
+            given = []
+            for login in logins:
+                data = self.users.setdefault(login, {})
+                imported = False
+                if "states" not in data:
+                    data["states"] = copy.deepcopy(states)
+                    imported = True
+                if "pins" not in data:
+                    data["pins"] = list(pins)
+                    imported = True
+                if imported:
+                    given.append(login)
+            if given:
+                self._save()
+            return given
