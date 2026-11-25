@@ -17,31 +17,30 @@ def test_reader_state_requires_login(app):
     assert client.put("/api/reader/state", json=STATE).status_code == 401
 
 
-def test_reader_state_is_saved_in_state_file(app, client, tmp_bookdir):
-    state_file = tmp_bookdir[0] / "reader_states.json"
-    assert app.config["STATE_FILE"] == str(state_file)
-
+def test_reader_state_is_saved_for_the_user(app, client):
     assert client.get("/api/reader/state/doc-1").status_code == 404
     response = client.put("/api/reader/state", json=STATE)
     assert response.status_code == 200 and response.json["success"]
 
-    assert json.loads(state_file.read_text())["doc-1"]["pageNumber"] == 3
+    db = json.loads(open(app.config["USERDATA_DB"], encoding="utf-8").read())
+    assert db["users"]["test"]["states"]["doc-1"]["pageNumber"] == 3
     assert client.get("/api/reader/state/doc-1").json["pageNumber"] == 3
+    # reader_states.json: no longer written
+    assert not os.path.exists(app.config["STATE_FILE"])
+    # another user: their own position
+    other = app.test_client()
+    with other.session_transaction() as session:
+        session["username"] = "other"
+    assert other.get("/api/reader/state/doc-1").status_code == 404
+    other.put("/api/reader/state", json=dict(STATE, pageNumber=9))
+    assert client.get("/api/reader/state/doc-1").json["pageNumber"] == 3
+    assert other.get("/api/reader/state/doc-1").json["pageNumber"] == 9
 
 
-def test_invalid_reader_state(client, tmp_bookdir):
+def test_invalid_reader_state(app, client):
     response = client.put("/api/reader/state", json=dict(STATE, pageNumber=0))
     assert response.status_code == 400
-    assert not (tmp_bookdir[0] / "reader_states.json").exists()
-
-
-def test_unreadable_state_file_is_logged(app, client, tmp_bookdir, caplog):
-    # a directory instead of the file
-    (tmp_bookdir[0] / "reader_states.json").mkdir()
-    response = client.get("/api/reader/state/doc-1")
-    assert response.status_code == 500
-    assert response.json["error"] == "Impossible de lire les états enregistrés."
-    assert "Impossible de lire le fichier des états." in caplog.text
+    assert not os.path.exists(app.config["USERDATA_DB"])
 
 
 # --- journal of the reader events
@@ -82,14 +81,62 @@ def test_reader_event_failure_is_logged(app, client, tmp_path, caplog):
 
 # --- reading position of a book whose file was replaced
 
-def test_move_reader_state(app, client):
-    from app.api import move_reader_state
+def test_move_user_data(app, client):
+    from app.api import move_user_data
 
     client.put("/api/reader/state", json=dict(STATE, pageNumber=3))
+    app.userdata.toggle_pin("test", "doc-1")
     with app.test_request_context():
-        move_reader_state("doc-1", "doc-2", page_offset=1)
-        move_reader_state("unknown", "doc-3")
+        move_user_data("doc-1", "doc-2", page_offset=1)
+        move_user_data("unknown", "doc-3")
     assert client.get("/api/reader/state/doc-1").status_code == 404
     state = client.get("/api/reader/state/doc-2").json
     assert state["pageNumber"] == 4 and state["documentId"] == "doc-2"
     assert client.get("/api/reader/state/doc-3").status_code == 404
+    assert app.userdata.pins("test") == {"doc-2"}
+
+
+# --- positions and pins common to all the users, before userdata.db
+
+def test_common_positions_and_pins_copied_to_each_user(app, monkeypatch, caplog):
+    import logging
+    from pathlib import Path
+
+    from app import create_app
+    from tests.conftest import make_pdf
+
+    caplog.set_level(logging.INFO)
+    Path(app.config["STATE_FILE"]).write_text(json.dumps({"doc-1": STATE}))
+    make_pdf(Path(app.config["BOOK_DIR"]) / "a.pdf")
+    app.bookdir.rescan()
+    book = app.bookdir.find_book_by_filename("a.pdf")
+    book.bookmarked = True
+    app.bookdir.save_db()
+    monkeypatch.setenv("EBOOKONLINE_CREDENTIALS", json.dumps({"alice": "h", "bob": "h"}))
+
+    app = create_app()
+    for user in ("alice", "bob"):
+        assert app.userdata.state(user, "doc-1")["pageNumber"] == 3
+        assert app.userdata.pins(user) == {book.sha1}
+    assert "Common reading positions (1) and pins (1) copied to the users: alice, bob" in caplog.text
+    # once: their changes are kept at the next start, the sources untouched
+    app.userdata.toggle_pin("alice", book.sha1)
+    app.userdata.set_state("bob", dict(STATE, pageNumber=8))
+    app = create_app()
+    assert app.userdata.pins("alice") == set() and app.userdata.pins("bob") == {book.sha1}
+    assert app.userdata.state("bob", "doc-1")["pageNumber"] == 8
+    assert json.loads(Path(app.config["STATE_FILE"]).read_text())["doc-1"]["pageNumber"] == 3
+    assert app.bookdir.find_book_by_sha1(book.sha1).bookmarked
+
+
+def test_common_positions_unreadable(app, monkeypatch, caplog):
+    from pathlib import Path
+
+    from app import create_app
+
+    # a directory instead of the file: not imported, done at a next start
+    Path(app.config["STATE_FILE"]).mkdir()
+    monkeypatch.setenv("EBOOKONLINE_CREDENTIALS", json.dumps({"alice": "h"}))
+    app = create_app()
+    assert "Common reading positions not imported" in caplog.text
+    assert app.userdata.state("alice", "doc-1") is None and "alice" not in app.userdata.users

@@ -100,6 +100,7 @@ def test_pin_is_not_saved(book_dir_read_only_app):
     response = logged_in(app).post("/pinbook", data={"id": book.sha1})
     assert response.json == {"pinned": True}
     assert db.read_text() == content
+    assert not Path(app.config["USERDATA_DB"]).exists()
 
 
 def test_reader_state_is_kept_in_memory(book_dir_read_only_app):
@@ -107,17 +108,19 @@ def test_reader_state_is_kept_in_memory(book_dir_read_only_app):
     client = logged_in(app)
     response = client.put("/api/reader/state", json=STATE)
     assert response.status_code == 200 and response.json["readOnly"]
-    assert not Path(app.config["STATE_FILE"]).exists()
+    assert not Path(app.config["USERDATA_DB"]).exists()
     assert not Path(app.config["READER_EVENTS_FILE"]).exists()
     assert client.get("/api/reader/state/doc-1").json["pageNumber"] == 3
 
 
 def test_memory_state_is_over_the_file(app, tmp_bookdir, monkeypatch):
+    """ the common positions copied in memory, the changes in memory too """
     from app import create_app
 
     state_file = Path(app.config["STATE_FILE"])
     state_file.write_text(json.dumps({"doc-1": STATE, "doc-2": dict(STATE, documentId="doc-2")}))
     content = state_file.read_text()
+    monkeypatch.setenv("EBOOKONLINE_CREDENTIALS", json.dumps({"test": "h"}))
     tmp_bookdir[1].chmod(0o555)
     try:
         app = create_app()
@@ -129,6 +132,7 @@ def test_memory_state_is_over_the_file(app, tmp_bookdir, monkeypatch):
     assert client.get("/api/reader/state/doc-1").json["pageNumber"] == 7
     assert client.get("/api/reader/state/doc-2").json["pageNumber"] == 3
     assert state_file.read_text() == content
+    assert not Path(app.config["USERDATA_DB"]).exists()
 
 
 def test_file_operations_are_refused(book_dir_read_only_app, caplog):

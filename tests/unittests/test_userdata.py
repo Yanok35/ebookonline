@@ -167,3 +167,54 @@ def test_invalid_login_refused_at_startup(app, monkeypatch):
         create_app()
     monkeypatch.setenv("EBOOKONLINE_CREDENTIALS", json.dumps({"élise.d@home": "hash"}))
     create_app()
+
+
+def test_pins_of_each_user(app, client, book):
+    other = app.test_client()
+    with other.session_transaction() as session:
+        session["username"] = "other"
+    assert client.post("/pinbook", data={"id": book.sha1}).json == {"pinned": True}
+    db = json.loads(Path(app.config["USERDATA_DB"]).read_text())
+    assert db["users"]["test"]["pins"] == [book.sha1]
+    # book.db: no longer changed by a pin
+    assert not app.bookdir.find_book_by_sha1(book.sha1).bookmarked
+
+    def pinned_icon(c):
+        return "bookmark-active.svg" in c.get("/browser_subset?subset-id=0").text
+
+    assert pinned_icon(client) and not pinned_icon(other)
+    # the filter "épinglés" of the search
+    def pinned_search(c):
+        return json.loads(c.get("/browser_search?pat=&pinned=true").text)["body"]
+
+    assert book.sha1 in pinned_search(client) and book.sha1 not in pinned_search(other)
+    # the book page
+    assert "<dt>Épinglé</dt><dd>oui</dd>" in client.get(f"/bookadmin/{book.sha1}").text
+    assert "<dt>Épinglé</dt><dd>non</dd>" in other.get(f"/bookadmin/{book.sha1}").text
+    # unpinned
+    assert client.post("/pinbook", data={"id": book.sha1}).json == {"pinned": False}
+    assert client.post("/pinbook", data={"id": "0" * 40}).status_code == 404
+
+
+def test_move_book_states_and_pins(tmp_path):
+    data = UserData(str(tmp_path / "userdata.db"))
+    data.set_state("alice", {"documentId": "old", "pageNumber": 5})
+    data.toggle_pin("alice", "old")
+    data.toggle_pin("bob", "other")
+    assert data.move_book("old", "new", page_offset=1) == 1
+    again = UserData(str(tmp_path / "userdata.db"))
+    assert again.state("alice", "new") == {"documentId": "new", "pageNumber": 6}
+    assert again.state("alice", "old") is None
+    assert again.pins("alice") == {"new"} and again.pins("bob") == {"other"}
+
+
+def test_import_common_once(tmp_path):
+    data = UserData(str(tmp_path / "userdata.db"))
+    states = {"s1": {"documentId": "s1", "pageNumber": 2}}
+    assert data.import_common(["alice", "bob"], states, ["s1"]) == ["alice", "bob"]
+    data.set_state("alice", {"documentId": "s1", "pageNumber": 9})
+    # a copy for each one: not shared
+    assert data.state("bob", "s1")["pageNumber"] == 2
+    # once; a new user gets a copy too
+    assert data.import_common(["alice", "bob", "carol"], states, ["s1"]) == ["carol"]
+    assert data.state("alice", "s1")["pageNumber"] == 9
