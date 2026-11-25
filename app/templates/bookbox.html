@@ -11,7 +11,7 @@
             </div>
             <div class="book-actions">
                 <img class="pinbook-action-icon" id="{{ b.sha1 }}"
-                     {% if b.bookmarked %}
+                     {% if b.sha1 in pins %}
                      src="/static/bookmark-active.svg"
                      {% else %}
                      src="/static/bookmark.svg"

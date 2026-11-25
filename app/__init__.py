@@ -164,6 +164,10 @@ def create_app():
             f"Les données des utilisateurs ont été écrites par une version plus "
             f"récente d'ebookonline (schéma {app.userdata.newer_version}, ce "
             f"serveur gère le schéma {USERDATA_VERSION})")
+    # The reading positions and pins, common to all the users before: a
+    # copy for each user, once
+    from .api import import_common_data
+    import_common_data(app)
     for reason in app.read_only_reasons:
         app.logger.warning("Read-only mode: %s", reason)
     app.context_processor(_read_only_context)

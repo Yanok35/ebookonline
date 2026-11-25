@@ -2,8 +2,6 @@ import datetime
 import json
 import math
 import os
-import tempfile
-import threading
 
 from pathlib import Path
 
@@ -16,19 +14,12 @@ from app.auth import api_login_required, current_user_key
 # CONFIGURATION
 # =========================================================
 
-def memory_states():
-    """
-    Read-only server: the states saved since its start, kept in memory only
-    (over the ones of the file).
-    """
-    return current_app.extensions.setdefault("ebookonline.reader_states", {})
-
-
 def state_file():
     """
-    The reader states file: STATE_FILE setting of the application (relative
-    to the current directory), which instance/config.py or
-    EBOOKONLINE_STATE_FILE can override.
+    The reading positions common to all the users, before userdata.db:
+    STATE_FILE setting of the application (relative to the current
+    directory). Read once, to give a copy to each user (see
+    import_common_data()); no longer written.
     """
     return Path(current_app.config["STATE_FILE"])
 
@@ -61,11 +52,6 @@ def log_reader_event(state):
     except OSError as e:
         current_app.logger.warning("Reader event not logged in %s: %s", events_file, e)
 
-# Protège les lectures et écritures du fichier JSON
-# entre les requêtes traitées par ce processus Python.
-state_lock = threading.Lock()
-
-
 # =========================================================
 # GESTION DU FICHIER JSON
 # =========================================================
@@ -89,43 +75,6 @@ def load_states():
         raise ValueError("Le fichier des états doit contenir un objet JSON.")
 
     return data
-
-
-def save_states(states):
-    """
-    Enregistre les états dans un fichier temporaire,
-    puis remplace le fichier précédent.
-
-    Cette méthode évite qu'une interruption pendant
-    l'écriture laisse un fichier JSON partiellement écrit.
-    """
-
-    path = state_file()
-    fd, temporary_name = tempfile.mkstemp(
-        prefix="reader_states_",
-        suffix=".tmp",
-        dir=str(path.parent),
-    )
-
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as file:
-            json.dump(
-                states,
-                file,
-                ensure_ascii=False,
-                indent=2,
-                allow_nan=False,
-            )
-
-            file.write("\n")
-            file.flush()
-            os.fsync(file.fileno())
-
-        os.replace(temporary_name, path)
-
-    finally:
-        if os.path.exists(temporary_name):
-            os.unlink(temporary_name)
 
 
 # =========================================================
@@ -224,59 +173,15 @@ def validate_state(data):
 @api_login_required
 def get_reader_state(document_id):
     """
-    Retourne le dernier état enregistré pour un document.
+    The reading position of the logged in user in a document (userdata.db),
+    or 404.
     """
-
-    try:
-        with state_lock:
-            state = memory_states().get(document_id)
-            if state is None:
-                state = load_states().get(document_id)
-
-    except (OSError, ValueError, json.JSONDecodeError):
-        current_app.logger.exception(
-            "Impossible de lire le fichier des états."
-        )
-
-        return jsonify({
-            "error": "Impossible de lire les états enregistrés."
-        }), 500
-
+    state = current_app.userdata.state(current_user_key(), document_id)
     if state is None:
         return jsonify({
             "error": "Aucun état enregistré pour ce document."
         }), 404
-
     return jsonify(state)
-
-
-def move_reader_state(old_sha1, new_sha1, page_offset=0):
-    """
-    The reading position of a book whose file was replaced in place
-    (BookDir.transform(), restore_original()): moved to its new sha1, its
-    page moved by page_offset (a cover page added: +1). A failure is
-    logged: the position is then lost, the book is not.
-    """
-    def moved(state):
-        state = dict(state, documentId=new_sha1)
-        if isinstance(state.get("pageNumber"), int):
-            state["pageNumber"] = max(1, state["pageNumber"] + page_offset)
-        return state
-
-    try:
-        with state_lock:
-            memory = memory_states()
-            if old_sha1 in memory:
-                memory[new_sha1] = moved(memory.pop(old_sha1))
-            if is_read_only():
-                return
-            states = load_states()
-            if old_sha1 in states:
-                states[new_sha1] = moved(states.pop(old_sha1))
-                save_states(states)
-    except (OSError, ValueError) as e:
-        current_app.logger.warning("Reading position of %s not moved to %s: %s",
-                                   old_sha1, new_sha1, e)
 
 
 # =========================================================
@@ -287,7 +192,9 @@ def move_reader_state(old_sha1, new_sha1, page_offset=0):
 @api_login_required
 def put_reader_state():
     """
-    Reçoit l'état du lecteur et l'enregistre dans le JSON.
+    The reading position of the logged in user, saved in userdata.db (in
+    memory only in read-only mode), and appended to the journal of the
+    reader events.
     """
 
     data = request.get_json(silent=True)
@@ -299,9 +206,18 @@ def put_reader_state():
             "error": validation_error
         }), 400
 
+    try:
+        current_app.userdata.set_state(current_user_key(), state)
+    except OSError:
+        current_app.logger.exception(
+            "Impossible de sauvegarder l'état du lecteur."
+        )
+
+        return jsonify({
+            "error": "Impossible d'enregistrer l'état."
+        }), 500
+
     if is_read_only():
-        with state_lock:
-            memory_states()[state["documentId"]] = state
         return jsonify({
             "success": True,
             "readOnly": True,
@@ -310,24 +226,7 @@ def put_reader_state():
             "state": state,
         }), 200
 
-    try:
-        with state_lock:
-            states = load_states()
-
-            # Un état par identifiant de document.
-            states[state["documentId"]] = state
-
-            save_states(states)
-            log_reader_event(state)
-
-    except (OSError, ValueError, json.JSONDecodeError):
-        current_app.logger.exception(
-            "Impossible de sauvegarder l'état du lecteur."
-        )
-
-        return jsonify({
-            "error": "Impossible d'enregistrer l'état."
-        }), 500
+    log_reader_event(state)
 
     return jsonify({
         "success": True,
@@ -381,16 +280,40 @@ def put_notes(sha1):
     return jsonify(notes=kept)
 
 
-def move_notes(old_sha1, new_sha1, page_offset=0):
+def move_user_data(old_sha1, new_sha1, page_offset=0):
     """
-    The notes of a book whose file was replaced in place (BookDir.transform(),
-    restore_original()): moved to its new sha1, their page moved by
-    page_offset. A failure is logged: the notes stay under the old sha1.
+    The data of the users on a book whose file was replaced in place
+    (BookDir.transform(), restore_original()): their notes, reading
+    positions and pins move to its new sha1, the pages moved by page_offset
+    (a cover page added: +1). A failure is logged: they stay under the old
+    sha1.
     """
     try:
         current_app.userdata.move_book(old_sha1, new_sha1, page_offset)
     except OSError as e:
-        current_app.logger.warning("Notes of %s not moved to %s: %s", old_sha1, new_sha1, e)
+        current_app.logger.warning("Data of the users on %s not moved to %s: %s",
+                                   old_sha1, new_sha1, e)
+
+
+def import_common_data(app):
+    """
+    The reading positions (reader_states.json) and pins (book.db) common to
+    all the users before userdata.db: a copy for each user of CREDENTIALS
+    who has none yet (see UserData.import_common()). Not done when the
+    positions can not be read (done at a next start).
+    """
+    with app.app_context():
+        try:
+            states = load_states()
+        except (OSError, ValueError) as e:
+            app.logger.warning("Common reading positions not imported, %s unreadable: %s",
+                               state_file(), e)
+            return
+    pins = [b.sha1 for b in app.bookdir.get_all_books() if b.bookmarked]
+    given = app.userdata.import_common(list(app.config["CREDENTIALS"]), states, pins)
+    if given:
+        app.logger.info("Common reading positions (%d) and pins (%d) copied to the users: %s",
+                        len(states), len(pins), ", ".join(given))
 
 
 # @api.route("/debug-proxy", methods=['GET'])

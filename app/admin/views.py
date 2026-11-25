@@ -56,8 +56,8 @@ from app.admin.forms import (
     TrashDuplicateForm,
 )
 from app import is_read_only
-from app.api import move_notes, move_reader_state
-from app.auth import login_required
+from app.api import move_user_data
+from app.auth import current_user_key, login_required
 from srcs.bookfileops import (
     ROOT_CATEGORY,
     BookFileError,
@@ -184,6 +184,8 @@ def bookadmin(sha1):
     return render_template(
         "admin/book.html",
         book=book,
+        # pinned by the logged in user
+        pinned=book.sha1 in current_app.userdata.pins(current_user_key()),
         form=form,
         suggestions=suggestions,
         analysis=analysis,
@@ -406,11 +408,10 @@ def rename_book(sha1):
 def _transformed(result):
     """
     A book whose file was replaced (transformation, restored original): its
-    reading position and the notes of the users follow it. Returns its page
-    (new URL).
+    notes, reading positions and pins of the users follow it. Returns its
+    page (new URL).
     """
-    move_reader_state(result.old_sha1, result.new_sha1, result.page_offset)
-    move_notes(result.old_sha1, result.new_sha1, result.page_offset)
+    move_user_data(result.old_sha1, result.new_sha1, result.page_offset)
     return redirect(url_for(".bookadmin", sha1=result.new_sha1))
 
 

@@ -28,7 +28,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from wtforms import ValidationError
 
 from app import is_read_only
-from app.auth import login_required
+from app.auth import current_user_key, login_required
 from srcs.book import BookDir
 from srcs.bookfileops import INCOMING_DIR, BookFileError, BookFileExists
 from srcs.cache import Cache
@@ -212,7 +212,8 @@ def browser_subset():
 
     booklist = booklist[subset_id * SUBSET_NBBOOKS : subset_id * SUBSET_NBBOOKS + SUBSET_NBBOOKS]
 
-    return render_template("bookbox.html", books = booklist)
+    return render_template("bookbox.html", books = booklist,
+                           pins = current_app.userdata.pins(current_user_key()))
 
 
 @main.route('/browser_search', methods=['GET', 'POST'])
@@ -220,9 +221,11 @@ def browser_subset():
 def browser_search():
     d = current_app.bookdir
 
+    pins = current_app.userdata.pins(current_user_key())
     pinned = request.values.get('pinned')
     if pinned:
-        s = d.get_subset_if_bookmarked()
+        # the books pinned by the user
+        s = [b for b in d.get_booklist() if b.sha1 in pins]
         current_app.logger.debug("Pinned books: %d", len(s))
     else:
         s = d.get_booklist()
@@ -236,7 +239,7 @@ def browser_search():
     html = ""
     if len(s) < 200:
 
-        html += render_template("bookbox.html", books = s)
+        html += render_template("bookbox.html", books = s, pins = pins)
 
     elif len(s) < 1000:
 
@@ -384,14 +387,20 @@ def pinbook(sha1 = None):
 
     sha1 = request.form['id']
     bsel = d.find_book_by_sha1(sha1)
+    if bsel is None:
+        abort(404)
 
-    bsel.bookmarked = not bsel.bookmarked
-    current_app.logger.info("%s: %s '%s'", session.get("username"),
-                            "pin" if bsel.bookmarked else "unpin", bsel.filename)
+    # pinned for the logged in user (userdata.db; in memory only in
+    # read-only mode)
+    try:
+        pinned = current_app.userdata.toggle_pin(current_user_key(), sha1)
+    except OSError as e:
+        current_app.logger.warning("Pin of '%s' not saved: %s", bsel.filename, e)
+        abort(500)
+    current_app.logger.info("%s: %s '%s'", current_user_key(),
+                            "pin" if pinned else "unpin", bsel.filename)
 
-    d.save_db()
-
-    return jsonify({"pinned": bsel.bookmarked}), 200
+    return jsonify({"pinned": pinned}), 200
 
 #@main.errorhandler(401)
 #@main.errorhandler(404)
