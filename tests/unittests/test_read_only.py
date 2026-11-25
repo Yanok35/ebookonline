@@ -215,3 +215,19 @@ def test_upload_is_refused(book_dir_read_only_app):
     assert response.status_code == 403 and "lecture seule" in response.json["error"]
     response = client.post("/upload/check", json={"names": ["a.pdf"]})
     assert response.status_code == 403
+
+
+def test_notes_kept_in_memory(book_dir_read_only_app):
+    """ the notes of the users, as the reading positions: not written """
+    import re
+
+    app = book_dir_read_only_app
+    client = logged_in(app)
+    book = app.bookdir.find_book_by_filename("Science/a.pdf")
+    token = re.search(r'const NOTES_TOKEN = "([^"]+)";', client.get(f"/reader/{book.sha1}").text).group(1)
+    note = {"id": "n-1", "page": 1, "ratio": 0.5, "quote": "", "text": "Note"}
+    response = client.put(f"/api/notes/{book.sha1}", json={"notes": [note]},
+                          headers={"X-CSRFToken": token})
+    assert response.status_code == 200 and app.userdata.read_only
+    assert client.get(f"/api/notes/{book.sha1}").json["notes"][0]["text"] == "Note"
+    assert not Path(app.config["USERDATA_DB"]).exists()

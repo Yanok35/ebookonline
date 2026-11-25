@@ -124,6 +124,7 @@ def app(tmp_bookdir, monkeypatch):
         "BOOK_DIR": str(bookdir),
         "BOOK_DB": str(tmp_path / "book.db"),
         "STATE_FILE": str(tmp_path / "reader_states.json"),
+        "USERDATA_DB": str(tmp_path / "userdata.db"),
         "READER_EVENTS_FILE": str(tmp_path / "reader_events.jsonl"),
         "CACHE_DIR": str(cachedir),
         "BOOK_DIR_WATCH": "false",

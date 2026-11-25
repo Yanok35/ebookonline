@@ -354,6 +354,8 @@ def test_insert_cover(app, client, book, caplog, fmt, filename):
     caplog.set_level(logging.WARNING)
     old_sha1 = book.sha1
     client.put("/api/reader/state", json=dict(STATE, documentId=old_sha1))
+    app.userdata.set_notes("test", old_sha1, [{"id": "n-1", "page": 2, "ratio": 0.5,
+                                               "quote": "", "text": "Note"}])
 
     response = post_cover(client, book, cover_image(fmt), filename)
 
@@ -371,6 +373,9 @@ def test_insert_cover(app, client, book, caplog, fmt, filename):
     assert client.get(f"/api/reader/state/{old_sha1}").status_code == 404
     state = client.get(f"/api/reader/state/{book.sha1}").json
     assert state["pageNumber"] == 4 and state["documentId"] == book.sha1
+    # the notes too
+    assert app.userdata.notes("test", old_sha1) == []
+    assert [n["page"] for n in app.userdata.notes("test", book.sha1)] == [3]
     # the original can be restored
     assert 'value="Restaurer l&#39;original"' in html
 
