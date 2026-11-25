@@ -88,6 +88,14 @@ By default the server will search for PDF files in a subdirectory "books" as
 referenced by the `BOOK_DIR` variable. Like any other setting it can be
 overridden, e.g. `EBOOKONLINE_BOOK_DIR=/srv/books`.
 
+The data written by the server, in the current directory by default:
+`book.db` (`BOOK_DB`, the book list), `reader_states.json` (`STATE_FILE`,
+the reading positions), `reader_events.jsonl` (`READER_EVENTS_FILE`, the
+journal of the readings) and `userdata.db` (`USERDATA_DB`, the notes of the
+users in the margin of the books, see
+[technote-userdata.md](docs/technote-userdata.md)): to back up, unlike
+`CACHE_DIR` (thumbnails, analyses: made again when missing).
+
 ### Metadata analysis
 
 The PDF files are analysed in background processes, at a low priority, to
@@ -152,7 +160,7 @@ it chooses the user and the command of the service.
 gunicorn -w 1 --threads 4 -b 127.0.0.1:5000 \
     --no-control-socket \
     --logger-class srcs.gunicorn_logger.GunicornLogger \
-    'ebookonline:create_app("default")'
+    'ebookonline:create_app()'
 ```
 
 `-w 1`: a single process, which holds the book list in memory and writes

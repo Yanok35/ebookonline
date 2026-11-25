@@ -56,7 +56,7 @@ from app.admin.forms import (
     TrashDuplicateForm,
 )
 from app import is_read_only
-from app.api import move_reader_state
+from app.api import move_notes, move_reader_state
 from app.auth import login_required
 from srcs.bookfileops import (
     ROOT_CATEGORY,
@@ -406,9 +406,11 @@ def rename_book(sha1):
 def _transformed(result):
     """
     A book whose file was replaced (transformation, restored original): its
-    reading position follows it. Returns its page (new URL).
+    reading position and the notes of the users follow it. Returns its page
+    (new URL).
     """
     move_reader_state(result.old_sha1, result.new_sha1, result.page_offset)
+    move_notes(result.old_sha1, result.new_sha1, result.page_offset)
     return redirect(url_for(".bookadmin", sha1=result.new_sha1))
 
 

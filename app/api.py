@@ -7,10 +7,10 @@ import threading
 
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request
 
 from app import is_read_only
-from app.auth import api_login_required
+from app.auth import api_login_required, current_user_key
 
 # =========================================================
 # CONFIGURATION
@@ -53,7 +53,7 @@ def log_reader_event(state):
         "t": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
         "doc": state["documentId"],
         "page": state["pageNumber"],
-        "user": session.get("username"),
+        "user": current_user_key(),
     }
     try:
         with open(events_file, "a", encoding="utf-8") as f:
@@ -336,6 +336,63 @@ def put_reader_state():
     }), 200
 
 # # Useful to debug reverse proxy configurations
+# =========================================================
+# NOTES IN THE MARGIN (userdata.db)
+# =========================================================
+
+@api.route("/api/notes/<sha1>", methods=["GET"])
+@api_login_required
+def get_notes(sha1):
+    """ JSON {"notes": [...]}: the notes of the logged in user on a book """
+    return jsonify(notes=current_app.userdata.notes(current_user_key(), sha1))
+
+
+@api.route("/api/notes/<sha1>", methods=["PUT"])
+@api_login_required
+def put_notes(sha1):
+    """
+    JSON {"notes": [{id, page, ratio, quote, text}]}: all the notes of the
+    logged in user on a book (CSRF token in the X-CSRFToken header).
+    Answers {"notes": [...]} as kept (with created and updated), or {error}
+    with 400 (invalid), 404 (unknown book). In read-only mode, kept in
+    memory only.
+    """
+    from flask_wtf.csrf import validate_csrf
+    from wtforms.validators import ValidationError
+
+    try:
+        validate_csrf(request.headers.get("X-CSRFToken"))
+    except ValidationError:
+        return jsonify(error="Jeton de sécurité invalide : recharger la page."), 400
+    if current_app.bookdir.find_book_by_sha1(sha1) is None:
+        return jsonify(error="Livre inconnu."), 404
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="Objet JSON attendu."), 400
+    from srcs.userdata import UserDataError
+
+    try:
+        kept = current_app.userdata.set_notes(current_user_key(), sha1, data.get("notes"))
+    except UserDataError as e:
+        return jsonify(error=f"Notes refusées : {e}"), 400
+    except OSError as e:
+        current_app.logger.warning("Notes of %s not saved: %s", sha1, e)
+        return jsonify(error="Notes non enregistrées sur le serveur."), 500
+    return jsonify(notes=kept)
+
+
+def move_notes(old_sha1, new_sha1, page_offset=0):
+    """
+    The notes of a book whose file was replaced in place (BookDir.transform(),
+    restore_original()): moved to its new sha1, their page moved by
+    page_offset. A failure is logged: the notes stay under the old sha1.
+    """
+    try:
+        current_app.userdata.move_book(old_sha1, new_sha1, page_offset)
+    except OSError as e:
+        current_app.logger.warning("Notes of %s not moved to %s: %s", old_sha1, new_sha1, e)
+
+
 # @api.route("/debug-proxy", methods=['GET'])
 # def debug_proxy():
 #     return {

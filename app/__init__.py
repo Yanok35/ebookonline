@@ -18,6 +18,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
+import re
 
 import click
 from flask import Flask, current_app, request, session
@@ -30,6 +31,7 @@ from srcs.logs import setup_logging
 from srcs.book import DB_VERSION
 from srcs.metadata.service import MetadataService
 from srcs.services import make_bookdir, make_cache
+from srcs.userdata import USERDATA_VERSION, UserData
 from srcs.naming import NamingError, check_pattern
 from srcs.watcher import BookDirWatcher
 
@@ -111,6 +113,13 @@ def create_app():
             f"in {config.INSTANCE_CONFIG}"
         )
 
+    # The logins key the data of the users (userdata.db, journal of the
+    # reader events): letters, digits, '.', '_', '@', '-'
+    for login in app.config['CREDENTIALS']:
+        if not re.fullmatch(r"[\w.@-]+", login):
+            raise RuntimeError(f"CREDENTIALS: invalid login {login!r} (letters, digits, "
+                               "'.', '_', '@', '-')")
+
     try:
         check_pattern(app.config['FILENAME_PATTERN'])
     except NamingError as e:
@@ -133,7 +142,7 @@ def create_app():
     # book.db was written by a newer version: the reasons, as messages.
     app.read_only_reasons = check_write_access(
         app.config['BOOK_DIR'], app.config['BOOK_DB'], app.config['STATE_FILE'],
-        app.config['CACHE_DIR'])
+        app.config['CACHE_DIR'], app.config['USERDATA_DB'])
     # Last known book list, available at once (no directory scan)
     app.bookdir = make_bookdir(app.config, app.cache, read_only=bool(app.read_only_reasons))
     # Suggestions of metadata, kept in the cache directory like the
@@ -147,6 +156,14 @@ def create_app():
             f"La base des livres a été écrite par une version plus récente "
             f"d'ebookonline (schéma {app.bookdir.db_version}, ce serveur gère "
             f"le schéma {DB_VERSION})")
+    # The data of the users (notes): in memory only in read-only mode, as
+    # the reading positions
+    app.userdata = UserData(app.config['USERDATA_DB'], read_only=bool(app.read_only_reasons))
+    if app.userdata.newer_version is not None:
+        app.read_only_reasons.append(
+            f"Les données des utilisateurs ont été écrites par une version plus "
+            f"récente d'ebookonline (schéma {app.userdata.newer_version}, ce "
+            f"serveur gère le schéma {USERDATA_VERSION})")
     for reason in app.read_only_reasons:
         app.logger.warning("Read-only mode: %s", reason)
     app.context_processor(_read_only_context)

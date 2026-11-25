@@ -25,9 +25,9 @@ the logged in user, found from the journal of the reader events
 
 import os
 
-from flask import Blueprint, current_app, render_template, session, url_for
+from flask import Blueprint, current_app, render_template, url_for
 
-from app.auth import login_required
+from app.auth import current_user_key, login_required
 from srcs.history import SESSION_GAP, reading_sessions
 
 timeline = Blueprint("timeline", __name__)
@@ -38,7 +38,7 @@ timeline = Blueprint("timeline", __name__)
 def timeline_page():
     """ The timeline of the books read by the user """
     events_file = current_app.config.get("READER_EVENTS_FILE")
-    found = reading_sessions(events_file, session.get("username")) if events_file else {}
+    found = reading_sessions(events_file, current_user_key()) if events_file else {}
     history = []
     for sha1, sessions in found.items():
         book = current_app.bookdir.find_book_by_sha1(sha1)

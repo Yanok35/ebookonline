@@ -200,3 +200,15 @@ def test_book_reader_touch_screen(client, book):
     # pinch: the document zoomed, not the page
     assert "touch-action: pan-x pan-y;" in html
     assert '<div id="pdf-pages"></div>' in html and "setupPinchZoom();" in html
+
+
+def test_book_reader_notes_mockup(client, book):
+    """ MOCKUP: the margin of the notes, and its button next to the download one """
+    html = client.get(f"/reader/{book.sha1}").text
+    assert re.search(r'id="downloadPdf".*?</a>\s*<button\s+id="toggleNotes"', html, re.S)
+    # in the scrolled container: its scrollbar on the right of the margin
+    assert re.search(r'<div id="pdf-container"[^>]*>\s*(<!--.*?-->\s*)?<aside id="notes"', html)
+    # to the previous / next note
+    assert 'id="previousNote"' in html and 'id="nextNote"' in html
+    # the notes of this document
+    assert f'const DOCUMENT_ID = "{book.sha1}";' in html
