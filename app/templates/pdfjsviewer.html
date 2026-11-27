@@ -653,6 +653,14 @@
             background: #5c5044;
         }
 
+        /* a note whose page is not drawn yet (the document loading): hidden,
+           not on top of the margin */
+        .note.unseen,
+        .note-anchor.unseen,
+        .note-link.unseen {
+            display: none;
+        }
+
         /* the note reached with the buttons */
         .note.reached {
             box-shadow: 0 0 0 3px #f5c86a, 0 2px 8px #0008;
@@ -5278,16 +5286,33 @@
         // the bubbles in the order of their anchors, each one under the
         // previous one when they would overlap; the margin as high as the
         // document (or the last bubble)
+        // a note is shown once its page was drawn (a canvas in it), then
+        // stays shown (also while its page is drawn again: zoom)
+        function seen(note) {
+            if (!note.seen) {
+                const page = shell(note.page);
+                note.seen = Boolean(page && page.querySelector("canvas"));
+            }
+            return note.seen;
+        }
+
         function layout() {
             margin.classList.toggle("has-notes", notes.length > 0);
             const pages = container.querySelectorAll(".pdf-page");
             const last = pages[pages.length - 1];
             let height = last ? documentTop(last) + last.offsetHeight : container.clientHeight;
             let bottom = -Infinity;
-            const placed = notes
-                .map(note => ({ note, y: anchorY(note) }))
-                .filter(p => p.y !== null)
-                .sort((a, b) => a.y - b.y);
+            const placed = [];
+            for (const note of notes) {
+                const y = seen(note) ? anchorY(note) : null;
+                for (const e of ["bubble", "anchor", "link"]) {
+                    note.elements[e].classList.toggle("unseen", y === null);
+                }
+                if (y !== null) {
+                    placed.push({ note, y });
+                }
+            }
+            placed.sort((a, b) => a.y - b.y);
             for (const { note, y } of placed) {
                 const { bubble, anchor, link } = note.elements;
                 const top = Math.max(y - TAIL, bottom + GAP);
@@ -5405,7 +5430,8 @@
             if (mutations.some(m => !margin.contains(m.target))) {
                 layoutSoon();
             }
-        }).observe(container, { subtree: true, attributes: true, attributeFilter: ["style"] });
+        }).observe(container, { subtree: true, childList: true,
+                                attributes: true, attributeFilter: ["style"] });
 
         function show(shown) {
             workspace.classList.toggle("notes-hidden", !shown);

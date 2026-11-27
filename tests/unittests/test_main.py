@@ -212,3 +212,10 @@ def test_book_reader_notes_mockup(client, book):
     assert 'id="previousNote"' in html and 'id="nextNote"' in html
     # the notes of this document
     assert f'const DOCUMENT_ID = "{book.sha1}";' in html
+
+
+def test_reader_notes_hidden_until_their_page_is_drawn(client, book):
+    """ not on top of the margin while the document loads """
+    html = client.get(f"/reader/{book.sha1}").text
+    assert ".note.unseen,\n        .note-anchor.unseen,\n        .note-link.unseen {\n            display: none;" in html
+    assert 'page.querySelector("canvas")' in html and "childList: true" in html
