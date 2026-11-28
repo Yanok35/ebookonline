@@ -8,7 +8,7 @@ import pytest
 import srcs.book
 from srcs.book import BookDir
 from srcs.book import Transformed
-from srcs.transformations import CoverPage, Transformation
+from srcs.pdf.transformations import CoverPage, Transformation
 from srcs.bookfileops import BookFileError
 
 from tests.conftest import FakeCache, make_pdf
@@ -417,7 +417,7 @@ def test_restore_original(library, book):
 
 def test_transform_keeping_first_page_and_text(library, book):
     """ the thumbnail and the metadata analysis follow the book """
-    from srcs import pdfstats
+    from srcs.pdf import stats as pdfstats
     from srcs.metadata import store
 
     cache_dir = library.cache.cachedir
@@ -499,9 +499,9 @@ def test_scan_compares_the_size(library, book, mocker):
 
 def test_optimize(library):
     import pymupdf
-    from srcs import pdfstats
+    from srcs.pdf import stats as pdfstats
     from srcs.metadata import store
-    from srcs.transformations import ResourcesPerPage
+    from srcs.pdf.transformations import ResourcesPerPage
     from tests.unittests.test_pdfstats import book_with_images
 
     root = Path(library.dirpath)
@@ -536,7 +536,7 @@ def test_optimize(library):
 
 
 def test_optimize_refused(library, book):
-    from srcs.transformations import ResourcesPerPage
+    from srcs.pdf.transformations import ResourcesPerPage
 
     root = Path(library.dirpath)
     original = (root / "Science" / "a.pdf").read_bytes()
@@ -548,7 +548,7 @@ def test_optimize_refused(library, book):
 
 def test_same_rendering(tmp_path):
     import pymupdf
-    from srcs.transformations import same_rendering
+    from srcs.pdf.transformations import same_rendering
     from tests.unittests.test_pdfstats import book_with_images
 
     a = pymupdf.open(book_with_images(tmp_path / "a.pdf"))

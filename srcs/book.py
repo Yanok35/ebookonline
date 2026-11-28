@@ -31,13 +31,13 @@ import pymupdf
 
 from srcs import bookfileops
 from srcs.bookfileops import IGNORE_MARKER, BookFileError, BookFileExists
-from srcs.cache import Cache
+from srcs.pdf.thumbnails import Cache
 from srcs.common.files import atomic_write, remove_quietly, sha1_file
+from srcs.pdf import PDF_MAGIC
 from srcs.common.versioned import file_version, migrate
 from srcs.search import fuzzy_search
 
 # The header of a PDF file
-PDF_MAGIC = b"%PDF-"
 
 log = logging.getLogger(__name__)
 
@@ -641,7 +641,7 @@ class BookDir:
 
     def transform(self, sha1, transformation):
         """
-        Transform the PDF file of a book in place (srcs/transformations.py):
+        Transform the PDF file of a book in place (srcs/pdf/transformations.py):
         the transformed file replaces it, with its modification time, and the
         original goes to the trash, 'Trash/<path> (original).pdf'. The book
         keeps its entry and user values, under the new sha1; its thumbnail
@@ -762,7 +762,7 @@ class BookDir:
 
     def __move_caches(self, old_sha1, new_sha1, path, keeps_first_page, keeps_text):
         """ The thumbnail and metadata analysis follow the book, or are made again """
-        from srcs import pdfstats
+        from srcs.pdf import stats as pdfstats
         from srcs.metadata import store
 
         cache_dir = self.cache.cachedir

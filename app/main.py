@@ -31,7 +31,7 @@ from app import is_read_only
 from app.auth import current_user_key, login_required
 from srcs.book import BookDir
 from srcs.bookfileops import INCOMING_DIR, BookFileError, BookFileExists
-from srcs.cache import Cache
+from srcs.pdf.thumbnails import Cache
 
 from werkzeug.security import check_password_hash, generate_password_hash
 

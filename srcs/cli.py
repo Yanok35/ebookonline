@@ -46,7 +46,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import click
 
 from srcs import config as settings
-from srcs.cache import BACKENDS, Cache, available_backends
+from srcs.pdf.thumbnails import BACKENDS, Cache, available_backends
 from srcs.common.logs import setup_logging
 
 
@@ -254,7 +254,7 @@ def regenerate(cmyk, missing, unreadable, all_, backend, jobs, dry_run, verbose,
 
     # the INFO messages of each thumbnail would hide the progress bar
     log_level = logging.getLogger().getEffectiveLevel() if verbose else logging.WARNING
-    cache_logger = logging.getLogger("srcs.cache")
+    cache_logger = logging.getLogger("srcs.pdf.thumbnails")
     previous_level = cache_logger.level
     cache_logger.setLevel(log_level)
     failed = []
@@ -574,14 +574,14 @@ def stats(live):
                    f"{rate(c['agree'], c['compared']):24} {rate(c['agree80'], c['compared80']):18}")
 
 
-# --- PDF indicators (srcs/pdfstats.py)
+# --- PDF indicators (srcs/pdf/stats.py)
 
 pdf = Group("pdf", help="Indicators of the PDF files: what makes a book slow to open in the reader.")
 add_help_command(pdf)
 
 
 def _measure(cache_dir, sha1, pdf_path, force):
-    from srcs import pdfstats
+    from srcs.pdf import stats as pdfstats
     return pdfstats.get(cache_dir, sha1, pdf_path, writable=True, force=force)
 
 
@@ -607,7 +607,7 @@ def audit(force, jobs, limit, only_warnings, books):
     a file already measured is not read again (unless --force). The same
     indicators are shown by the book page, section "Structure du PDF".
     """
-    from srcs import pdfstats
+    from srcs.pdf import stats as pdfstats
 
     cache_dir = library().config["CACHE_DIR"]
     if not library().cache.writable:
@@ -692,7 +692,7 @@ def pdf_show(book, force, as_json):
     """
     import json
 
-    from srcs import pdfstats
+    from srcs.pdf import stats as pdfstats
 
     book = _find_book(book)
     pdf_path = os.path.join(library().bookdir.dirpath, book.filename)

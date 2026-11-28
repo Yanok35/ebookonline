@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from srcs.cache import available_backends
+from srcs.pdf.thumbnails import available_backends
 from tests.conftest import make_pdf, write_jpeg
 
 
@@ -169,7 +169,7 @@ def test_reset_thumbnail_backends(app, client, book, monkeypatch):
 
 def test_reset_thumbnail_unavailable_backend(app, client, book, monkeypatch):
     # gs is not installed: Ghostscript is not proposed, and refused
-    monkeypatch.setattr("srcs.cache.shutil.which", lambda name: None)
+    monkeypatch.setattr("srcs.pdf.thumbnails.shutil.which", lambda name: None)
     html = client.get(f"/bookadmin/{book.sha1}").text
     assert 'value="ghostscript"' not in html
     app.cache.requests.clear()

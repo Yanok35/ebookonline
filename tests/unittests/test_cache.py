@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from srcs.common.files import sha1_file
-from srcs.cache import Cache
+from srcs.pdf.thumbnails import Cache
 
 directory = Path(os.path.dirname(__file__)) / ".." / "resources"
 have_resources = True if any(directory.glob("*.pdf")) else False
@@ -52,7 +52,7 @@ def test_cache(tmp_bookdir):
 def _sleep_after_reset():
     import time
 
-    from srcs.cache import _reset_signal_handlers
+    from srcs.pdf.thumbnails import _reset_signal_handlers
     _reset_signal_handlers()
     time.sleep(30)
 
@@ -80,7 +80,7 @@ def test_thumbnail_process_can_be_terminated():
 
 # --- Ghostscript fallback ---
 
-from srcs import cache as cache_module
+from srcs.pdf import thumbnails as cache_module
 from tests.conftest import FakeCache, make_pdf, write_jpeg
 
 need_gs = pytest.mark.skipif(not __import__("shutil").which("gs"), reason="Ghostscript (gs) required")

@@ -87,7 +87,7 @@ class Config:
     READER_EVENTS_FILE = "reader_events.jsonl"
 
     # Largest request body, in bytes: the image of a cover page (20 MiB at
-    # most, see srcs/pdfcover.py), with the other fields of its form
+    # most, see srcs/pdf/cover.py), with the other fields of its form
     MAX_CONTENT_LENGTH = 21 * 1024 * 1024
     # Largest book uploaded from the library page (drag and drop), in
     # bytes: it goes to BOOK_DIR/Incoming

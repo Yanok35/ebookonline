@@ -24,6 +24,13 @@ import os
 import tempfile
 
 
+class FileOperationError(Exception):
+    """
+    A file operation was refused, or failed (in the book directory:
+    BookFileError, the same class)
+    """
+
+
 def atomic_write(path, write, binary=False, fsync=False, prefix=".ebookonline-"):
     """
     Write the file path by write(f), f a file opened in its directory

@@ -1,4 +1,4 @@
-""" Indicators of the PDF files (srcs/pdfstats.py), book page and command line """
+""" Indicators of the PDF files (srcs/pdf/stats.py), book page and command line """
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from srcs import pdfstats
+from srcs.pdf import stats as pdfstats
 from tests.conftest import make_pdf
 
 

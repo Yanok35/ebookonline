@@ -41,9 +41,6 @@ import pymupdf
 
 from srcs.common.files import atomic_write
 
-# The errors of damaged files: not printed (the indicators tell them)
-pymupdf.TOOLS.mupdf_display_errors(False)
-pymupdf.TOOLS.mupdf_display_warnings(False)
 
 log = logging.getLogger(__name__)
 
@@ -306,7 +303,7 @@ def _page_resources(doc, page, length, font_bytes, shared):
 
 def optimizable(stats):
     """
-    Whether the resources per page (srcs/transformations.py) may lighten
+    Whether the resources per page (srcs/pdf/transformations.py) may lighten
     the book: a page declares too many resources
     """
     return bool(stats) and not stats.get("error") \

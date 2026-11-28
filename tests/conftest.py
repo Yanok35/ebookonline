@@ -6,7 +6,7 @@ import pytest
 from pypdf import PdfWriter
 
 from srcs.book import BookDir
-from srcs.cache import Cache
+from srcs.pdf.thumbnails import Cache
 
 
 class FakeCache(Cache):

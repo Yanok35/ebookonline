@@ -2,7 +2,7 @@ import pymupdf
 import pytest
 
 from srcs.bookfileops import BookFileError
-from srcs.pdfcover import (
+from srcs.pdf.cover import (
     COVER_LABEL,
     MAX_IMAGE_PIXELS,
     check_image,

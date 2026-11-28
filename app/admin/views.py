@@ -35,9 +35,10 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.admin import metadata
-from srcs import naming, pdfstats
-from srcs.cache import available_backends
-from srcs.transformations import CoverPage, ResourcesPerPage
+from srcs import naming
+from srcs.pdf import stats as pdfstats
+from srcs.pdf.thumbnails import available_backends
+from srcs.pdf.transformations import CoverPage, ResourcesPerPage
 from srcs.metadata.service import TASK_TIMEOUT
 from app.admin.forms import (
     AnalyseForm,

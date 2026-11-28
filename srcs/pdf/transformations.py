@@ -32,12 +32,9 @@ follow).
 
 import pymupdf
 
-from srcs import pdfcover
-from srcs.bookfileops import BookFileError
+from srcs.pdf import cover as pdfcover
+from srcs.common.files import FileOperationError
 
-# MuPDF messages (e.g. on a malformed PDF file) are not printed
-pymupdf.TOOLS.mupdf_display_errors(False)
-pymupdf.TOOLS.mupdf_display_warnings(False)
 
 # Pages whose text is compared, at the beginning and at the end
 CHECKED_PAGES = 3
@@ -55,31 +52,31 @@ class Transformation:
     page_offset = 0
 
     def apply(self, src, dst):
-        """ Write the transformed file dst from src, or raise BookFileError """
+        """ Write the transformed file dst from src, or raise FileOperationError """
         raise NotImplementedError
 
     def check(self, src, dst):
         """
-        Raise BookFileError when dst is not what it should be: the pages of
+        Raise FileOperationError when dst is not what it should be: the pages of
         the original, at page_offset, with the same text (the first and last
         pages compared)
         """
         try:
             old, new = pymupdf.open(src), pymupdf.open(dst)
         except Exception as e:
-            raise BookFileError(f"{self.name}: can not read the files: {e}") from None
+            raise FileOperationError(f"{self.name}: can not read the files: {e}") from None
         with old, new:
             if new.page_count != old.page_count + self.page_offset:
-                raise BookFileError(f"{self.name}: {new.page_count} pages instead of "
+                raise FileOperationError(f"{self.name}: {new.page_count} pages instead of "
                                     f"{old.page_count + self.page_offset}")
             n = old.page_count
             for pno in sorted(set(range(min(CHECKED_PAGES, n)))
                               | set(range(max(0, n - CHECKED_PAGES), n))):
                 a, b = old[pno], new[pno + self.page_offset]
                 if (round(a.rect.width), round(a.rect.height)) != (round(b.rect.width), round(b.rect.height)):
-                    raise BookFileError(f"{self.name}: page {pno + 1} changed of size")
+                    raise FileOperationError(f"{self.name}: page {pno + 1} changed of size")
                 if a.get_text() != b.get_text():
-                    raise BookFileError(f"{self.name}: the text of page {pno + 1} changed")
+                    raise FileOperationError(f"{self.name}: the text of page {pno + 1} changed")
 
 
 class CoverPage(Transformation):
@@ -138,10 +135,10 @@ class ResourcesPerPage(Transformation):
         try:
             doc = pymupdf.open(src)
         except Exception as e:
-            raise BookFileError(f"can not read the PDF file: {e}") from None
+            raise FileOperationError(f"can not read the PDF file: {e}") from None
         with doc:
             if doc.needs_pass or doc.is_encrypted:
-                raise BookFileError(f"{self.name}: encrypted PDF file")
+                raise FileOperationError(f"{self.name}: encrypted PDF file")
             try:
                 for page in doc:
                     # the content streams rewritten, with the resources
@@ -149,27 +146,27 @@ class ResourcesPerPage(Transformation):
                     page.clean_contents(sanitize=True)
                 doc.save(dst, garbage=3, deflate=True)
             except Exception as e:
-                raise BookFileError(f"{self.name}: {e}") from None
+                raise FileOperationError(f"{self.name}: {e}") from None
 
     def check(self, src, dst):
-        from srcs import pdfstats
+        from srcs.pdf import stats as pdfstats
 
         super().check(src, dst)
         with pymupdf.open(src) as old, pymupdf.open(dst) as new:
             # the text of every page, the rendering of a few ones
             for pno in range(old.page_count):
                 if old[pno].get_text() != new[pno].get_text():
-                    raise BookFileError(f"{self.name}: the text of page {pno + 1} changed")
+                    raise FileOperationError(f"{self.name}: the text of page {pno + 1} changed")
             n = old.page_count
             for pno in sorted({0, 1, 2, n // 2, n - 1} & set(range(n))):
                 if not same_rendering(old, new, pno):
-                    raise BookFileError(f"{self.name}: the rendering of page {pno + 1} changed")
+                    raise FileOperationError(f"{self.name}: the rendering of page {pno + 1} changed")
         before = pdfstats.measure(src)
         after = pdfstats.measure(dst)
         if before.get("error") or after.get("error"):
-            raise BookFileError(f"{self.name}: {before.get('error') or after.get('error')}")
+            raise FileOperationError(f"{self.name}: {before.get('error') or after.get('error')}")
         self.gain = (before["resources"]["max"], after["resources"]["max"])
         if not before["resources"]["max"] \
                 or after["resources"]["max"] > OPTIMIZATION_MIN_GAIN * before["resources"]["max"]:
-            raise BookFileError(f"{self.name}: nothing to gain, the heaviest page keeps "
+            raise FileOperationError(f"{self.name}: nothing to gain, the heaviest page keeps "
                                 f"{after['resources']['max'] / 1048576:.1f} MB of resources")

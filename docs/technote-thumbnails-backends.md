@@ -2,7 +2,7 @@
 
 The thumbnail of a book is the first page of its PDF file, as a JPEG image
 of 300 pixels wide, in the cache directory (`<sha1>.jpg`). Code:
-`srcs/cache.py`, `Cache.__pdf2jpeg()`. Three backends make the image; by
+`srcs/pdf/thumbnails.py`, `Cache.__pdf2jpeg()`. Three backends make the image; by
 default they are tried in this order until one succeeds, and the book page
 (or `python -m srcs.cli thumbnails regenerate --backend`) can choose one.
 

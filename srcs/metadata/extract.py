@@ -36,6 +36,9 @@ import re
 
 import pymupdf
 
+# (the errors and warnings of MuPDF not printed)
+import srcs.pdf  # noqa: F401
+
 from srcs.metadata.isbn import find_isbns
 from srcs.metadata.text import clean_spaces
 
@@ -61,9 +64,6 @@ XMP_TAGS = ("dc:creator", "dc:publisher", "dc:title", "dc:date", "dc:language",
 # "object is not a stream", ...), which are not RuntimeError
 MUPDF_ERRORS = (RuntimeError, pymupdf.mupdf.FzErrorBase)
 
-# MuPDF messages (e.g. on a malformed PDF file) are not printed
-pymupdf.TOOLS.mupdf_display_errors(False)
-pymupdf.TOOLS.mupdf_display_warnings(False)
 
 
 class ExtractError(Exception):

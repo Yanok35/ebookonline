@@ -133,7 +133,7 @@ class AnalyseForm(FlaskForm):
     submit = SubmitField("Relancer l'analyse")
 
 
-# Backends of the thumbnails (srcs.cache.BACKENDS), as shown to the user
+# Backends of the thumbnails (srcs.pdf.thumbnails.BACKENDS), as shown to the user
 THUMBNAIL_BACKEND_LABELS = {
     "": "Automatique (le premier qui réussit)",
     "pypdf-wand": "pypdf puis ImageMagick (wand)",

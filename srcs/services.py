@@ -25,7 +25,7 @@ The services of the book directory, made from the configuration
 
 from srcs.common.access import can_write_dir
 from srcs.book import BookDir
-from srcs.cache import Cache
+from srcs.pdf.thumbnails import Cache
 
 
 def make_cache(config, workers=None):
