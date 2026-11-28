@@ -103,11 +103,54 @@
             margin: 6px;
             overflow-wrap: anywhere;
         }
+        .timeline .simple-caption .book-filename p {
+            margin: 0;
+        }
+        /* With a mouse: the caption is a bubble next to the cover, on the
+           side away from the axis and centred on it (as the dotted lines),
+           and not over it: the whole cover stays visible and opens the book.
+           The bubble lets the clicks through, to the cover under it as well
+           as to the books of the next lane. */
+        @media (hover: hover) {
+            .timeline .book-box {
+                overflow: visible;
+            }
+            .timeline .simple-caption,
+            .timeline .book-box:hover .simple-caption {
+                top: 100%;
+                bottom: auto;
+                left: 50%;
+                width: max(100%, 170px);
+                box-sizing: border-box;
+                transform: translateX(-50%);
+                pointer-events: none;
+                color: #fff;
+                background-color: rgba(0, 0, 0, 0.8) !important;
+                box-shadow: 1px 1px 5px 1px #808080;
+                transition: opacity 150ms ease-out, visibility 150ms;
+            }
+            .timeline .simple-caption {
+                opacity: 0;
+                visibility: hidden;
+            }
+            .timeline .book-box:hover .simple-caption {
+                opacity: 1;
+                visibility: visible;
+            }
+            /* (the books above the axis: the bubble above the cover) */
+            .timeline .book-box.above .simple-caption {
+                top: auto;
+                bottom: 100%;
+            }
+        }
         .timeline .reading-time {
             position: absolute;
             top: 4px;
             right: 4px;
             z-index: 1;
+            /* (the clicks go to the cover under it: the caption tells the
+               reading time as well) */
+            pointer-events: none;
         }
     </style>
 </head>
@@ -249,11 +292,15 @@
             box.style.width = w + "px";
             box.style.left = left + "px";
             box.style.top = top + "px";
-            if (above) { box.style.transform = "translateY(-100%)"; }
+            // (the side of the caption bubble, see the style)
+            if (above) {
+                box.style.transform = "translateY(-100%)";
+                box.classList.add("above");
+            }
             var last = b.times[b.times.length - 1];
             var n = b.sessions.length;
             box.innerHTML =
-                '<span class="badge reading-time" title="temps de lecture">' + duration(minutesShown) + '</span>'
+                '<span class="badge reading-time">' + duration(minutesShown) + '</span>'
                 + '<a href="' + b.url + '"><div class="book-img"><img src="' + b.image + '" alt="" /></div></a>'
                 + '<div class="simple-caption"><div class="book-filename"><p>' + b.name.replace(/</g, "&lt;")
                 + '<br>' + n + ' session' + (n > 1 ? 's' : '') + ', ' + duration(sum(b.sessions, minutes))
