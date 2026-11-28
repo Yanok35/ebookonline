@@ -294,6 +294,25 @@ fail2ban-client status ebookonline-notfound
 
 # Development environement
 
+## Source code
+
+- `app/`: the web application (Flask): pages, API, admin pages.
+- `srcs/`: the code without the web, used by `app/` and the command line:
+  - `library/`: the book directory: its books (`book.py`), `book.db`
+    (`bookdb.py`), the index and the scan (`bookdir.py`), the operations on
+    its files (`operations.py`, `fileops.py`), the transformations of a book
+    file (`transform.py`), the file names (`naming.py`), the search
+    (`search.py`), the watcher (`watcher.py`);
+  - `pdf/`: the PDF files themselves: thumbnails, indicators, cover page,
+    transformations;
+  - `metadata/`: the analysis of the metadata of the books;
+  - `users/`: the data of each user (`userdata.db`), the journal of the
+    readings;
+  - `common/`: technical tools (files written atomically, versioned files,
+    access checks, logs);
+  - `config.py` (settings), `services.py`, `cli.py` (`python -m srcs.cli`),
+    `gunicorn_logger.py`.
+
 ## Extend dependencies for dev
 
 The project had initiated a use of `pytest` test framework, which can be installed using:

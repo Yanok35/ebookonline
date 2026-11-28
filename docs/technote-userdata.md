@@ -116,7 +116,7 @@ Two tabs on the same book: the last saving wins (the whole list).
 ## Life of the book
 
 The data is keyed by the sha1 of the book. When its file is replaced in
-place (cover page, optimization, restored original: `BookDir.transform()`,
+place (cover page, optimization, restored original: `transform()`,
 `restore_original()`), the notes, reading positions and pins of the users
 follow it (`move_user_data()`, `app/api.py`), the pages moved as the pages
 of the book. A book in the trash keeps them (the same sha1 when it comes

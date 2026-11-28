@@ -171,7 +171,9 @@ the heaviest page before and after. On the book of 80.9 MB: 3.2 s, the
 heaviest page from 74.3 MB to 1.7 MB, the first page of the reader at
 20 Mbit/s from 11.1 s (21.9 MB downloaded) to 2.1 s (1.0 MB).
 
-### `BookDir.transform(sha1, transformation)`, under the scan lock
+### `transform(bookdir, sha1, transformation)`, under the scan lock
+
+In `srcs/library/transform.py`.
 
 1. refused: a missing book, read-only mode, a book with copies in the
    library (duplicates), a transformed file which is a known book;
@@ -191,7 +193,7 @@ The reading position belongs to the application: `app/api.py`
 (`move_reader_state()`) moves it to the new sha1, its page moved by
 `page_offset`, under the lock of the positions.
 
-### `BookDir.restore_original(sha1)`: undo the last transformation
+### `restore_original(bookdir, sha1)`: undo the last transformation
 
 The latest `(original)` file of the book in the trash takes its place
 again, the current file goes to the trash, `Trash/<path>

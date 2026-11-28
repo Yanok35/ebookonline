@@ -73,7 +73,7 @@ Under "Nouveau nom", in the file actions:
 - "Pas de nom selon le modèle : titre manquant." otherwise.
 
 The name is made from the saved values: save the metadata first. The rename
-is the usual one (`BookDir.rename_book()`): same directory, the
+is the usual one (`rename_book()`, `srcs/library/operations.py`): same directory, the
 modification time of the file is kept; a name typed in the field which
 exists is refused, as well as the proposed one when a file took it since
 the page was shown (nothing is overwritten).
