@@ -26,8 +26,8 @@ from flask.helpers import get_debug_flag
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from srcs import config
-from srcs.access import check_write_access
-from srcs.logs import setup_logging
+from srcs.common.access import check_write_access
+from srcs.common.logs import setup_logging
 from srcs.book import DB_VERSION
 from srcs.metadata.service import MetadataService
 from srcs.services import make_bookdir, make_cache

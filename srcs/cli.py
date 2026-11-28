@@ -47,7 +47,7 @@ import click
 
 from srcs import config as settings
 from srcs.cache import BACKENDS, Cache, available_backends
-from srcs.logs import setup_logging
+from srcs.common.logs import setup_logging
 
 
 class Library:
@@ -302,7 +302,7 @@ def _find_book(arg):
     library without book.db), as a book without user values
     """
     from srcs.book import Book
-    from srcs.cache import sha1_file
+    from srcs.common.files import sha1_file
 
     d = library().bookdir
     book = d.find_book_by_sha1(arg) or d.find_book_by_filename(arg)

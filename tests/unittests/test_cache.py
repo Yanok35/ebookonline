@@ -4,7 +4,7 @@ import time
 
 from pathlib import Path
 
-from srcs.cache import sha1_file
+from srcs.common.files import sha1_file
 from srcs.cache import Cache
 
 directory = Path(os.path.dirname(__file__)) / ".." / "resources"

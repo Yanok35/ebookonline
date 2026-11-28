@@ -32,7 +32,8 @@ import pymupdf
 from srcs import bookfileops
 from srcs.bookfileops import IGNORE_MARKER, BookFileError, BookFileExists
 from srcs.cache import Cache
-from srcs.cache import sha1_file
+from srcs.common.files import atomic_write, remove_quietly, sha1_file
+from srcs.common.versioned import file_version, migrate
 from srcs.search import fuzzy_search
 
 # The header of a PDF file
@@ -93,10 +94,7 @@ assert len(_MIGRATIONS) == DB_VERSION
 
 def migrate_db(db):
     """ Convert the JSON content of an older book.db to DB_VERSION """
-    for migrate in _MIGRATIONS[db.get("version", 0):]:
-        db = migrate(db)
-    db["version"] = DB_VERSION
-    return db
+    return migrate(db, _MIGRATIONS)
 
 
 # A PDF file found in the book directory
@@ -107,13 +105,6 @@ PdfFile = namedtuple("PdfFile", "filename category mtime filesize sha1")
 # of the file replaced, and the move of the pages (page n of the former
 # file is page n + page_offset of the new one)
 Transformed = namedtuple("Transformed", "filename old_sha1 new_sha1 trashed page_offset")
-
-
-def _remove_quietly(path):
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        pass
 
 
 class Book:
@@ -231,7 +222,7 @@ class BookDir:
 
         # Nothing is written, neither book.db nor the files of the book
         # directory: changes are kept in memory only. Given when the server
-        # can not write (see srcs.access), or set by load_db() for a book.db
+        # can not write (see srcs.common.access), or set by load_db() for a book.db
         # written by a newer version of ebookonline, but readable by this one.
         self.read_only = read_only
         # Schema version of the book.db file, when newer than DB_VERSION
@@ -263,15 +254,8 @@ class BookDir:
             # Rewriting a newer file would silently drop the data this
             # version does not know (e.g. after a rollback of the server):
             # it is opened read-only, if this version can read it.
-            version = inp.get("version", 0)
+            version = file_version(inp, self.dbfile, DB_VERSION, BookDbVersionError)
             if version > DB_VERSION:
-                # missing: only its own version is known to read it
-                min_reader = inp.get("min_reader_version", version)
-                if min_reader > DB_VERSION:
-                    raise BookDbVersionError(
-                        f"{self.dbfile}: schema version {version} can only "
-                        f"be read by schema version {min_reader} or newer, "
-                        f"this is version {DB_VERSION}: upgrade ebookonline")
                 log.warning("%s: schema version %d is newer than the supported "
                             "version %d: read-only, changes are kept in memory only",
                             self.dbfile, version, DB_VERSION)
@@ -342,18 +326,7 @@ class BookDir:
             return
         with self.lock:
             s = json.dumps(self.to_json(), default=lambda o: o.__dict__, indent=2)
-
-            dbdir = os.path.dirname(os.path.abspath(self.dbfile))
-            fd, tmpname = tempfile.mkstemp(prefix=".book_db_", suffix=".tmp", dir=dbdir)
-            try:
-                with os.fdopen(fd, "w") as f:
-                    f.write(s)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(tmpname, self.dbfile)
-            finally:
-                if os.path.exists(tmpname):
-                    os.unlink(tmpname)
+            atomic_write(self.dbfile, lambda f: f.write(s), fsync=True, prefix=".book_db_")
 
     def find_book_by_sha1(self, sha1):
         """ Search all books, including missing ones (admin page) """
@@ -797,7 +770,7 @@ class BookDir:
         if keeps_first_page and os.path.exists(thumbnail):
             os.replace(thumbnail, self.cache.get_thumbname(new_sha1))
         else:
-            _remove_quietly(thumbnail)
+            remove_quietly(thumbnail)
             self.cache.create_thumbnail(path, new_sha1)
         entry = store.read(cache_dir, old_sha1)
         if keeps_text and entry is not None:
@@ -805,9 +778,9 @@ class BookDir:
             store.write(cache_dir, entry)
         elif self.metadata is not None:
             self.metadata.request(new_sha1, path)
-        _remove_quietly(store.path(cache_dir, old_sha1))
+        remove_quietly(store.path(cache_dir, old_sha1))
         # the indicators: of the new file, measured when asked
-        _remove_quietly(pdfstats.path(cache_dir, old_sha1))
+        remove_quietly(pdfstats.path(cache_dir, old_sha1))
 
     def __trash(self, relpath, suffix=""):
         """ Move a file to the trash, at its path in it (with suffix before '.pdf') """

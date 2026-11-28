@@ -23,7 +23,7 @@ The services of the book directory, made from the configuration
 (srcs/cli.py).
 """
 
-from srcs.access import can_write_dir
+from srcs.common.access import can_write_dir
 from srcs.book import BookDir
 from srcs.cache import Cache
 

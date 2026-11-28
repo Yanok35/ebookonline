@@ -45,9 +45,10 @@ import datetime
 import json
 import logging
 import math
-import os
-import tempfile
 import threading
+
+from srcs.common.files import atomic_write
+from srcs.common.versioned import file_version, migrate
 
 log = logging.getLogger(__name__)
 
@@ -152,19 +153,14 @@ class UserData:
             raise UserDataError(f"can not read {self.path}: {e}") from None
         if not isinstance(db, dict):
             raise UserDataError(f"can not read {self.path}: an object is expected")
-        version = db.get("version", 0)
+        version = file_version(db, self.path, USERDATA_VERSION, UserDataError)
         if version > USERDATA_VERSION:
-            if db.get("min_reader_version", version) > USERDATA_VERSION:
-                raise UserDataError(
-                    f"{self.path} is version {version}, this is version "
-                    f"{USERDATA_VERSION}: upgrade ebookonline")
             log.warning("%s: version %d, newer than %d: read only",
                         self.path, version, USERDATA_VERSION)
             self.newer_version = version
             self.read_only = True
         else:
-            for migrate in _MIGRATIONS[version:]:
-                db = migrate(db)
+            db = migrate(db, _MIGRATIONS)
         users = db.get("users", {})
         self.users = users if isinstance(users, dict) else {}
         if version < USERDATA_VERSION and not self.read_only:
@@ -180,15 +176,8 @@ class UserData:
         """ Written to a temporary file, then renamed: never half written """
         if self.read_only:
             return
-        directory = os.path.dirname(os.path.abspath(self.path))
-        fd, tmpname = tempfile.mkstemp(prefix=".userdata-", suffix=".tmp", dir=directory)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(self.to_json(), f, ensure_ascii=False, indent=1)
-            os.replace(tmpname, self.path)
-        finally:
-            if os.path.exists(tmpname):
-                os.unlink(tmpname)
+        atomic_write(self.path, lambda f: json.dump(self.to_json(), f, ensure_ascii=False, indent=1),
+                     prefix=".userdata-")
 
     # --- notes
 

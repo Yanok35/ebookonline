@@ -39,8 +39,8 @@ import gzip
 import json
 import logging
 import os
-import tempfile
 
+from srcs.common.files import atomic_write
 from srcs.metadata import analyse, extract
 
 log = logging.getLogger(__name__)
@@ -66,14 +66,11 @@ def read(cache_dir, sha1):
 
 def write(cache_dir, entry):
     """ Write a cache file: to a temporary file, then renamed """
-    fd, tmpname = tempfile.mkstemp(prefix=".meta-", suffix=".tmp", dir=cache_dir)
-    try:
-        with os.fdopen(fd, "wb") as f, gzip.GzipFile(fileobj=f, mode="wb", mtime=0) as gz:
+    def gzipped(f):
+        with gzip.GzipFile(fileobj=f, mode="wb", mtime=0) as gz:
             gz.write(json.dumps(entry, ensure_ascii=False).encode("utf-8"))
-        os.replace(tmpname, path(cache_dir, entry["sha1"]))
-    finally:
-        if os.path.exists(tmpname):
-            os.unlink(tmpname)
+
+    atomic_write(path(cache_dir, entry["sha1"]), gzipped, binary=True, prefix=".meta-")
 
 
 def _now():

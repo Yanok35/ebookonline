@@ -24,14 +24,14 @@ Logger class for gunicorn, given on its command line:
 
 gunicorn logs from its master process, before the application is loaded
 (startup, workers, signals, timeouts): its messages then go through the
-handler of ebookonline (see srcs.logs), with the same format and the
+handler of ebookonline (see srcs.common.logs), with the same format and the
 journald priorities, from the gunicorn --log-level option. The messages of
 the application follow the LOG_LEVEL setting (config.py).
 """
 
 from gunicorn.glogging import Logger
 
-from srcs.logs import setup_logging
+from srcs.common.logs import setup_logging
 
 
 class GunicornLogger(Logger):

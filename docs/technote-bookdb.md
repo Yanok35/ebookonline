@@ -187,7 +187,7 @@ The server runs read-only, the reasons being listed in
 - the file was written by a newer, compatible, version of the server
   (typically a rollback of the server, after its new version migrated the
   file): a rewrite would drop the data of the newer version;
-- the server can not write where it needs to (`srcs/access.py`, checked at
+- the server can not write where it needs to (`srcs/common/access.py`, checked at
   startup, before loading the file, by creating and removing a file
   `.ebookonline-write-test-*` in each directory):
   - the book directory (`BOOK_DIR`): file operations of the admin pages;

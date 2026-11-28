@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from srcs.logs import (
+from srcs.common.logs import (
     JournalFormatter,
     LogHandler,
     setup_logging,
