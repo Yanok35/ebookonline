@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from srcs.logs import (
+from srcs.common.logs import (
     JournalFormatter,
     LogHandler,
     setup_logging,
@@ -25,7 +25,7 @@ def root_handlers():
 
 
 def record(level, msg, exc_info=None):
-    return logging.LogRecord("srcs.book", level, __file__, 1, msg, (), exc_info)
+    return logging.LogRecord("srcs.library.bookdir", level, __file__, 1, msg, (), exc_info)
 
 
 def test_syslog_priority():
@@ -36,13 +36,13 @@ def test_syslog_priority():
 
 def test_journal_formatter_prefixes_every_line():
     formatter = JournalFormatter()
-    assert formatter.format(record(logging.WARNING, "a\nb")) == "<4>srcs.book: a\n<4>b"
+    assert formatter.format(record(logging.WARNING, "a\nb")) == "<4>srcs.library.bookdir: a\n<4>b"
     try:
         raise ValueError("boom")
     except ValueError:
         text = formatter.format(record(logging.ERROR, "failed", sys.exc_info()))
     lines = text.splitlines()
-    assert lines[0] == "<3>srcs.book: failed" and lines[-1] == "<3>ValueError: boom"
+    assert lines[0] == "<3>srcs.library.bookdir: failed" and lines[-1] == "<3>ValueError: boom"
     assert all(line.startswith("<3>") for line in lines)
 
 

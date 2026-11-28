@@ -3,7 +3,6 @@
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 from srcs import config
 from tests.conftest import make_pdf

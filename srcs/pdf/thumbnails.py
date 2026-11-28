@@ -18,7 +18,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import hashlib
 import logging
 import os
 import math
@@ -34,7 +33,8 @@ from pypdf import PdfReader, PdfWriter
 
 from wand.image import Image
 
-from srcs.logs import setup_logging
+from srcs.common.files import remove_quietly
+from srcs.common.logs import setup_logging
 
 log = logging.getLogger(__name__)
 
@@ -72,13 +72,6 @@ def available_backends():
 # halved until below), longest run of gs
 GS_MAX_IMAGE_BYTES = 2048 * 1024
 GS_TIMEOUT = 120
-
-
-def _remove(filename):
-    try:
-        os.remove(filename)
-    except FileNotFoundError:
-        pass
 
 
 # Start Of Frame markers of a JPEG file: they give its size (not DHT, JPG,
@@ -126,16 +119,11 @@ def jpeg_info(filename):
         return None
 
 
-def sha1_file(filename):
-    with open(filename, 'rb') as fd_in:
-        digest = hashlib.file_digest(fd_in, "sha1")
-        return digest.hexdigest()
-
 class Cache:
 
     instance = None
     file_list = []
-    # False when the cache directory can not be written (see srcs.access):
+    # False when the cache directory can not be written (see srcs.common.access):
     # no thumbnail is generated.
     writable = True
 
@@ -228,11 +216,11 @@ class Cache:
         """
         dirname, name = os.path.split(thumbname)
         tmpname = os.path.join(dirname, f".{name}.{os.getpid()}.new.jpg")
-        _remove(tmpname)
+        remove_quietly(tmpname)
         if self._thumbnail_job(pdffilename, tmpname, backend) and os.path.exists(tmpname):
             os.replace(tmpname, thumbname)
             return True
-        _remove(tmpname)
+        remove_quietly(tmpname)
         return False
 
     def create_thumbnail(self, pdffilename, sha1, backend=None):
@@ -320,7 +308,7 @@ class Cache:
             raise
         except Exception:
             log.error("No thumbnail for %s", pdffilename, exc_info=True)
-        _remove(thumbname)
+        remove_quietly(thumbname)
         return False
 
     def __pdf2jpeg(self, pdffilename, thumbname, backend=None):
@@ -383,7 +371,7 @@ class Cache:
                         img.alpha_channel = "remove"
                         img.save(filename=thumbname)
                 finally:
-                    _remove(inter)
+                    remove_quietly(inter)
             return True
 
         except KeyboardInterrupt:
@@ -449,14 +437,14 @@ class Cache:
                                         timeout=GS_TIMEOUT)
             except (OSError, subprocess.SubprocessError) as e:
                 log.error("No thumbnail for %s: Ghostscript failed: %s", pdffilename, e)
-                _remove(thumbname)
+                remove_quietly(thumbname)
                 return False
             size = os.path.getsize(thumbname) if os.path.exists(thumbname) else 0
             if result.returncode != 0 or size == 0:
                 log.error("No thumbnail for %s: Ghostscript failed (exit status %d): %s",
                           pdffilename, result.returncode,
                           result.stderr.decode(errors="replace").strip()[-500:])
-                _remove(thumbname)
+                remove_quietly(thumbname)
                 return False
             log.debug("Thumbnail size: %d bytes", size)
             if size < GS_MAX_IMAGE_BYTES:

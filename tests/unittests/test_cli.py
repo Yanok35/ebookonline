@@ -95,7 +95,7 @@ def test_regenerate_usage_errors(app, books, args, message):
 
 
 def test_regenerate_with_an_unavailable_backend(app, books, monkeypatch):
-    monkeypatch.setattr("srcs.cache.shutil.which", lambda name: None)
+    monkeypatch.setattr("srcs.pdf.thumbnails.shutil.which", lambda name: None)
     result = run(app, "regenerate", "--all", "--backend", "ghostscript")
     assert result.exit_code == 2 and "backend not available here: ghostscript" in result.output
 
@@ -128,7 +128,6 @@ def test_help_lists_the_whole_first_paragraph(app):
 # --- metadata ---
 
 import json
-import os
 
 from srcs.metadata import store
 from tests.conftest import make_book_pdf

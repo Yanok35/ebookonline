@@ -60,7 +60,7 @@ book in 1 to 36 ms (151 ms for the cover, a CMYK JPEG of 2325×2850).
 
 ## Indicators
 
-`srcs/pdfstats.py` measures them with PyMuPDF, without rendering: one pass
+`srcs/pdf/stats.py` measures them with PyMuPDF, without rendering: one pass
 over the objects of the file (weight by kind, images, fonts), then the
 resources each page declares, measured once per resource dictionary
 (pages sharing a dictionary, by reference or by a copy of its text, as
@@ -144,7 +144,7 @@ the user values), and to keep the original (in the trash).
 ## Transformations of a book file
 
 Two transformations change the content of a book file in place: the
-insertion of a cover page and the optimization of the resources. `srcs/transformations.py` describes each one: `apply(src,
+insertion of a cover page and the optimization of the resources. `srcs/pdf/transformations.py` describes each one: `apply(src,
 dst)` writes the new file, `check(src, dst)` compares it with the
 original (the number of pages, the size and the text of the first and
 last pages, at `page_offset`), and what it keeps of the original: the
@@ -171,7 +171,9 @@ the heaviest page before and after. On the book of 80.9 MB: 3.2 s, the
 heaviest page from 74.3 MB to 1.7 MB, the first page of the reader at
 20 Mbit/s from 11.1 s (21.9 MB downloaded) to 2.1 s (1.0 MB).
 
-### `BookDir.transform(sha1, transformation)`, under the scan lock
+### `transform(bookdir, sha1, transformation)`, under the scan lock
+
+In `srcs/library/transform.py`.
 
 1. refused: a missing book, read-only mode, a book with copies in the
    library (duplicates), a transformed file which is a known book;
@@ -191,7 +193,7 @@ The reading position belongs to the application: `app/api.py`
 (`move_reader_state()`) moves it to the new sha1, its page moved by
 `page_offset`, under the lock of the positions.
 
-### `BookDir.restore_original(sha1)`: undo the last transformation
+### `restore_original(bookdir, sha1)`: undo the last transformation
 
 The latest `(original)` file of the book in the trash takes its place
 again, the current file goes to the trash, `Trash/<path>
@@ -217,7 +219,7 @@ trash.
 
 ### Steps
 
-1. Indicators: done (`srcs/pdfstats.py`, book page, `pdf audit|show`).
+1. Indicators: done (`srcs/pdf/stats.py`, book page, `pdf audit|show`).
 2. `transform()`, `restore_original()`, the cover page in place, the
    reading positions moved: done.
 3. The optimization (resources per page): done.

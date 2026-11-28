@@ -3,7 +3,8 @@
 The book database keeps the list of books found in the book directory
 (`BOOK_DIR`), with the information which can not be found again from the PDF
 files themselves: user settings (bookmark, tags, editor, ...) and books whose
-file is missing. It is managed by `BookDir` in `srcs/book.py`.
+file is missing. It is read and written by `srcs/library/bookdb.py`, and
+managed by `BookDir` (`srcs/library/bookdir.py`).
 
 ## Location and writes
 
@@ -187,7 +188,7 @@ The server runs read-only, the reasons being listed in
 - the file was written by a newer, compatible, version of the server
   (typically a rollback of the server, after its new version migrated the
   file): a rewrite would drop the data of the newer version;
-- the server can not write where it needs to (`srcs/access.py`, checked at
+- the server can not write where it needs to (`srcs/common/access.py`, checked at
   startup, before loading the file, by creating and removing a file
   `.ebookonline-write-test-*` in each directory):
   - the book directory (`BOOK_DIR`): file operations of the admin pages;
@@ -224,12 +225,12 @@ the access is only checked at startup.
 
 ## Changing the schema
 
-1. Increment `DB_VERSION` in `srcs/book.py`.
+1. Increment `DB_VERSION` in `srcs/library/bookdb.py`.
 2. Append the migration from the previous version to `_MIGRATIONS`: a
    function which takes and returns the JSON content (a dict).
 3. If the previous version can not read the new file correctly, set
    `DB_MIN_READER_VERSION` to the new version; otherwise keep it unchanged.
-4. Update `load_db()` / `to_json()`, this note (schema and history), and add
+4. Update `read()` / `to_json()` (`srcs/library/bookdb.py`), this note (schema and history), and add
    tests: migration from the previous version, and loading by the previous
    version when the change is compatible.
 

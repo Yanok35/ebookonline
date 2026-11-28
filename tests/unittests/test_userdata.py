@@ -1,4 +1,4 @@
-""" The data of the users, userdata.db (srcs/userdata.py), and the API of the notes """
+""" The data of the users, userdata.db (srcs/users/userdata.py), and the API of the notes """
 
 import json
 import re
@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from srcs.userdata import (USERDATA_VERSION, UserData, UserDataError, clean_notes)
+from srcs.users.userdata import (USERDATA_VERSION, UserData, UserDataError, clean_notes)
 from tests.conftest import make_pdf
 
 NOTE = {"id": "n-1", "page": 3, "ratio": 0.25, "quote": "", "text": "Relire"}
 
 
-# --- srcs/userdata.py
+# --- srcs/users/userdata.py
 
 def test_notes_saved_and_read_again(tmp_path):
     path = tmp_path / "userdata.db"
@@ -38,7 +38,7 @@ def test_empty_notes_dropped(tmp_path):
 
 
 def test_dates_of_the_notes(monkeypatch):
-    import srcs.userdata as userdata
+    import srcs.users.userdata as userdata
 
     monkeypatch.setattr(userdata, "_now", lambda: "T1")
     first = clean_notes([NOTE, dict(NOTE, id="n-2")])

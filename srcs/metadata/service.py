@@ -44,7 +44,7 @@ import threading
 import time
 from collections import OrderedDict
 
-from srcs.logs import setup_logging
+from srcs.common.logs import setup_logging
 from srcs.metadata import store
 
 log = logging.getLogger(__name__)

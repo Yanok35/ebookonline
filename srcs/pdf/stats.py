@@ -36,13 +36,11 @@ import json
 import logging
 import os
 import statistics
-import tempfile
 
 import pymupdf
 
-# The errors of damaged files: not printed (the indicators tell them)
-pymupdf.TOOLS.mupdf_display_errors(False)
-pymupdf.TOOLS.mupdf_display_warnings(False)
+from srcs.common.files import atomic_write
+
 
 log = logging.getLogger(__name__)
 
@@ -305,7 +303,7 @@ def _page_resources(doc, page, length, font_bytes, shared):
 
 def optimizable(stats):
     """
-    Whether the resources per page (srcs/transformations.py) may lighten
+    Whether the resources per page (srcs/pdf/transformations.py) may lighten
     the book: a page declares too many resources
     """
     return bool(stats) and not stats.get("error") \
@@ -381,11 +379,4 @@ def get(cache_dir, sha1, pdf_path, writable=True, force=False):
 
 
 def _write(cache_dir, entry):
-    fd, tmpname = tempfile.mkstemp(prefix=".pdfstats-", suffix=".tmp", dir=cache_dir)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(entry, f)
-        os.replace(tmpname, path(cache_dir, entry["sha1"]))
-    finally:
-        if os.path.exists(tmpname):
-            os.unlink(tmpname)
+    atomic_write(path(cache_dir, entry["sha1"]), lambda f: json.dump(entry, f), prefix=".pdfstats-")

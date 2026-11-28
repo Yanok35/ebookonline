@@ -54,7 +54,7 @@ from srcs.metadata.text import clean_spaces, fix_case, norm_key, strip_accents
 # files. suggest() runs on each request: no version.
 ANALYSER_VERSION = 2
 
-# The metadata fields, named as the attributes of srcs.book.Book
+# The metadata fields, named as the attributes of srcs.library.book.Book
 FIELDS = ("title", "subtitle", "authors", "editor", "year", "isbn")
 
 # Sources of the candidates, as shown to the user

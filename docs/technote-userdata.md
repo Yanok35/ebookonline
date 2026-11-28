@@ -4,7 +4,7 @@ The data kept by the server for each user, found again in any browser, on
 any device: the notes in the margin of the books, the reading positions,
 the pins. A JSON file next to
 `book.db`, on the same principles (versioned, kept in memory, rewritten
-whole and atomically after each change). Code: `srcs/userdata.py`.
+whole and atomically after each change). Code: `srcs/users/userdata.py`.
 
 ## Location
 
@@ -84,7 +84,7 @@ memory only.
 ## Versioning
 
 As `book.db`: `USERDATA_VERSION` and `USERDATA_MIN_READER_VERSION` in
-`srcs/userdata.py`, the migrations in `_MIGRATIONS` (`_MIGRATIONS[n]`
+`srcs/users/userdata.py`, the migrations in `_MIGRATIONS` (`_MIGRATIONS[n]`
 converts version `n` to `n + 1`). A file of a newer version is read and
 never written: the notes are then kept in memory only, and the server is in
 read-only mode (one more reason in the list); it is refused when its
@@ -116,7 +116,7 @@ Two tabs on the same book: the last saving wins (the whole list).
 ## Life of the book
 
 The data is keyed by the sha1 of the book. When its file is replaced in
-place (cover page, optimization, restored original: `BookDir.transform()`,
+place (cover page, optimization, restored original: `transform()`,
 `restore_original()`), the notes, reading positions and pins of the users
 follow it (`move_user_data()`, `app/api.py`), the pages moved as the pages
 of the book. A book in the trash keeps them (the same sha1 when it comes

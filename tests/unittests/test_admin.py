@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from srcs.cache import available_backends
+from srcs.pdf.thumbnails import available_backends
 from tests.conftest import make_pdf, write_jpeg
 
 
@@ -169,7 +169,7 @@ def test_reset_thumbnail_backends(app, client, book, monkeypatch):
 
 def test_reset_thumbnail_unavailable_backend(app, client, book, monkeypatch):
     # gs is not installed: Ghostscript is not proposed, and refused
-    monkeypatch.setattr("srcs.cache.shutil.which", lambda name: None)
+    monkeypatch.setattr("srcs.pdf.thumbnails.shutil.which", lambda name: None)
     html = client.get(f"/bookadmin/{book.sha1}").text
     assert 'value="ghostscript"' not in html
     app.cache.requests.clear()
@@ -334,12 +334,12 @@ def test_book_list_summary_with_missing_and_duplicates(app, client):
 @pytest.fixture
 def read_only_app(app, book):
     """ The application on a book.db written by a newer, compatible, version """
-    import srcs.book
+    import srcs.library.bookdb
     from app import create_app
 
     with open(app.config["BOOK_DB"]) as f:
         db = json.load(f)
-    db["version"] = srcs.book.DB_VERSION + 1
+    db["version"] = srcs.library.bookdb.DB_VERSION + 1
     with open(app.config["BOOK_DB"], "w") as f:
         json.dump(db, f)
     app = create_app()

@@ -1,9 +1,9 @@
-""" Reading history: sessions from the journal of the reader events (srcs/history.py) """
+""" Reading history: sessions from the journal of the reader events (srcs/users/journal.py) """
 
 import datetime
 import json
 
-from srcs.history import SESSION_GAP, SESSION_TAIL, read_events, reading_sessions, sessions
+from srcs.users.journal import SESSION_GAP, SESSION_TAIL, read_events, reading_sessions, sessions
 
 T = datetime.datetime(2026, 11, 1, 20, 0, tzinfo=datetime.UTC)
 

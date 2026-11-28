@@ -5,13 +5,17 @@ from pathlib import Path
 
 import pytest
 
-import srcs.book
-from srcs.book import BookDir
-from srcs.book import Transformed
-from srcs.transformations import CoverPage, Transformation
-from srcs.bookfileops import BookFileError
+import srcs.common.files
+import srcs.library.bookdb
+import srcs.library.bookdir
+from srcs.library.bookdir import BookDir
+from srcs.library.transform import Transformed
+from srcs.pdf.transformations import CoverPage, Transformation
+from srcs.library.fileops import BookFileError
 
 from tests.conftest import FakeCache, make_pdf
+from srcs.library.operations import move_book, move_book_to_category, rename_book, restore_from_trash, trash_book, trash_duplicate
+from srcs.library.transform import original_in_trash, restore_original, transform
 
 
 @pytest.fixture
@@ -33,9 +37,9 @@ def db_filenames(library):
 def test_move_book(library, book, mocker):
     root = Path(library.dirpath)
     mtime = os.path.getmtime(root / "Science" / "a.pdf")
-    spy = mocker.spy(srcs.book, "sha1_file")
+    spy = mocker.spy(srcs.library.bookdir, "sha1_file")
 
-    assert library.move_book(book.sha1, "Art/new/a-renamed.pdf") == "Art/new/a-renamed.pdf"
+    assert move_book(library, book.sha1, "Art/new/a-renamed.pdf") == "Art/new/a-renamed.pdf"
 
     assert not (root / "Science" / "a.pdf").exists()
     assert os.path.getmtime(root / "Art" / "new" / "a-renamed.pdf") == mtime
@@ -51,7 +55,7 @@ def test_move_book_does_not_rescan(library, book):
     """ Only the moved book changes: no rescan of the whole directory """
     make_pdf(Path(library.dirpath) / "c.pdf", title="C")
     library.cache.requests.clear()
-    library.rename_book(book.sha1, "renamed")
+    rename_book(library, book.sha1, "renamed")
     assert library.find_book_by_filename("c.pdf") is None
     assert library.cache.requests == []
     with open(library.dbfile) as f:
@@ -63,21 +67,21 @@ def test_move_book_does_not_rescan(library, book):
 
 
 def test_move_book_to_the_root(library, book):
-    library.move_book(book.sha1, "a.pdf")
+    move_book(library, book.sha1, "a.pdf")
     assert book.filename == "a.pdf" and book.category == "Generals"
 
 
 def test_rename_book(library, book):
-    assert library.rename_book(book.sha1, "A new name") == "Science/A new name.pdf"
+    assert rename_book(library, book.sha1, "A new name") == "Science/A new name.pdf"
     assert (Path(library.dirpath) / "Science" / "A new name.pdf").exists()
     assert book.filename == "Science/A new name.pdf" and book.category == "Science"
-    assert library.rename_book(book.sha1, "again.PDF") == "Science/again.PDF"
+    assert rename_book(library, book.sha1, "again.PDF") == "Science/again.PDF"
 
 
 @pytest.mark.parametrize("name", ["", "sub/a.pdf", "../a.pdf", ".hidden.pdf", " a.pdf"])
 def test_rename_book_refused(library, book, name):
     with pytest.raises(BookFileError):
-        library.rename_book(book.sha1, name)
+        rename_book(library, book.sha1, name)
     assert (Path(library.dirpath) / "Science" / "a.pdf").exists()
     assert book.filename == "Science/a.pdf"
 
@@ -95,7 +99,7 @@ def test_move_book_refused(library, book, relpath):
     (root / "private").mkdir()
     (root / "private" / ".ebook-ignore-dir").touch()
     with pytest.raises(BookFileError):
-        library.move_book(book.sha1, relpath)
+        move_book(library, book.sha1, relpath)
     assert (root / "Science" / "a.pdf").exists() and (root / "b.pdf").exists()
     assert book.filename == "Science/a.pdf"
     assert not (root.parent / "outside.pdf").exists()
@@ -106,29 +110,29 @@ def test_move_book_through_a_symlink_outside(library, book, tmp_path):
     outside.mkdir()
     os.symlink(outside, Path(library.dirpath) / "link")
     with pytest.raises(BookFileError):
-        library.move_book(book.sha1, "link/a.pdf")
+        move_book(library, book.sha1, "link/a.pdf")
     assert list(outside.iterdir()) == []
 
 
 def test_move_unknown_or_missing_book(library, book):
     with pytest.raises(BookFileError):
-        library.move_book("0" * 40, "c.pdf")
+        move_book(library, "0" * 40, "c.pdf")
     os.remove(Path(library.dirpath) / "Science" / "a.pdf")
     library.rescan()
     with pytest.raises(BookFileError):
-        library.move_book(book.sha1, "c.pdf")
+        move_book(library, book.sha1, "c.pdf")
     with pytest.raises(BookFileError):
-        library.trash_book(book.sha1)
+        trash_book(library, book.sha1)
 
 
 def test_move_book_to_its_own_path(library, book):
-    assert library.move_book(book.sha1, "Science/a.pdf") == "Science/a.pdf"
+    assert move_book(library, book.sha1, "Science/a.pdf") == "Science/a.pdf"
     assert (Path(library.dirpath) / "Science" / "a.pdf").exists()
 
 
 def test_trash_book(library, book, tmp_bookdir):
     root = Path(library.dirpath)
-    assert library.trash_book(book.sha1) == "Trash/Science/a.pdf"
+    assert trash_book(library, book.sha1) == "Trash/Science/a.pdf"
 
     assert (root / "Trash" / "Science" / "a.pdf").exists()
     assert (root / "Trash" / ".ebook-ignore-dir").exists()
@@ -154,7 +158,7 @@ def test_trash_book_with_a_duplicate(library, book):
     library.rescan()
     assert [d.filename for d in library.duplicates] == ["copy/a.pdf"]
 
-    library.trash_book(book.sha1)
+    trash_book(library, book.sha1)
     # the duplicate replaces the book, with its settings
     assert book.present and book.filename == "copy/a.pdf" and book.bookmarked
     assert library.duplicates == []
@@ -163,7 +167,7 @@ def test_trash_book_with_a_duplicate(library, book):
 def test_trash_name_collision(library, book):
     root = Path(library.dirpath)
     make_pdf(root / "Trash" / "Science" / "a.pdf", title="older")
-    assert library.trash_book(book.sha1) == "Trash/Science/a (2).pdf"
+    assert trash_book(library, book.sha1) == "Trash/Science/a (2).pdf"
     assert (root / "Trash" / "Science" / "a.pdf").exists()
 
 
@@ -173,7 +177,7 @@ def test_trash_duplicate(library, book):
     make_pdf(root / "z.pdf", title="A")
     library.rescan()
 
-    assert library.trash_duplicate("copy/a.pdf") == "Trash/copy/a.pdf"
+    assert trash_duplicate(library, "copy/a.pdf") == "Trash/copy/a.pdf"
     assert (root / "Trash" / "copy" / "a.pdf").exists()
     assert [d.filename for d in library.duplicates] == ["z.pdf"]
     # the book is unchanged
@@ -184,14 +188,14 @@ def test_trash_duplicate(library, book):
 def test_trash_duplicate_refused(library, book, relpath):
     # books are not duplicates
     with pytest.raises(BookFileError):
-        library.trash_duplicate(relpath)
+        trash_duplicate(library, relpath)
     assert book.present
 
 
 def test_file_operations_in_read_only_mode(library, book, tmp_bookdir):
     with open(library.dbfile) as f:
         db = json.load(f)
-    db["version"] = srcs.book.DB_VERSION + 1
+    db["version"] = srcs.library.bookdb.DB_VERSION + 1
     with open(library.dbfile, "w") as f:
         json.dump(db, f)
     content = Path(library.dbfile).read_text()
@@ -206,12 +210,12 @@ def test_file_operations_in_read_only_mode(library, book, tmp_bookdir):
     make_pdf(root / "copy" / "a.pdf", title="A")
     reopened.rescan()
     bookfiles = sorted(root.rglob("*"))
-    for operation in [lambda: reopened.rename_book(book.sha1, "renamed"),
-                      lambda: reopened.move_book(book.sha1, "a.pdf"),
-                      lambda: reopened.move_book_to_category(book.sha1, ""),
-                      lambda: reopened.trash_book(book.sha1),
-                      lambda: reopened.trash_duplicate("copy/a.pdf"),
-                      lambda: reopened.restore_from_trash("Trash/c.pdf")]:
+    for operation in [lambda: rename_book(reopened, book.sha1, "renamed"),
+                      lambda: move_book(reopened, book.sha1, "a.pdf"),
+                      lambda: move_book_to_category(reopened, book.sha1, ""),
+                      lambda: trash_book(reopened, book.sha1),
+                      lambda: trash_duplicate(reopened, "copy/a.pdf"),
+                      lambda: restore_from_trash(reopened, "Trash/c.pdf")]:
         with pytest.raises(BookFileError, match="read-only"):
             operation()
     assert reopened.find_book_by_sha1(book.sha1).filename == "Science/a.pdf"
@@ -223,7 +227,7 @@ def test_file_operations_when_opened_read_only(library, book, tmp_bookdir):
     reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]), read_only=True)
     reopened.open(library.dirpath)
     with pytest.raises(BookFileError, match="read-only"):
-        reopened.rename_book(book.sha1, "renamed")
+        rename_book(reopened, book.sha1, "renamed")
     assert (Path(library.dirpath) / "Science" / "a.pdf").exists()
 
 
@@ -234,12 +238,12 @@ def test_move_book_to_category(library, book):
     library.rescan()
     c = library.find_book_by_filename("Science/sub/c.pdf")
 
-    assert library.move_book_to_category(book.sha1, "Art") == "Art/a.pdf"
+    assert move_book_to_category(library, book.sha1, "Art") == "Art/a.pdf"
     assert book.category == "Art" and book.tags == "algo"
     # the file goes to the category directory itself
-    assert library.move_book_to_category(c.sha1, "Art") == "Art/c.pdf"
+    assert move_book_to_category(library, c.sha1, "Art") == "Art/c.pdf"
     # '': the root of the book directory
-    assert library.move_book_to_category(book.sha1, "") == "a.pdf"
+    assert move_book_to_category(library, book.sha1, "") == "a.pdf"
     assert book.category == "Generals"
 
 
@@ -252,17 +256,17 @@ def test_move_book_to_category_refused(library, book, category, tmp_path):
     (root / "Trash").mkdir()
     os.symlink(tmp_path, root / "link")
     with pytest.raises(BookFileError):
-        library.move_book_to_category(book.sha1, category)
+        move_book_to_category(library, book.sha1, category)
     assert book.filename == "Science/a.pdf"
     assert not (root / "New").exists()
 
 
 def test_restore_from_trash(library, book):
     root = Path(library.dirpath)
-    trashed = library.trash_book(book.sha1)
+    trashed = trash_book(library, book.sha1)
     os.rmdir(root / "Science")  # the category was removed in the meantime
 
-    assert library.restore_from_trash(trashed) == "Science/a.pdf"
+    assert restore_from_trash(library, trashed) == "Science/a.pdf"
     assert (root / "Science" / "a.pdf").exists()
     assert not (root / "Trash" / "Science" / "a.pdf").exists()
     # the book is back, with its settings
@@ -273,19 +277,19 @@ def test_restore_from_trash(library, book):
 def test_restore_a_duplicate_from_trash(library, book):
     make_pdf(Path(library.dirpath) / "copy" / "a.pdf", title="A")
     library.rescan()
-    trashed = library.trash_duplicate("copy/a.pdf")
+    trashed = trash_duplicate(library, "copy/a.pdf")
     assert library.duplicates == []
-    library.restore_from_trash(trashed)
+    restore_from_trash(library, trashed)
     assert [d.filename for d in library.duplicates] == ["copy/a.pdf"]
     assert book.filename == "Science/a.pdf"
 
 
 def test_restore_from_trash_never_overwrites(library, book):
     root = Path(library.dirpath)
-    trashed = library.trash_book(book.sha1)
+    trashed = trash_book(library, book.sha1)
     make_pdf(root / "Science" / "a.pdf", title="another one")
     with pytest.raises(BookFileError, match="already exists"):
-        library.restore_from_trash(trashed)
+        restore_from_trash(library, trashed)
     assert (root / trashed).exists()
 
 
@@ -296,9 +300,9 @@ def test_restore_from_trash_never_overwrites(library, book):
     "Trash",
 ])
 def test_restore_from_trash_refused(library, book, relpath):
-    library.trash_book(book.sha1)
+    trash_book(library, book.sha1)
     with pytest.raises(BookFileError):
-        library.restore_from_trash(relpath)
+        restore_from_trash(library, relpath)
     assert (Path(library.dirpath) / "Trash" / "Science" / "a.pdf").exists()
 
 
@@ -312,13 +316,13 @@ def test_file_operations_keep_the_modification_time(library, book):
     def file_mtime(relpath):
         return os.stat(root / relpath).st_mtime
 
-    library.rename_book(book.sha1, "renamed")
+    rename_book(library, book.sha1, "renamed")
     assert file_mtime("Science/renamed.pdf") == mtime
-    library.move_book_to_category(book.sha1, "Art")
+    move_book_to_category(library, book.sha1, "Art")
     assert file_mtime("Art/renamed.pdf") == mtime
-    trashed = library.trash_book(book.sha1)
+    trashed = trash_book(library, book.sha1)
     assert file_mtime(trashed) == mtime
-    library.restore_from_trash(trashed)
+    restore_from_trash(library, trashed)
     assert file_mtime("Art/renamed.pdf") == mtime
     # and the book.db entry
     assert book.mtime == mtime
@@ -359,7 +363,7 @@ def test_cover_in_place(library, book):
     thumbnail.write_bytes(b"old thumbnail")
     library.cache.requests.clear()
 
-    result = library.transform(old_sha1, CoverPage(cover_image()))
+    result = transform(library, old_sha1, CoverPage(cover_image()))
 
     assert result == Transformed("Science/a.pdf", old_sha1, book.sha1,
                                  "Trash/Science/a (original).pdf", 1)
@@ -371,7 +375,7 @@ def test_cover_in_place(library, book):
     assert (root / "Trash" / "Science" / "a (original).pdf").read_bytes() == original
     # the same book, its user values, its new sha1, saved
     assert library.find_book_by_filename("Science/a.pdf") is book
-    assert book.sha1 != old_sha1 and book.sha1 == srcs.book.sha1_file(path)
+    assert book.sha1 != old_sha1 and book.sha1 == srcs.common.files.sha1_file(path)
     assert (book.title, book.meta_reviewed, book.tags, book.bookmarked) == ("A book", True, "algo", True)
     assert book.mtime == mtime and book.filesize == os.stat(path).st_size
     assert db_filenames(library) == {book.sha1: "Science/a.pdf",
@@ -382,12 +386,12 @@ def test_cover_in_place(library, book):
     # no temporary file left; a rescan finds nothing to do
     assert sorted(p.name for p in (root / "Science").iterdir()) == ["a.pdf"]
     assert not library.rescan()
-    assert library.original_in_trash(book.sha1) == "Trash/Science/a (original).pdf"
+    assert original_in_trash(library, book.sha1) == "Trash/Science/a (original).pdf"
 
     # again: the latest original
-    library.transform(book.sha1, CoverPage(cover_image()))
+    transform(library, book.sha1, CoverPage(cover_image()))
     assert pymupdf.open(path).page_count == 3
-    assert library.original_in_trash(book.sha1) == "Trash/Science/a (original) (2).pdf"
+    assert original_in_trash(library, book.sha1) == "Trash/Science/a (original) (2).pdf"
 
 
 def test_restore_original(library, book):
@@ -397,27 +401,27 @@ def test_restore_original(library, book):
     path = root / "Science" / "a.pdf"
     sha1s = [book.sha1]
     for _ in range(2):
-        sha1s.append(library.transform(book.sha1, CoverPage(cover_image())).new_sha1)
+        sha1s.append(transform(library, book.sha1, CoverPage(cover_image())).new_sha1)
 
-    result = library.restore_original(book.sha1)
+    result = restore_original(library, book.sha1)
     assert result == Transformed("Science/a.pdf", sha1s[2], sha1s[1],
                                  "Trash/Science/a (transformed).pdf", -1)
     assert book.sha1 == sha1s[1] and pymupdf.open(path).page_count == 2
-    assert library.original_in_trash(book.sha1) == "Trash/Science/a (original).pdf"
+    assert original_in_trash(library, book.sha1) == "Trash/Science/a (original).pdf"
     # and again: the first file
-    library.restore_original(book.sha1)
+    restore_original(library, book.sha1)
     assert book.sha1 == sha1s[0] and pymupdf.open(path).page_count == 1
-    assert library.original_in_trash(book.sha1) is None
+    assert original_in_trash(library, book.sha1) is None
     assert sorted(p.name for p in (root / "Trash" / "Science").iterdir()) == \
         ["a (transformed) (2).pdf", "a (transformed).pdf"]
     with pytest.raises(BookFileError, match="no original in the trash"):
-        library.restore_original(book.sha1)
+        restore_original(library, book.sha1)
     assert not library.rescan()
 
 
 def test_transform_keeping_first_page_and_text(library, book):
     """ the thumbnail and the metadata analysis follow the book """
-    from srcs import pdfstats
+    from srcs.pdf import stats as pdfstats
     from srcs.metadata import store
 
     cache_dir = library.cache.cachedir
@@ -427,7 +431,7 @@ def test_transform_keeping_first_page_and_text(library, book):
     Path(pdfstats.path(cache_dir, old_sha1)).write_text("{}")
     library.cache.requests.clear()
 
-    result = library.transform(old_sha1, Recompressed())
+    result = transform(library, old_sha1, Recompressed())
     assert result.page_offset == 0
     assert Path(library.cache.get_thumbname(book.sha1)).read_bytes() == b"thumbnail"
     assert not Path(library.cache.get_thumbname(old_sha1)).exists()
@@ -441,18 +445,18 @@ def test_transform_keeping_first_page_and_text(library, book):
 def test_transform_refused(library, book, tmp_bookdir):
     root = Path(library.dirpath)
     with pytest.raises(BookFileError, match="not a JPEG or PNG image"):
-        library.transform(book.sha1, CoverPage(b"not an image"))
+        transform(library, book.sha1, CoverPage(b"not an image"))
     with pytest.raises(BookFileError, match="unknown book"):
-        library.transform("0" * 40, CoverPage(cover_image()))
+        transform(library, "0" * 40, CoverPage(cover_image()))
     (root / "bad.pdf").write_bytes(b"not a PDF file")
     library.rescan()
     with pytest.raises(BookFileError, match="can not read the PDF file"):
-        library.transform(library.find_book_by_filename("bad.pdf").sha1, CoverPage(cover_image()))
+        transform(library, library.find_book_by_filename("bad.pdf").sha1, CoverPage(cover_image()))
     # a copy of the book in the library
     shutil.copy(root / "b.pdf", root / "copy of b.pdf")
     library.rescan()
     with pytest.raises(BookFileError, match="has copies in the library"):
-        library.transform(library.find_book_by_filename("b.pdf").sha1, CoverPage(cover_image()))
+        transform(library, library.find_book_by_filename("b.pdf").sha1, CoverPage(cover_image()))
     # nothing written
     assert sorted(p.name for p in root.rglob("*")) == \
         ["Science", "a.pdf", "b.pdf", "bad.pdf", "copy of b.pdf"]
@@ -460,7 +464,7 @@ def test_transform_refused(library, book, tmp_bookdir):
     reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]), read_only=True)
     reopened.open(library.dirpath)
     with pytest.raises(BookFileError, match="read-only"):
-        reopened.transform(book.sha1, CoverPage(cover_image()))
+        transform(reopened, book.sha1, CoverPage(cover_image()))
 
 
 def test_transform_check_failed(library, book):
@@ -478,7 +482,7 @@ def test_transform_check_failed(library, book):
     root = Path(library.dirpath)
     original = (root / "Science" / "a.pdf").read_bytes()
     with pytest.raises(BookFileError, match="broken: the text of page 1 changed"):
-        library.transform(book.sha1, Broken())
+        transform(library, book.sha1, Broken())
     assert (root / "Science" / "a.pdf").read_bytes() == original
     assert not (root / "Trash").exists()
     assert sorted(p.name for p in (root / "Science").iterdir()) == ["a.pdf"]
@@ -492,17 +496,17 @@ def test_scan_compares_the_size(library, book, mocker):
     make_pdf(path, title="A longer title, another content")
     os.utime(path, (mtime, mtime))
     library.rescan()
-    assert book.sha1 == srcs.book.sha1_file(path)
+    assert book.sha1 == srcs.common.files.sha1_file(path)
 
 
 # --- optimization: resources per page
 
 def test_optimize(library):
     import pymupdf
-    from srcs import pdfstats
+    from srcs.pdf import stats as pdfstats
     from srcs.metadata import store
-    from srcs.transformations import ResourcesPerPage
-    from tests.unittests.test_pdfstats import book_with_images
+    from srcs.pdf.transformations import ResourcesPerPage
+    from tests.unittests.test_pdf_stats import book_with_images
 
     root = Path(library.dirpath)
     book_with_images(root / "Shared.pdf", pages=4, shared=True)
@@ -515,7 +519,7 @@ def test_optimize(library):
     library.cache.requests.clear()
 
     transformation = ResourcesPerPage()
-    result = library.transform(old_sha1, transformation)
+    result = transform(library, old_sha1, transformation)
 
     assert result == Transformed("Shared.pdf", old_sha1, book.sha1, "Trash/Shared (original).pdf", 0)
     assert (root / "Trash" / "Shared (original).pdf").read_bytes() == original
@@ -532,24 +536,24 @@ def test_optimize(library):
     assert library.cache.requests == []
     # nothing more to gain
     with pytest.raises(BookFileError, match="nothing to gain"):
-        library.transform(book.sha1, ResourcesPerPage())
+        transform(library, book.sha1, ResourcesPerPage())
 
 
 def test_optimize_refused(library, book):
-    from srcs.transformations import ResourcesPerPage
+    from srcs.pdf.transformations import ResourcesPerPage
 
     root = Path(library.dirpath)
     original = (root / "Science" / "a.pdf").read_bytes()
     with pytest.raises(BookFileError, match="resources per page: nothing to gain"):
-        library.transform(book.sha1, ResourcesPerPage())
+        transform(library, book.sha1, ResourcesPerPage())
     assert (root / "Science" / "a.pdf").read_bytes() == original
     assert not (root / "Trash").exists()
 
 
 def test_same_rendering(tmp_path):
     import pymupdf
-    from srcs.transformations import same_rendering
-    from tests.unittests.test_pdfstats import book_with_images
+    from srcs.pdf.transformations import same_rendering
+    from tests.unittests.test_pdf_stats import book_with_images
 
     a = pymupdf.open(book_with_images(tmp_path / "a.pdf"))
     assert same_rendering(a, a, 0)

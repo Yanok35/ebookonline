@@ -32,7 +32,7 @@ import unicodedata
 
 from srcs.metadata.names import PARTICLES
 
-# Variables of a pattern, from the attributes of srcs.book.Book
+# Variables of a pattern, from the attributes of srcs.library.book.Book
 VARIABLES = {
     "title": "titre",
     "subtitle": "sous-titre",

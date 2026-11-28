@@ -18,8 +18,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-Reading history: the reading sessions of the books, found from the journal
-of the reader events (READER_EVENTS_FILE, see app/api.py).
+The journal of the reader events (READER_EVENTS_FILE): one JSON line per
+saved reading position, appended (append_event()), never rewritten; and
+the reading history found from it: the reading sessions of the books.
 
 The reader saves its state 500 ms after each move (scroll, page, zoom) and
 at the opening of a book. Events of a book less than SESSION_GAP apart
@@ -35,6 +36,22 @@ import logging
 log = logging.getLogger(__name__)
 
 SESSION_GAP = datetime.timedelta(minutes=10)
+
+
+def append_event(path, sha1, page, user):
+    """
+    Append a line to the journal path: {"t": time of the server (UTC, ISO
+    8601), "doc": sha1 of the book, "page": page, "user": user}. Raises
+    OSError.
+    """
+    event = {
+        "t": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
+        "doc": sha1,
+        "page": page,
+        "user": user,
+    }
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
 SESSION_TAIL = datetime.timedelta(minutes=1)
 
 

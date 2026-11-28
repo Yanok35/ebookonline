@@ -1,7 +1,5 @@
-import datetime
 import json
 import math
-import os
 
 from pathlib import Path
 
@@ -9,6 +7,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from app import is_read_only
 from app.auth import api_login_required, current_user_key
+from srcs.users.journal import append_event
 
 # =========================================================
 # CONFIGURATION
@@ -40,15 +39,8 @@ def log_reader_event(state):
     events_file = current_app.config.get("READER_EVENTS_FILE")
     if not events_file:
         return
-    event = {
-        "t": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
-        "doc": state["documentId"],
-        "page": state["pageNumber"],
-        "user": current_user_key(),
-    }
     try:
-        with open(events_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        append_event(events_file, state["documentId"], state["pageNumber"], current_user_key())
     except OSError as e:
         current_app.logger.warning("Reader event not logged in %s: %s", events_file, e)
 
@@ -268,7 +260,7 @@ def put_notes(sha1):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify(error="Objet JSON attendu."), 400
-    from srcs.userdata import UserDataError
+    from srcs.users.userdata import UserDataError
 
     try:
         kept = current_app.userdata.set_notes(current_user_key(), sha1, data.get("notes"))
@@ -283,7 +275,7 @@ def put_notes(sha1):
 def move_user_data(old_sha1, new_sha1, page_offset=0):
     """
     The data of the users on a book whose file was replaced in place
-    (BookDir.transform(), restore_original()): their notes, reading
+    (transform(), restore_original() of srcs/library/transform.py): their notes, reading
     positions and pins move to its new sha1, the pages moved by page_offset
     (a cover page added: +1). A failure is logged: they stay under the old
     sha1.

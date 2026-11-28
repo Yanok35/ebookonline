@@ -1,8 +1,8 @@
-""" Names of the PDF files after a pattern (srcs/naming.py) """
+""" Names of the PDF files after a pattern (srcs/library/naming.py) """
 
 import pytest
 
-from srcs.naming import (
+from srcs.library.naming import (
     MAX_NAME_BYTES,
     NamingError,
     author_sort,

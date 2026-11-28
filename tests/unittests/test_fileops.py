@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from srcs.bookfileops import (
+from srcs.library.fileops import (
     BookFileError,
     category_of,
     check_inside,

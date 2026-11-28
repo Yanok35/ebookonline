@@ -11,7 +11,7 @@ one JSON line per state saved by the reader, `{"t", "doc", "page", "user"}`.
 The reader saves its state 500 ms after each move (scroll, page, zoom) and
 at the opening of a book. The file is only appended to.
 
-## Sessions (`srcs/history.py`)
+## Sessions (`srcs/users/journal.py`)
 
 - The events of a book, for a user, less than `SESSION_GAP` (10 min) apart
   belong to the same **session**: from its first to its last event, plus

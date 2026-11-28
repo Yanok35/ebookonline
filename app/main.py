@@ -19,19 +19,17 @@
 
 import calendar
 import os
-import sys
 import json
 from functools import wraps
-from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for
+from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
 from flask_wtf.csrf import generate_csrf, validate_csrf
 from werkzeug.exceptions import RequestEntityTooLarge
 from wtforms import ValidationError
 
 from app import is_read_only
 from app.auth import current_user_key, login_required
-from srcs.book import BookDir
-from srcs.bookfileops import INCOMING_DIR, BookFileError, BookFileExists
-from srcs.cache import Cache
+from srcs.library.fileops import INCOMING_DIR, BookFileError, BookFileExists
+from srcs.library.operations import add_book, incoming_exists
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -111,8 +109,6 @@ def favicon():
 def browser_lazy():
     d = current_app.bookdir
     booklist = d.get_booklist()
-    subset = booklist[:SUBSET_NBBOOKS]
-
     return render_template("browser_lazy.html",
                            titre = "eBook browser",
                            nbBooklist = len(booklist),
@@ -153,7 +149,7 @@ def upload():
         return jsonify(error="Aucun fichier reçu."), 400
 
     try:
-        relpath = current_app.bookdir.add_book(book.stream, book.filename)
+        relpath = add_book(current_app.bookdir, book.stream, book.filename)
     except BookFileExists:
         current_app.logger.warning("%s: upload of %r refused: already in %s", user, book.filename, INCOMING_DIR)
         return jsonify(error=f"déjà présent dans « {INCOMING_DIR} », non envoyé."), 409
@@ -191,7 +187,7 @@ def upload_check():
     names = (request.get_json(silent=True) or {}).get("names")
     if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
         return jsonify(error="Liste de noms attendue."), 400
-    return jsonify(existing=[n for n in names if current_app.bookdir.incoming_exists(n)])
+    return jsonify(existing=[n for n in names if incoming_exists(current_app.bookdir, n)])
 
 
 @main.route('/browser_subset', methods=['GET', 'POST'])
@@ -206,7 +202,6 @@ def browser_subset():
         current_app.logger.debug("Books sorted by date: %d", len(s))
 
     booklist = s
-    nbBooks = len(booklist)
 
     subset_id = int(request.values.get('subset-id'))
 

@@ -31,13 +31,10 @@ import struct
 
 import pymupdf
 
-from srcs.bookfileops import BookFileError
+from srcs.common.files import FileOperationError
 
 log = logging.getLogger(__name__)
 
-# MuPDF messages (e.g. on a malformed PDF file) are logged, not printed
-pymupdf.TOOLS.mupdf_display_errors(False)
-pymupdf.TOOLS.mupdf_display_warnings(False)
 
 # Limits of the image: size of the file, and number of pixels once decoded
 # (checked before decoding it: about 90 MB in memory at most)
@@ -55,11 +52,11 @@ _JPEG_SOF = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
 def image_info(data):
     """
     ('jpeg' or 'png', width, height) of an image, read from its header (the
-    image is not decoded), or raise BookFileError: unsupported format,
+    image is not decoded), or raise FileOperationError: unsupported format,
     truncated header, size over the limits.
     """
     if len(data) > MAX_IMAGE_BYTES:
-        raise BookFileError(f"image too large: {len(data)} bytes, "
+        raise FileOperationError(f"image too large: {len(data)} bytes, "
                             f"{MAX_IMAGE_BYTES} at most")
     if data.startswith(b"\x89PNG\r\n\x1a\n") and data[12:16] == b"IHDR":
         kind = "png"
@@ -84,20 +81,20 @@ def image_info(data):
                 break
             i += 2 + length
         if not width or not height:
-            raise BookFileError("invalid JPEG image")
+            raise FileOperationError("invalid JPEG image")
     else:
-        raise BookFileError("not a JPEG or PNG image")
+        raise FileOperationError("not a JPEG or PNG image")
     if not width or not height:
-        raise BookFileError(f"invalid {kind.upper()} image size")
+        raise FileOperationError(f"invalid {kind.upper()} image size")
     if width * height > MAX_IMAGE_PIXELS:
-        raise BookFileError(f"image too large: {width}x{height} pixels")
+        raise FileOperationError(f"image too large: {width}x{height} pixels")
     return kind, width, height
 
 
 def check_image(data):
     """
     ('jpeg' or 'png', width, height) of a valid image, or raise
-    BookFileError. The image is decoded, once its header checked: MuPDF
+    FileOperationError. The image is decoded, once its header checked: MuPDF
     shows a damaged (e.g. truncated) image as it can, an error or a warning
     while decoding it refuses it.
     """
@@ -106,10 +103,10 @@ def check_image(data):
     try:
         pymupdf.Pixmap(data)
     except Exception as e:
-        raise BookFileError(f"invalid {kind.upper()} image: {e}") from None
+        raise FileOperationError(f"invalid {kind.upper()} image: {e}") from None
     warnings = pymupdf.TOOLS.mupdf_warnings()
     if warnings:
-        raise BookFileError(f"damaged {kind.upper()} image: {warnings.splitlines()[0]}")
+        raise FileOperationError(f"damaged {kind.upper()} image: {warnings.splitlines()[0]}")
     return kind, width, height
 
 
@@ -132,7 +129,7 @@ def insert_cover(pdf_path, image, out_path):
     """
     Write in out_path the PDF file pdf_path, with a first page showing the
     image (bytes of a JPEG or PNG file). The page has the width of the first
-    page of the document, and the ratio of the image. Raise BookFileError on
+    page of the document, and the ratio of the image. Raise FileOperationError on
     an invalid image or PDF file.
     """
     kind, width, height = check_image(image)
@@ -140,12 +137,12 @@ def insert_cover(pdf_path, image, out_path):
     try:
         doc = pymupdf.open(pdf_path, filetype="pdf")
     except (pymupdf.FileDataError, RuntimeError) as e:
-        raise BookFileError(f"can not read the PDF file: {e}") from None
+        raise FileOperationError(f"can not read the PDF file: {e}") from None
     try:
         if doc.needs_pass:
-            raise BookFileError("the PDF file is protected by a password")
+            raise FileOperationError("the PDF file is protected by a password")
         if doc.page_count == 0:
-            raise BookFileError("the PDF file has no page")
+            raise FileOperationError("the PDF file has no page")
 
         labels = _shifted_labels(doc.get_page_labels())
         page_width = doc[0].rect.width
@@ -154,7 +151,7 @@ def insert_cover(pdf_path, image, out_path):
         try:
             page.insert_image(page.rect, stream=image)
         except (ValueError, RuntimeError) as e:
-            raise BookFileError(f"invalid {kind.upper()} image: {e}") from None
+            raise FileOperationError(f"invalid {kind.upper()} image: {e}") from None
         doc.set_page_labels(labels)
         doc.save(out_path, encryption=pymupdf.PDF_ENCRYPT_KEEP)
     finally:

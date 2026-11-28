@@ -5,11 +5,12 @@ from pathlib import Path
 
 import pytest
 
-import srcs.book
-from srcs.book import BookDir
-from srcs.watcher import BookDirWatcher
+import srcs.library.bookdir
+from srcs.library.bookdir import BookDir
+from srcs.library.watcher import BookDirWatcher
 
 from tests.conftest import FakeCache, make_pdf, wait_until
+from srcs.library.operations import move_book, trash_book
 
 DELAY = 0.2
 
@@ -145,10 +146,10 @@ def test_file_operations_are_not_undone(watched, mocker):
     b = library.find_book_by_filename("b.pdf")
     time.sleep(DELAY * 3)
     count = len(rescans)
-    spy = mocker.spy(srcs.book, "sha1_file")
+    spy = mocker.spy(srcs.library.bookdir, "sha1_file")
 
-    library.move_book(a.sha1, "Art/a.pdf")
-    library.trash_book(b.sha1)
+    move_book(library, a.sha1, "Art/a.pdf")
+    trash_book(library, b.sha1)
 
     # the watcher rescans after the moves, and finds the same state
     assert wait_until(lambda: len(rescans) > count)

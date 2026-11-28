@@ -30,6 +30,8 @@ import os
 import posixpath
 from collections import namedtuple
 
+from srcs.common.files import FileOperationError
+
 # A directory containing this file is ignored by the scan, with its
 # subdirectories
 IGNORE_MARKER = ".ebook-ignore-dir"
@@ -44,8 +46,9 @@ ROOT_CATEGORY = "Generals"
 INCOMING_DIR = "Incoming"
 
 
-class BookFileError(Exception):
-    """ A file operation in the book directory was refused, or failed """
+# A file operation in the book directory was refused, or failed (also
+# raised by srcs/pdf, which knows nothing of the book directory)
+BookFileError = FileOperationError
 
 
 class BookFileExists(BookFileError):

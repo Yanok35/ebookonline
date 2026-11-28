@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from srcs.access import can_read_dir, can_write_dir, check_write_access
+from srcs.common.access import can_read_dir, can_write_dir, check_write_access
 
 # root writes in read-only directories
 needs_non_root = pytest.mark.skipif(os.geteuid() == 0, reason="run as root")
