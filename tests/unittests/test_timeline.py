@@ -61,3 +61,20 @@ def test_timeline_requires_login(app):
 
 def test_library_links_to_the_timeline(client):
     assert 'href="/timeline">Mes lectures</a>' in client.get("/browser_lazy").text
+
+
+def test_the_cover_opens_the_book_under_the_caption(app, client):
+    """
+    With a mouse, the caption is a bubble next to the cover, not over it,
+    and it lets the clicks through, as the badge of the reading time does
+    """
+    books = library(app)
+    journal(app, [(0, books["a"].sha1, "test")])
+    style = re.search(r"<style>(.*?)</style>", client.get("/timeline").text, re.S).group(1)
+    hover = re.search(r"@media \(hover: hover\) \{(.*)\}", style, re.S).group(1)
+    caption = re.search(r"\.timeline \.simple-caption,\s*\.timeline \.book-box:hover \.simple-caption \{([^}]*)\}",
+                        hover).group(1)
+    assert "pointer-events: none" in caption
+    assert "top: 100%" in caption and "translateX(-50%)" in caption
+    badge = re.search(r"\.timeline \.reading-time \{([^}]*)\}", style).group(1)
+    assert "pointer-events: none" in badge
