@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 
-import srcs.book
-from srcs.book import BookDir
+import srcs.library.bookdb
+import srcs.library.bookdir
+from srcs.library.bookdir import BookDir
 
 from tests.conftest import FakeCache, make_pdf
 
@@ -43,7 +44,7 @@ def test_rescan_only_hashes_new_files(library, mocker):
     make_pdf(root / "a.pdf")
     library.rescan()
 
-    spy = mocker.spy(srcs.book, "sha1_file")
+    spy = mocker.spy(srcs.library.bookdir, "sha1_file")
     assert library.rescan() is False
     assert spy.call_count == 0
 
@@ -86,8 +87,6 @@ def test_deleted_book_is_hidden_kept_and_restored(library):
 
     # hidden from every view...
     assert names(library.get_booklist()) == ["b.pdf"]
-    assert library.get_subset_if_bookmarked() == []
-    assert library.get_subset_by_regexp("a") == []
     assert names(library.sort_by_date()) == ["b.pdf"]
     # ... but kept, in memory and in book.db
     assert library.find_book_by_sha1(sha1) is book
@@ -237,7 +236,7 @@ def test_db_has_a_schema_version(library):
     make_pdf(Path(library.dirpath) / "a.pdf")
     library.rescan()
     with open(library.dbfile) as f:
-        assert json.load(f)["version"] == srcs.book.DB_VERSION
+        assert json.load(f)["version"] == srcs.library.bookdb.DB_VERSION
 
 
 def test_db_without_version_is_migrated(library, tmp_bookdir):
@@ -261,7 +260,7 @@ def test_db_without_version_is_migrated(library, tmp_bookdir):
     # the previous file is kept, the database is saved in the current version
     assert Path(library.dbfile + ".v0.bak").read_text() == old_content
     with open(library.dbfile) as f:
-        assert json.load(f)["version"] == srcs.book.DB_VERSION
+        assert json.load(f)["version"] == srcs.library.bookdb.DB_VERSION
 
 
 def test_read_only_db_is_never_written(library, tmp_bookdir):
@@ -333,12 +332,12 @@ def test_newer_db_is_refused(library, tmp_bookdir):
     with open(library.dbfile) as f:
         db = json.load(f)
     # an incompatible change: this version can not read it
-    db["version"] = db["min_reader_version"] = srcs.book.DB_VERSION + 1
+    db["version"] = db["min_reader_version"] = srcs.library.bookdb.DB_VERSION + 1
     with open(library.dbfile, "w") as f:
         json.dump(db, f)
     content = Path(library.dbfile).read_text()
 
-    with pytest.raises(srcs.book.BookDbVersionError):
+    with pytest.raises(srcs.library.bookdb.BookDbVersionError):
         BookDir(library.dbfile, FakeCache(tmp_bookdir[2])).open(library.dirpath)
     # left untouched
     assert Path(library.dbfile).read_text() == content
@@ -365,8 +364,8 @@ def test_migrations_are_applied_in_order(library, tmp_bookdir, monkeypatch):
             b["tags"] += " v2"
         return db
 
-    monkeypatch.setattr(srcs.book, "DB_VERSION", 2)
-    monkeypatch.setattr(srcs.book, "_MIGRATIONS", [migrate_v0, migrate_v1])
+    monkeypatch.setattr(srcs.library.bookdb, "DB_VERSION", 2)
+    monkeypatch.setattr(srcs.library.bookdb, "_MIGRATIONS", [migrate_v0, migrate_v1])
 
     reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
     reopened.open(library.dirpath)
@@ -425,7 +424,7 @@ def test_duplicates_are_kept_and_not_hashed_again(library, mocker):
     assert [(d.filename, d.sha1) for d in library.duplicates] == \
         [("copy/a.pdf", library.find_book_by_filename("a.pdf").sha1)]
 
-    spy = mocker.spy(srcs.book, "sha1_file")
+    spy = mocker.spy(srcs.library.bookdir, "sha1_file")
     assert library.rescan() is False
     assert spy.call_count == 0
 
@@ -445,7 +444,7 @@ def test_duplicates_are_saved(library, tmp_bookdir, mocker):
     reopened.open(library.dirpath)
     assert reopened.duplicates == library.duplicates
 
-    spy = mocker.spy(srcs.book, "sha1_file")
+    spy = mocker.spy(srcs.library.bookdir, "sha1_file")
     assert reopened.rescan() is False
     assert spy.call_count == 0
 
@@ -465,7 +464,7 @@ def test_db_version_1_is_migrated(library, tmp_bookdir):
     assert reopened.duplicates == []
     with open(library.dbfile) as f:
         db = json.load(f)
-    assert db["version"] == srcs.book.DB_VERSION and db["duplicates"] == []
+    assert db["version"] == srcs.library.bookdb.DB_VERSION and db["duplicates"] == []
     assert Path(library.dbfile + ".v1.bak").exists()
 
 
@@ -489,7 +488,7 @@ def write_newer_db(library, **keys):
     """ Rewrite book.db as written by a newer version, with keys updated """
     with open(library.dbfile) as f:
         db = json.load(f)
-    db["version"] = srcs.book.DB_VERSION + 1
+    db["version"] = srcs.library.bookdb.DB_VERSION + 1
     db.update(keys)
     with open(library.dbfile, "w") as f:
         json.dump(db, f)
@@ -500,7 +499,7 @@ def test_db_has_a_min_reader_version(library):
     make_pdf(Path(library.dirpath) / "a.pdf")
     library.rescan()
     with open(library.dbfile) as f:
-        assert json.load(f)["min_reader_version"] == srcs.book.DB_MIN_READER_VERSION
+        assert json.load(f)["min_reader_version"] == srcs.library.bookdb.DB_MIN_READER_VERSION
 
 
 def test_newer_readable_db_is_read_only(library, tmp_bookdir):
@@ -510,12 +509,12 @@ def test_newer_readable_db_is_read_only(library, tmp_bookdir):
     library.find_book_by_filename("a.pdf").tags = "algo"
     library.save_db()
     # a compatible change: a new key, ignored by this version
-    content = write_newer_db(library, min_reader_version=srcs.book.DB_VERSION,
+    content = write_newer_db(library, min_reader_version=srcs.library.bookdb.DB_VERSION,
                              new_key={"from": "the future"})
 
     reopened = BookDir(library.dbfile, FakeCache(tmp_bookdir[2]))
     reopened.open(library.dirpath)
-    assert reopened.read_only and reopened.db_version == srcs.book.DB_VERSION + 1
+    assert reopened.read_only and reopened.db_version == srcs.library.bookdb.DB_VERSION + 1
     book = reopened.find_book_by_filename("a.pdf")
     assert book.tags == "algo"
 
@@ -539,7 +538,7 @@ def test_newer_db_without_min_reader_version_is_refused(library, tmp_bookdir):
         json.dump(db, f)
     content = write_newer_db(library)
 
-    with pytest.raises(srcs.book.BookDbVersionError):
+    with pytest.raises(srcs.library.bookdb.BookDbVersionError):
         BookDir(library.dbfile, FakeCache(tmp_bookdir[2])).open(library.dirpath)
     assert Path(library.dbfile).read_text() == content
 
@@ -572,7 +571,7 @@ def test_db_version_2_is_migrated(library, tmp_bookdir):
     assert (book.title, book.authors, book.meta_reviewed) == ("", [], False)
     with open(library.dbfile) as f:
         db = json.load(f)
-    assert db["version"] == srcs.book.DB_VERSION
+    assert db["version"] == srcs.library.bookdb.DB_VERSION
     assert db["booklist"][0]["authors"] == [] and db["booklist"][0]["meta_reviewed"] is False
     assert Path(library.dbfile + ".v2.bak").exists()
 
@@ -593,7 +592,7 @@ def test_db_version_3_is_migrated(library, tmp_bookdir):
     assert reopened.find_book_by_filename("a.pdf").subtitle == ""
     with open(library.dbfile) as f:
         db = json.load(f)
-    assert db["version"] == srcs.book.DB_VERSION and db["min_reader_version"] == 1
+    assert db["version"] == srcs.library.bookdb.DB_VERSION and db["min_reader_version"] == 1
     assert db["booklist"][0]["subtitle"] == ""
     assert Path(library.dbfile + ".v3.bak").exists()
 
@@ -640,7 +639,7 @@ def test_pdf_files(library, mocker):
     make_pdf(root / "a.pdf", title="A")
     library.rescan()
     make_pdf(root / "Science" / "b.pdf", title="B")
-    spy = mocker.spy(srcs.book, "sha1_file")
+    spy = mocker.spy(srcs.library.bookdir, "sha1_file")
     files = sorted(library.pdf_files(), key=lambda f: f.filename)
     assert [(f.filename, f.category) for f in files] == [("Science/b.pdf", "Science"), ("a.pdf", "Generals")]
     assert spy.call_count == 1

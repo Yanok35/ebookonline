@@ -128,7 +128,6 @@ def test_help_lists_the_whole_first_paragraph(app):
 # --- metadata ---
 
 import json
-import os
 
 from srcs.metadata import store
 from tests.conftest import make_book_pdf

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from tests.conftest import make_pdf
+from srcs.library.operations import trash_book, trash_duplicate
 
 
 @pytest.fixture
@@ -159,7 +160,7 @@ def test_trash_page(app, client, book):
     assert "La corbeille est vide." in client.get("/bookadmin/trash").text
     assert "dans la corbeille" not in client.get("/bookadmin/").text
 
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
     html = client.get("/bookadmin/").text
     assert '<a href="/bookadmin/trash">1 dans la corbeille</a>' in html
     html = client.get("/bookadmin/trash").text
@@ -173,7 +174,7 @@ def test_book_list_summary_with_everything(app, client, book):
     make_pdf(root / "copy.pdf", title="B")
     make_pdf(root / "gone.pdf", title="gone")
     app.bookdir.rescan()
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
     (root / "gone.pdf").unlink()
     app.bookdir.rescan()
     html = client.get("/bookadmin/").text
@@ -186,7 +187,7 @@ def test_restore(app, client, book, caplog):
     caplog.set_level(logging.WARNING)
     root = Path(app.config["BOOK_DIR"])
     book.tags = "algo"
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
 
     response = client.post("/bookadmin/trash/restore", data={
         "csrf_token": token(client, "/bookadmin/trash"),
@@ -204,7 +205,7 @@ def test_restore(app, client, book, caplog):
 
 def test_restore_refused(app, client, book):
     root = Path(app.config["BOOK_DIR"])
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
     make_pdf(root / "Science" / "O'Reilly.pdf", title="another one")
     tok = token(client, "/bookadmin/trash")
 
@@ -233,7 +234,7 @@ def test_trash_pages_require_login(app, method, url):
 def test_trash_page_buttons(app, client, book):
     html = client.get("/bookadmin/trash").text
     assert "Vider la corbeille" not in html
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
     html = client.get("/bookadmin/trash").text
     assert "Supprimer" in html and "Vider la corbeille" in html
     assert 'confirm("Supprimer d\\u00e9finitivement \\u00ab Science/O\\u0027Reilly.pdf \\u00bb ?")' in html
@@ -243,7 +244,7 @@ def test_trash_page_buttons(app, client, book):
 def test_delete_from_trash(app, client, book, caplog):
     caplog.set_level(logging.WARNING)
     root = Path(app.config["BOOK_DIR"])
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
 
     response = client.post("/bookadmin/trash/delete", data={
         "csrf_token": token(client, "/bookadmin/trash"),
@@ -261,7 +262,7 @@ def test_delete_from_trash(app, client, book, caplog):
 
 def test_delete_from_trash_refused(app, client, book):
     root = Path(app.config["BOOK_DIR"])
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
     tok = token(client, "/bookadmin/trash")
     # a file of the library is never deleted
     response = client.post("/bookadmin/trash/delete", data={"csrf_token": tok, "filename": "b.pdf"})
@@ -278,8 +279,8 @@ def test_empty_trash(app, client, book, caplog):
     root = Path(app.config["BOOK_DIR"])
     make_pdf(root / "copy.pdf", title="B")
     app.bookdir.rescan()
-    app.bookdir.trash_book(book.sha1)
-    app.bookdir.trash_duplicate("copy.pdf")
+    trash_book(app.bookdir, book.sha1)
+    trash_duplicate(app.bookdir, "copy.pdf")
 
     response = client.post("/bookadmin/trash/empty", data={"csrf_token": token(client, "/bookadmin/trash")})
     assert response.location == "/bookadmin/trash"
@@ -293,7 +294,7 @@ def test_empty_trash(app, client, book, caplog):
 
 
 def test_empty_trash_requires_csrf_token(app, client, book):
-    app.bookdir.trash_book(book.sha1)
+    trash_book(app.bookdir, book.sha1)
     response = client.post("/bookadmin/trash/empty")
     assert "Formulaire expiré ou invalide" in client.get(response.location).text
     assert (Path(app.config["BOOK_DIR"]) / "Trash" / "Science" / "O'Reilly.pdf").exists()

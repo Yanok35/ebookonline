@@ -5,7 +5,7 @@ import pytest
 
 from pypdf import PdfWriter
 
-from srcs.book import BookDir
+from srcs.library.bookdir import BookDir
 from srcs.pdf.thumbnails import Cache
 
 

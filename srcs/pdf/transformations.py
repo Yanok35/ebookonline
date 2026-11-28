@@ -19,7 +19,7 @@
 
 """
 Transformations of the PDF file of a book, made in place by
-BookDir.transform(): the transformed file replaces the original, which
+transform() (srcs/library/transform.py): the transformed file replaces the original, which
 goes to the trash ('name (original).pdf'). See
 docs/technote-pdf-performance.md.
 

@@ -67,6 +67,8 @@ from srcs.library.fileops import (
     list_categories,
     list_trash,
 )
+from srcs.library import operations
+from srcs.library import transform as transforms
 
 admin = Blueprint('admin', __name__)
 
@@ -201,7 +203,7 @@ def bookadmin(sha1):
         **_pdfstats_context(),
         cover_form=CoverForm(prefix=COVER_FORM_PREFIX),
         # the original of the last transformation (cover page), in the trash
-        original=d.original_in_trash(book.sha1),
+        original=transforms.original_in_trash(d, book.sha1),
         original_form=RestoreOriginalForm(prefix=ORIGINAL_FORM_PREFIX),
         cache_writable=current_app.cache.writable,
         rename_form=RenameBookForm(prefix=RENAME_FORM_PREFIX,
@@ -401,7 +403,7 @@ def rename_book(sha1):
     if not form.validate_on_submit():
         _flash_form_errors(form)
     elif _file_operation(f"rename '{book.filename}'",
-                         lambda: current_app.bookdir.rename_book(sha1, form.name.data)):
+                         lambda: operations.rename_book(current_app.bookdir, sha1, form.name.data)):
         flash(f"Fichier renommé : {book.filename}")
     return redirect(url_for(".bookadmin", sha1=sha1))
 
@@ -428,7 +430,7 @@ def insert_cover(sha1):
 
     image = form.image.data.read()
     result = _file_operation(f"insert a cover in '{book.filename}'",
-                             lambda: current_app.bookdir.transform(sha1, CoverPage(image)))
+                             lambda: transforms.transform(current_app.bookdir, sha1, CoverPage(image)))
     if not result:
         return redirect(url_for(".bookadmin", sha1=sha1))
     flash(f"Page de couverture insérée. L'original est dans la corbeille : {result.trashed}")
@@ -450,7 +452,7 @@ def optimize(sha1):
         return redirect(url_for(".bookadmin", sha1=sha1))
     transformation = ResourcesPerPage()
     result = _file_operation(f"optimize '{book.filename}'",
-                             lambda: current_app.bookdir.transform(sha1, transformation))
+                             lambda: transforms.transform(current_app.bookdir, sha1, transformation))
     if not result:
         return redirect(url_for(".bookadmin", sha1=sha1))
     before, after = transformation.gain
@@ -469,7 +471,7 @@ def restore_original(sha1):
         flash(CSRF_ERROR, "error")
         return redirect(url_for(".bookadmin", sha1=sha1))
     result = _file_operation(f"restore the original of '{book.filename}'",
-                             lambda: current_app.bookdir.restore_original(sha1))
+                             lambda: transforms.restore_original(current_app.bookdir, sha1))
     if not result:
         return redirect(url_for(".bookadmin", sha1=sha1))
     flash(f"Original restauré. Le fichier remplacé est dans la corbeille : {result.trashed}")
@@ -493,7 +495,7 @@ def move_book(sha1):
     if not form.validate_on_submit():
         _flash_form_errors(form)
     elif _file_operation(f"move '{book.filename}'",
-                         lambda: current_app.bookdir.move_book_to_category(sha1, form.category.data)):
+                         lambda: operations.move_book_to_category(current_app.bookdir, sha1, form.category.data)):
         flash(f"Fichier déplacé : {book.filename}")
     return redirect(url_for(".bookadmin", sha1=sha1))
 
@@ -507,7 +509,7 @@ def trash_book(sha1):
         _flash_form_errors(form)
     else:
         trashed = _file_operation(f"trash '{book.filename}'",
-                                  lambda: current_app.bookdir.trash_book(sha1))
+                                  lambda: operations.trash_book(current_app.bookdir, sha1))
         if trashed:
             flash(f"Fichier mis à la corbeille : {trashed}")
     return redirect(url_for(".bookadmin", sha1=sha1))
@@ -522,7 +524,7 @@ def trash_duplicate():
     else:
         filename = form.filename.data
         trashed = _file_operation(f"trash duplicate '{filename}'",
-                                  lambda: current_app.bookdir.trash_duplicate(filename))
+                                  lambda: operations.trash_duplicate(current_app.bookdir, filename))
         if trashed:
             flash(f"Copie mise à la corbeille : {trashed}")
     return redirect(url_for(".duplicates"))
@@ -551,7 +553,7 @@ def restore():
     else:
         filename = form.filename.data
         restored = _file_operation(f"restore '{filename}'",
-                                   lambda: current_app.bookdir.restore_from_trash(filename))
+                                   lambda: operations.restore_from_trash(current_app.bookdir, filename))
         if restored:
             flash(f"Fichier restauré : {restored}")
     return redirect(url_for(".trash"))

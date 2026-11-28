@@ -1,6 +1,5 @@
 import json
 import math
-import os
 
 from pathlib import Path
 
@@ -276,7 +275,7 @@ def put_notes(sha1):
 def move_user_data(old_sha1, new_sha1, page_offset=0):
     """
     The data of the users on a book whose file was replaced in place
-    (BookDir.transform(), restore_original()): their notes, reading
+    (transform(), restore_original() of srcs/library/transform.py): their notes, reading
     positions and pins move to its new sha1, the pages moved by page_offset
     (a cover page added: +1). A failure is logged: they stay under the old
     sha1.

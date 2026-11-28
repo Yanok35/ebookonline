@@ -1,4 +1,4 @@
-""" Books uploaded from the library page: BookDir.add_book(), POST /upload """
+""" Books uploaded from the library page: add_book(BookDir, ), POST /upload """
 
 import io
 import re
@@ -8,6 +8,7 @@ import pytest
 
 from srcs.library.fileops import BookFileError
 from tests.conftest import make_pdf
+from srcs.library.operations import add_book, incoming_exists
 
 
 def pdf_bytes(tmp_path, title):
@@ -18,7 +19,7 @@ def pdf_bytes(tmp_path, title):
 
 def test_add_book(app, tmp_path):
     data = pdf_bytes(tmp_path, "Dune")
-    relpath = app.bookdir.add_book(io.BytesIO(data), "Dune.pdf")
+    relpath = add_book(app.bookdir, io.BytesIO(data), "Dune.pdf")
     assert relpath == "Incoming/Dune.pdf"
     assert (Path(app.config["BOOK_DIR"]) / relpath).read_bytes() == data
     # in the list at once
@@ -33,15 +34,15 @@ def test_add_book_refuses_an_existing_name(app, tmp_path):
     from srcs.library.fileops import BookFileExists
 
     first = pdf_bytes(tmp_path, "a")
-    app.bookdir.add_book(io.BytesIO(first), "Dune.pdf")
+    add_book(app.bookdir, io.BytesIO(first), "Dune.pdf")
     with pytest.raises(BookFileExists, match="already in Incoming: 'Dune.pdf'"):
-        app.bookdir.add_book(io.BytesIO(pdf_bytes(tmp_path, "b")), "Dune.pdf")
+        add_book(app.bookdir, io.BytesIO(pdf_bytes(tmp_path, "b")), "Dune.pdf")
     incoming = Path(app.config["BOOK_DIR"]) / "Incoming"
     assert [p.name for p in incoming.iterdir()] == ["Dune.pdf"]
     assert (incoming / "Dune.pdf").read_bytes() == first
-    assert app.bookdir.incoming_exists("Dune.pdf") and not app.bookdir.incoming_exists("Other.pdf")
+    assert incoming_exists(app.bookdir, "Dune.pdf") and not incoming_exists(app.bookdir, "Other.pdf")
     # the name of the file only
-    assert app.bookdir.incoming_exists("C:\\Users\\me\\Dune.pdf")
+    assert incoming_exists(app.bookdir, "C:\\Users\\me\\Dune.pdf")
 
 
 def epub_bytes():
@@ -55,14 +56,14 @@ def epub_bytes():
 
 
 def test_add_epub(app):
-    relpath = app.bookdir.add_book(io.BytesIO(epub_bytes()), "Dune.epub")
+    relpath = add_book(app.bookdir, io.BytesIO(epub_bytes()), "Dune.epub")
     assert relpath == "Incoming/Dune.epub"
     assert (Path(app.config["BOOK_DIR"]) / relpath).read_bytes() == epub_bytes()
     # only stored: not a book of the library
     assert app.bookdir.get_all_books() == []
-    assert app.bookdir.incoming_exists("Dune.epub")
+    assert incoming_exists(app.bookdir, "Dune.epub")
     with pytest.raises(BookFileError, match="not a EPUB file"):
-        app.bookdir.add_book(io.BytesIO(b"%PDF-1.4 not a ZIP"), "Other.epub")
+        add_book(app.bookdir, io.BytesIO(b"%PDF-1.4 not a ZIP"), "Other.epub")
 
 
 @pytest.mark.parametrize("filename, expected", [
@@ -72,7 +73,7 @@ def test_add_epub(app):
     ("  Élève O'Reilly.PDF ", "Incoming/Élève O'Reilly.PDF"),
 ])
 def test_add_book_name(app, tmp_path, filename, expected):
-    assert app.bookdir.add_book(io.BytesIO(pdf_bytes(tmp_path, "x")), filename) == expected
+    assert add_book(app.bookdir, io.BytesIO(pdf_bytes(tmp_path, "x")), filename) == expected
 
 
 @pytest.mark.parametrize("data, filename, message", [
@@ -83,7 +84,7 @@ def test_add_book_name(app, tmp_path, filename, expected):
 def test_add_book_refused(app, tmp_path, data, filename, message):
     data = data if data is not None else pdf_bytes(tmp_path, "x")
     with pytest.raises(BookFileError, match=message):
-        app.bookdir.add_book(io.BytesIO(data), filename)
+        add_book(app.bookdir, io.BytesIO(data), filename)
     incoming = Path(app.config["BOOK_DIR"]) / "Incoming"
     assert not incoming.exists() or list(incoming.iterdir()) == []
 
@@ -91,7 +92,7 @@ def test_add_book_refused(app, tmp_path, data, filename, message):
 def test_add_book_header_after_garbage(app, tmp_path):
     """ the readers accept a header in the first 1024 bytes """
     data = b"\xef\xbb\xbf\n" + pdf_bytes(tmp_path, "x")
-    assert app.bookdir.add_book(io.BytesIO(data), "x.pdf") == "Incoming/x.pdf"
+    assert add_book(app.bookdir, io.BytesIO(data), "x.pdf") == "Incoming/x.pdf"
 
 
 # --- POST /upload

@@ -301,7 +301,7 @@ def _find_book(arg):
     file of the book directory unknown to book.db (e.g. a copy of the
     library without book.db), as a book without user values
     """
-    from srcs.book import Book
+    from srcs.library.book import Book
     from srcs.common.files import sha1_file
 
     d = library().bookdir
@@ -381,7 +381,7 @@ def scan(force, jobs, nice, dry_run, verbose, books):
         return
 
     log_level = logging.getLogger().getEffectiveLevel() if verbose else logging.WARNING
-    loggers = [logging.getLogger(name) for name in ("srcs.metadata", "srcs.book")]
+    loggers = [logging.getLogger(name) for name in ("srcs.metadata", "srcs.library")]
     previous_levels = [lg.level for lg in loggers]
     for lg in loggers:
         lg.setLevel(log_level)

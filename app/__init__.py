@@ -28,7 +28,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from srcs import config
 from srcs.common.access import check_write_access
 from srcs.common.logs import setup_logging
-from srcs.book import DB_VERSION
+from srcs.library.bookdb import DB_VERSION
 from srcs.metadata.service import MetadataService
 from srcs.services import make_bookdir, make_cache
 from srcs.users.userdata import USERDATA_VERSION, UserData
