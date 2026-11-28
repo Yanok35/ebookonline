@@ -31,7 +31,7 @@ from srcs.common.logs import setup_logging
 from srcs.book import DB_VERSION
 from srcs.metadata.service import MetadataService
 from srcs.services import make_bookdir, make_cache
-from srcs.userdata import USERDATA_VERSION, UserData
+from srcs.users.userdata import USERDATA_VERSION, UserData
 from srcs.naming import NamingError, check_pattern
 from srcs.watcher import BookDirWatcher
 

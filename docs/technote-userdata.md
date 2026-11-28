@@ -4,7 +4,7 @@ The data kept by the server for each user, found again in any browser, on
 any device: the notes in the margin of the books, the reading positions,
 the pins. A JSON file next to
 `book.db`, on the same principles (versioned, kept in memory, rewritten
-whole and atomically after each change). Code: `srcs/userdata.py`.
+whole and atomically after each change). Code: `srcs/users/userdata.py`.
 
 ## Location
 
@@ -84,7 +84,7 @@ memory only.
 ## Versioning
 
 As `book.db`: `USERDATA_VERSION` and `USERDATA_MIN_READER_VERSION` in
-`srcs/userdata.py`, the migrations in `_MIGRATIONS` (`_MIGRATIONS[n]`
+`srcs/users/userdata.py`, the migrations in `_MIGRATIONS` (`_MIGRATIONS[n]`
 converts version `n` to `n + 1`). A file of a newer version is read and
 never written: the notes are then kept in memory only, and the server is in
 read-only mode (one more reason in the list); it is refused when its

@@ -20,7 +20,7 @@
 """
 The timeline of the books of interest (/timeline): the reading sessions of
 the logged in user, found from the journal of the reader events
-(srcs/history.py), drawn along a time line.
+(srcs/users/journal.py), drawn along a time line.
 """
 
 import os
@@ -28,7 +28,7 @@ import os
 from flask import Blueprint, current_app, render_template, url_for
 
 from app.auth import current_user_key, login_required
-from srcs.history import SESSION_GAP, reading_sessions
+from srcs.users.journal import SESSION_GAP, reading_sessions
 
 timeline = Blueprint("timeline", __name__)
 
