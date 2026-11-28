@@ -7,7 +7,7 @@ import pytest
 
 import srcs.book
 from srcs.book import BookDir
-from srcs.watcher import BookDirWatcher
+from srcs.library.watcher import BookDirWatcher
 
 from tests.conftest import FakeCache, make_pdf, wait_until
 

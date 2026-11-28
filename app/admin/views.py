@@ -35,7 +35,7 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.admin import metadata
-from srcs import naming
+from srcs.library import naming
 from srcs.pdf import stats as pdfstats
 from srcs.pdf.thumbnails import available_backends
 from srcs.pdf.transformations import CoverPage, ResourcesPerPage
@@ -59,7 +59,7 @@ from app.admin.forms import (
 from app import is_read_only
 from app.api import move_user_data
 from app.auth import current_user_key, login_required
-from srcs.bookfileops import (
+from srcs.library.fileops import (
     ROOT_CATEGORY,
     BookFileError,
     delete_from_trash,

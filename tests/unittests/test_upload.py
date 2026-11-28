@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from srcs.bookfileops import BookFileError
+from srcs.library.fileops import BookFileError
 from tests.conftest import make_pdf
 
 
@@ -30,7 +30,7 @@ def test_add_book(app, tmp_path):
 
 
 def test_add_book_refuses_an_existing_name(app, tmp_path):
-    from srcs.bookfileops import BookFileExists
+    from srcs.library.fileops import BookFileExists
 
     first = pdf_bytes(tmp_path, "a")
     app.bookdir.add_book(io.BytesIO(first), "Dune.pdf")

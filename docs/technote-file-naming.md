@@ -2,7 +2,7 @@
 
 The book page (`/bookadmin/<sha1>`) proposes a name for the PDF file of a
 book, made from its metadata in `book.db` after a pattern, so that the files
-of the library are named in the same way. Code: `srcs/naming.py`.
+of the library are named in the same way. Code: `srcs/library/naming.py`.
 
 ## Pattern
 

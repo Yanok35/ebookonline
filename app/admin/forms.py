@@ -160,7 +160,7 @@ class ResetThumbnailForm(FlaskForm):
     submit = SubmitField("Régénérer la miniature")
 
 
-# File operations: the paths are checked by BookDir (srcs/bookfileops.py)
+# File operations: the paths are checked by BookDir (srcs/library/fileops.py)
 
 class CoverForm(FlaskForm):
     """ Insert a cover page, from an image, in the PDF file (its original in the trash) """

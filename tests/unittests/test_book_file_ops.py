@@ -9,7 +9,7 @@ import srcs.book
 from srcs.book import BookDir
 from srcs.book import Transformed
 from srcs.pdf.transformations import CoverPage, Transformation
-from srcs.bookfileops import BookFileError
+from srcs.library.fileops import BookFileError
 
 from tests.conftest import FakeCache, make_pdf
 

@@ -29,13 +29,13 @@ from threading import Thread
 
 import pymupdf
 
-from srcs import bookfileops
-from srcs.bookfileops import IGNORE_MARKER, BookFileError, BookFileExists
+from srcs.library import fileops as bookfileops
+from srcs.library.fileops import IGNORE_MARKER, BookFileError, BookFileExists
 from srcs.pdf.thumbnails import Cache
 from srcs.common.files import atomic_write, remove_quietly, sha1_file
 from srcs.pdf import PDF_MAGIC
 from srcs.common.versioned import file_version, migrate
-from srcs.search import fuzzy_search
+from srcs.library.search import fuzzy_search
 
 # The header of a PDF file
 
@@ -399,7 +399,7 @@ class BookDir:
     def search(self, pattern, books=None):
         """
         Typo tolerant search in 'books' (default: all present books), most
-        relevant first. See srcs/search.py.
+        relevant first. See srcs/library/search.py.
         """
         if books is None:
             books = self.get_booklist()

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from srcs.search import fuzzy_search, normalize
+from srcs.library.search import fuzzy_search, normalize
 
 from tests.conftest import make_pdf
 
